@@ -8,13 +8,13 @@ var playerLocation:String
 @onready var start_http_request: HTTPRequest = $startHTTPRequest
 func _ready() -> void:
 	scene = owner
-	#await get_tree().create_timer(2).timeout
+	await get_tree().create_timer(2).timeout
 	add_start_log("正在初始化...")
-	#await get_tree().create_timer(1).timeout
+	await get_tree().create_timer(1).timeout
 	add_start_log("系统自检中...")
-	#await get_tree().create_timer(1).timeout
+	await get_tree().create_timer(1).timeout
 	add_start_log("核心模块加载中...")
-	#await get_tree().create_timer(1).timeout
+	await get_tree().create_timer(1).timeout
 	add_start_log("神经网络连接检测...")
 	check_chat_service()
 	await start_http_request.request_completed
@@ -22,9 +22,9 @@ func _ready() -> void:
 	check_image_service()
 	await start_http_request.request_completed
 	add_start_log("检测到新的用户")
-	#await get_tree().create_timer(2).timeout
+	await get_tree().create_timer(2).timeout
 	add_start_log("你好...")
-	#await get_tree().create_timer(2).timeout
+	await get_tree().create_timer(2).timeout
 	add_start_log("你是谁？")
 	$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 
@@ -120,7 +120,7 @@ func _on_start_log_child_entered_tree(_node: Node) -> void:
 		$HBoxContainer/VBoxContainer/ScrollContainer,
 		"scroll_vertical",
 		$HBoxContainer/VBoxContainer/ScrollContainer.get_v_scroll_bar().max_value,
-		0.2
+		0.5
 	)
 	pass # Replace with function body.
 
@@ -150,7 +150,6 @@ func _init_world(location:String):
 		{"role":"user","content": scene.background}]
 	scene.ask_ai(prompts_env, scene.aiMode.init_env)
 	pass
-
 
 func if_weather_ok():
 	add_start_log("环境创建完成...")
@@ -201,6 +200,7 @@ humidity_range: 根据世界的降水模式和地理环境设定湿度范围(%)
 	保持天气稳定性的概率通常较高
 	极端天气转换应有合理的过渡
 	转换概率总和为1
+	不要缺少某种天气类型
 
 4. 当前状态
 	根据世界的典型气候设定合理的初始天气状态。

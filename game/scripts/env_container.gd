@@ -12,7 +12,7 @@ func _process(delta: float) -> void:
 	if timer>= 1:
 		$site_buttons/timeDis/timeDot.visible = !$site_buttons/timeDis/timeDot.visible
 		timer = 0
-	_time_update(0.1)
+		_time_update(0.2)
 
 func _time_update(timeToAdd:float):
 	scene.nowtime+=timeToAdd

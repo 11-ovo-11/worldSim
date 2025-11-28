@@ -144,7 +144,7 @@ def chat():
                     model="deepseek-chat",
                     messages=user_msg,
                     tools=tools,
-                    output_format = output_format,
+                    response_format = { "type": output_format } ,
                     stream=False
                 )
                 # 获取消息

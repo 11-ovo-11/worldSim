@@ -29,6 +29,7 @@ var newNpc: npc
 var currentState = worldState.explore
 var currentMode = aiMode.explore
 var nowtime = 500
+
 #环境参数
 var envDic:Dictionary
 var timePrompt:String = ""
@@ -126,7 +127,6 @@ func site_update():
 	changeTextTo(response_label, sites[currentSiteName]["地点描述"],15)
 	clear_children(%site_buttons)
 	clear_children(%npc_buttons)
-
 	for i in sites[currentSiteName]["能前往的地点"]:
 		var new_site_button = load("res://fabs/site_button.tscn").instantiate() as siteButton
 		new_site_button.siteName = i
@@ -267,21 +267,18 @@ var tools = [
 			}
 		}
 	}
-
 ]
 
 # ==================== AI 交互 ====================
 func ask_ai(message: Array, askmode: aiMode):
-
 	currentMode = askmode
 	send_button.disabled = true
-	var body = [message,null]
+	var body = [message,null,"text"]
 	match askmode:
 		aiMode.tools:
 			body = [message,tools,"text"]
 		aiMode.explore:
 			body = [message,null,"json_object"]
-
 	var url = chat_url
 	var json_string = JSON.stringify(body)
 	var err = http_request.request(
@@ -290,7 +287,6 @@ func ask_ai(message: Array, askmode: aiMode):
 		HTTPClient.METHOD_POST,
 		json_string
 	)
-
 	if err != OK:
 		changeTextTo(response_label, "请求失败: " + str(err))
 		send_button.disabled = false
@@ -330,6 +326,7 @@ func get_content_in_angle_brackets(input_string: String)->String:
 		var content = match_obj.get_string(0)
 		results+=content
 	return results
+
 # ==================== 图片生成 ====================
 func gen_img(prompt):
 	print("正在同时生成图片...")
@@ -392,20 +389,16 @@ func addLog(logText: String):
 # ==================== HTTP 响应处理 ====================
 func _on_request_completed(result, response_code, _header, body):
 	send_button.disabled = false
-
 	if result != HTTPRequest.RESULT_SUCCESS:
 		changeTextTo(response_label, "网络错误: " + str(result))
 		return
-
 	if response_code != 200:
 		changeTextTo(response_label, "服务器错误: " + str(response_code))
 		return
-
 	var json = JSON.new()
 	if json.parse(body.get_string_from_utf8()) != OK:
 		changeTextTo(response_label, "解析响应失败")
 		return
-
 	var data = json.get_data()
 	if data.has("text"):
 		match currentMode:
@@ -422,7 +415,6 @@ func _on_request_completed(result, response_code, _header, body):
 				if %envContainer.load_weather_config_from_json(envDic):
 					$mainMenu.if_weather_ok()
 					pass
-
 			aiMode.explore:
 				var jsonDic = extract_json_from_text(data["text"])
 				if jsonDic == {}:

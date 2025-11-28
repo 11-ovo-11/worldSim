@@ -1,9 +1,11 @@
 extends VBoxContainer
+
 func _ready() -> void:
 	visible = false
 	for i in get_children():
 		if i is Control:
 			i.modulate = Color.TRANSPARENT
+
 func showUP():
 	visible = true
 	for i in get_children():
