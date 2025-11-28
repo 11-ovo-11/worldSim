@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://dbfcnwx58tydd"]
+
+[ext_resource type="Script" uid="uid://s63ariy0ua57" path="res://scripts/site_button.gd" id="1_n4ame"]
+
+[node name="ColorRect" type="Button"]
+custom_minimum_size = Vector2(198, 70)
+text = "地点名称"
+script = ExtResource("1_n4ame")
+
+[connection signal="button_down" from="." to="." method="_on_button_down"]
