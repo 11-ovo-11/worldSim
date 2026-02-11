@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://nw26ayapc3dh"]
+
+[ext_resource type="Theme" uid="uid://cw27y3q15da6g" path="res://assets/main.tres" id="1_l1tsd"]
+
+[node name="垂直分割线" type="Panel"]
+custom_minimum_size = Vector2(6, 0)
+size_flags_vertical = 3
+theme = ExtResource("1_l1tsd")
+theme_type_variation = &"v_line"

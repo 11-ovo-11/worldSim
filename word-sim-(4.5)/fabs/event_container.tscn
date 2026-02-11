@@ -1,0 +1,26 @@
+[gd_scene load_steps=2 format=3 uid="uid://bgqblbjltg0ak"]
+
+[ext_resource type="Script" uid="uid://bl2vukm3p80ur" path="res://scripts/event_container.gd" id="1_ftbfg"]
+
+[node name="eventContainer" type="HBoxContainer"]
+custom_minimum_size = Vector2(0, 50)
+script = ExtResource("1_ftbfg")
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 28
+text = "事件名称"
+
+[node name="yes" type="Button" parent="."]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "YES"
+
+[node name="no" type="Button" parent="."]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "NO"
+
+[connection signal="button_down" from="yes" to="." method="_on_yes_button_down"]
+[connection signal="button_down" from="no" to="." method="_on_no_button_down"]

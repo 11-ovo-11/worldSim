@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://c08dcgwadp4u"]
+
+[ext_resource type="Theme" uid="uid://cw27y3q15da6g" path="res://assets/main.tres" id="1_1eip8"]
+
+[node name="水平分割线" type="Panel"]
+custom_minimum_size = Vector2(0, 6)
+size_flags_horizontal = 3
+theme = ExtResource("1_1eip8")
+theme_type_variation = &"h_line"

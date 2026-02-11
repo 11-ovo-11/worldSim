@@ -1,0 +1,101 @@
+[gd_resource type="Theme" load_steps=12 format=3 uid="uid://cw27y3q15da6g"]
+
+[ext_resource type="FontFile" uid="uid://db4j522uf3t3k" path="res://assets/fonts/汇文港黑v1.001.ttf" id="2_tbf4e"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_tbf4e"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rehdy"]
+bg_color = Color(1, 1, 1, 0.16862746)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 1, 1, 0.80784315)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+corner_detail = 1
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_d26kf"]
+bg_color = Color(1, 1, 1, 0.16862746)
+draw_center = false
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 1, 1, 0.85882354)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+corner_detail = 1
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_b0qwo"]
+bg_color = Color(1, 1, 1, 0.16862746)
+draw_center = false
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+corner_detail = 1
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rixum"]
+bg_color = Color(1, 1, 1, 1)
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_p80i2"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_52k6b"]
+bg_color = Color(1, 1, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_17qtp"]
+content_margin_left = 8.0
+bg_color = Color(0, 0, 0, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 1, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_p80i2"]
+draw_center = false
+border_width_top = 2
+border_width_bottom = 2
+border_color = Color(1, 1, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tbf4e"]
+draw_center = false
+border_width_left = 2
+border_width_right = 2
+border_color = Color(1, 1, 1, 1)
+
+[resource]
+BoxContainer/constants/separation = 2
+Button/font_sizes/font_size = 24
+Button/fonts/font = ExtResource("2_tbf4e")
+Button/styles/focus = SubResource("StyleBoxEmpty_tbf4e")
+Button/styles/hover = SubResource("StyleBoxFlat_rehdy")
+Button/styles/normal = SubResource("StyleBoxFlat_d26kf")
+Button/styles/pressed = SubResource("StyleBoxFlat_b0qwo")
+GridContainer/constants/h_separation = 4
+GridContainer/constants/v_separation = 4
+Label/font_sizes/font_size = 36
+Label/fonts/font = ExtResource("2_tbf4e")
+ProgressBar/styles/background = null
+ProgressBar/styles/fill = SubResource("StyleBoxFlat_rixum")
+RichTextLabel/font_sizes/normal_font_size = 28
+RichTextLabel/fonts/normal_font = ExtResource("2_tbf4e")
+TextEdit/font_sizes/font_size = 30
+TextEdit/fonts/font = ExtResource("2_tbf4e")
+TextEdit/styles/normal = SubResource("StyleBoxEmpty_p80i2")
+VScrollBar/styles/grabber = SubResource("StyleBoxFlat_52k6b")
+VScrollBar/styles/scroll = SubResource("StyleBoxFlat_17qtp")
+h_line/base_type = &"Panel"
+h_line/styles/panel = SubResource("StyleBoxFlat_p80i2")
+v_line/base_type = &"Panel"
+v_line/styles/panel = SubResource("StyleBoxFlat_tbf4e")
