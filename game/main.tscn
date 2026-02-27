@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3 uid="uid://dan3qemb2cwhe"]
+[gd_scene format=3 uid="uid://dan3qemb2cwhe"]
 
 [ext_resource type="Script" uid="uid://dccxc0ayjp3ct" path="res://scripts/game.gd" id="1_ig7tw"]
 [ext_resource type="Theme" uid="uid://cw27y3q15da6g" path="res://assets/main.tres" id="1_ycdy4"]
@@ -56,7 +56,7 @@ shader_parameter/min_scanline_thickness = 0.5
 shader_parameter/aspect = 0.75
 shader_parameter/wobble_strength = 0.0
 
-[node name="Control" type="Control"]
+[node name="Control" type="Control" unique_id=1906446452]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -66,7 +66,7 @@ grow_vertical = 2
 theme = ExtResource("1_ycdy4")
 script = ExtResource("1_ig7tw")
 
-[node name="ColorRect" type="ColorRect" parent="."]
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1296139349]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -75,15 +75,15 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 0, 0, 1)
 
-[node name="HTTPRequest" type="HTTPRequest" parent="."]
+[node name="HTTPRequest" type="HTTPRequest" parent="." unique_id=1648532]
 
-[node name="ImgHTTPRequest" type="HTTPRequest" parent="."]
+[node name="ImgHTTPRequest" type="HTTPRequest" parent="." unique_id=1888598098]
 unique_name_in_owner = true
 
-[node name="mainMenu" type="CanvasLayer" parent="."]
+[node name="mainMenu" type="CanvasLayer" parent="." unique_id=285871532]
 script = ExtResource("3_074og")
 
-[node name="HBoxContainer" type="HBoxContainer" parent="mainMenu"]
+[node name="HBoxContainer" type="HBoxContainer" parent="mainMenu" unique_id=717351945]
 anchors_preset = 13
 anchor_left = 0.5
 anchor_right = 0.5
@@ -96,39 +96,39 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("1_ycdy4")
 
-[node name="垂直分割线" parent="mainMenu/HBoxContainer" instance=ExtResource("3_272bh")]
+[node name="垂直分割线" parent="mainMenu/HBoxContainer" unique_id=1990912222 instance=ExtResource("3_272bh")]
 layout_mode = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="mainMenu/HBoxContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="mainMenu/HBoxContainer" unique_id=1188651707]
 custom_minimum_size = Vector2(1080, 0)
 layout_mode = 2
 
-[node name="水平分割线" parent="mainMenu/HBoxContainer/VBoxContainer" instance=ExtResource("3_7mycd")]
+[node name="水平分割线" parent="mainMenu/HBoxContainer/VBoxContainer" unique_id=1520545936 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="ScrollContainer" type="ScrollContainer" parent="mainMenu/HBoxContainer/VBoxContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="mainMenu/HBoxContainer/VBoxContainer" unique_id=136043613]
 layout_mode = 2
 size_flags_vertical = 3
 follow_focus = true
 horizontal_scroll_mode = 3
 vertical_scroll_mode = 3
 
-[node name="startLog" type="VBoxContainer" parent="mainMenu/HBoxContainer/VBoxContainer/ScrollContainer"]
+[node name="startLog" type="VBoxContainer" parent="mainMenu/HBoxContainer/VBoxContainer/ScrollContainer" unique_id=1808430378]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 alignment = 2
 
-[node name="水平分割线2" parent="mainMenu/HBoxContainer/VBoxContainer" instance=ExtResource("3_7mycd")]
+[node name="水平分割线2" parent="mainMenu/HBoxContainer/VBoxContainer" unique_id=192750164 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="TextEdit" type="TextEdit" parent="mainMenu/HBoxContainer/VBoxContainer"]
+[node name="TextEdit" type="TextEdit" parent="mainMenu/HBoxContainer/VBoxContainer" unique_id=1943038794]
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 scroll_smooth = true
 
-[node name="Button" type="Button" parent="mainMenu/HBoxContainer/VBoxContainer/TextEdit"]
+[node name="Button" type="Button" parent="mainMenu/HBoxContainer/VBoxContainer/TextEdit" unique_id=1669382381]
 custom_minimum_size = Vector2(50, 50)
 layout_mode = 1
 anchors_preset = 6
@@ -144,15 +144,15 @@ grow_vertical = 2
 disabled = true
 text = "发送"
 
-[node name="水平分割线3" parent="mainMenu/HBoxContainer/VBoxContainer" instance=ExtResource("3_7mycd")]
+[node name="水平分割线3" parent="mainMenu/HBoxContainer/VBoxContainer" unique_id=2000854549 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="垂直分割线2" parent="mainMenu/HBoxContainer" instance=ExtResource("3_272bh")]
+[node name="垂直分割线2" parent="mainMenu/HBoxContainer" unique_id=427094813 instance=ExtResource("3_272bh")]
 layout_mode = 2
 
-[node name="startHTTPRequest" type="HTTPRequest" parent="mainMenu"]
+[node name="startHTTPRequest" type="HTTPRequest" parent="mainMenu" unique_id=784021408]
 
-[node name="mainContainer" type="VBoxContainer" parent="."]
+[node name="mainContainer" type="VBoxContainer" parent="." unique_id=1198228708]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -161,38 +161,38 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_cegan")
 
-[node name="Panel2" parent="mainContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel2" parent="mainContainer" unique_id=1639795009 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="HBoxContainer" type="HBoxContainer" parent="mainContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="mainContainer" unique_id=2143228223]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Panel3" parent="mainContainer/HBoxContainer" instance=ExtResource("3_272bh")]
+[node name="Panel3" parent="mainContainer/HBoxContainer" unique_id=1557883862 instance=ExtResource("3_272bh")]
 layout_mode = 2
 
-[node name="VBoxContainer3" type="VBoxContainer" parent="mainContainer/HBoxContainer"]
+[node name="VBoxContainer3" type="VBoxContainer" parent="mainContainer/HBoxContainer" unique_id=459762783]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="envContainer" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3"]
+[node name="envContainer" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=1480649275]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 script = ExtResource("5_yaehf")
 
-[node name="TextureRect" type="TextureRect" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer"]
+[node name="TextureRect" type="TextureRect" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer" unique_id=2001037118]
 visible = false
 layout_mode = 2
 size_flags_horizontal = 3
 texture = ExtResource("2_0xm2m")
 stretch_mode = 3
 
-[node name="Control" type="Control" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer"]
+[node name="Control" type="Control" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer" unique_id=1403144121]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="weatherLable" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer/Control"]
+[node name="weatherLable" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer/Control" unique_id=565222642]
 layout_mode = 1
 anchors_preset = 6
 anchor_left = 1.0
@@ -216,12 +216,12 @@ text = "      .--.
   ' ' 7 ' 7 7 ' '"
 script = ExtResource("9_w48qg")
 
-[node name="site_buttons" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer"]
+[node name="site_buttons" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer" unique_id=546509755]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="timeDis" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer/site_buttons"]
+[node name="timeDis" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer/site_buttons" unique_id=851733736]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_fonts/font = SubResource("FontVariation_2cqfq")
@@ -231,7 +231,7 @@ text = "08 20"
 horizontal_alignment = 2
 script = ExtResource("6_ycdy4")
 
-[node name="timeDot" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer/site_buttons/timeDis"]
+[node name="timeDot" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer/site_buttons/timeDis" unique_id=1075989546]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -251,7 +251,7 @@ theme_override_styles/normal = SubResource("StyleBoxEmpty_yaehf")
 text = ":"
 horizontal_alignment = 2
 
-[node name="weatherLable" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer/site_buttons"]
+[node name="weatherLable" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/envContainer/site_buttons" unique_id=1094431530]
 custom_minimum_size = Vector2(242, 53)
 layout_mode = 2
 theme_override_constants/line_spacing = -6
@@ -261,82 +261,82 @@ text = "晴天
 22℃ | 69% | ↙5km/h"
 horizontal_alignment = 2
 
-[node name="Panel6" parent="mainContainer/HBoxContainer/VBoxContainer3" instance=ExtResource("3_7mycd")]
+[node name="Panel6" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=2122502390 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3"]
+[node name="Label" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=1828826172]
 layout_mode = 2
 text = "地点"
 
-[node name="Panel" parent="mainContainer/HBoxContainer/VBoxContainer3" instance=ExtResource("3_7mycd")]
+[node name="Panel" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=11203452 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="ScrollContainer" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer3"]
+[node name="ScrollContainer" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=78900593]
 custom_minimum_size = Vector2(0, 221.37)
 layout_mode = 2
 
-[node name="site_buttons" type="GridContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer"]
+[node name="site_buttons" type="GridContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer" unique_id=105098828]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 2
 size_flags_vertical = 3
 columns = 2
 
-[node name="Panel2" parent="mainContainer/HBoxContainer/VBoxContainer3" instance=ExtResource("3_7mycd")]
+[node name="Panel2" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=353763140 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="Label2" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3"]
+[node name="Label2" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=1395710987]
 layout_mode = 2
 text = "角色"
 
-[node name="Panel3" parent="mainContainer/HBoxContainer/VBoxContainer3" instance=ExtResource("3_7mycd")]
+[node name="Panel3" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=1925001410 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="ScrollContainer2" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer3"]
+[node name="ScrollContainer2" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=430427721]
 custom_minimum_size = Vector2(0, 221.37)
 layout_mode = 2
 
-[node name="npc_buttons" type="GridContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer2"]
+[node name="npc_buttons" type="GridContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer2" unique_id=2079453410]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 columns = 2
 
-[node name="Panel4" parent="mainContainer/HBoxContainer/VBoxContainer3" instance=ExtResource("3_7mycd")]
+[node name="Panel4" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=1968620365 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="Label3" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3"]
+[node name="Label3" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=1569113210]
 layout_mode = 2
 size_flags_vertical = 0
 text = "状态"
 
-[node name="Panel5" parent="mainContainer/HBoxContainer/VBoxContainer3" instance=ExtResource("3_7mycd")]
+[node name="Panel5" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=42143561 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="ScrollContainer3" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer3"]
+[node name="ScrollContainer3" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer3" unique_id=599433744]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="HBoxContainer" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3"]
+[node name="HBoxContainer" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3" unique_id=103560614]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="stateContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer"]
+[node name="stateContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer" unique_id=1924501477]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Label" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer"]
+[node name="Label" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=561959860]
 layout_mode = 2
 theme_override_font_sizes/font_size = 28
 text = "资产"
 
-[node name="Panel10" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel10" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=1480275396 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="money" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer"]
+[node name="money" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=1680476193]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 size_flags_vertical = 3
@@ -346,7 +346,7 @@ horizontal_alignment = 1
 vertical_alignment = 1
 script = ExtResource("5_kek77")
 
-[node name="moneyBar" type="ProgressBar" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer/money"]
+[node name="moneyBar" type="ProgressBar" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer/money" unique_id=1241818669]
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
@@ -356,20 +356,20 @@ value = 10.0
 allow_greater = true
 script = ExtResource("6_4c57u")
 
-[node name="Panel5" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel5" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=2134606700 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="Label2" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer"]
+[node name="Label2" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=713777984]
 layout_mode = 2
 theme_override_font_sizes/font_size = 28
 text = "体力"
 
-[node name="Panel9" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel9" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=624436832 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="energy" type="ProgressBar" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer"]
+[node name="energy" type="ProgressBar" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=768987037]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
@@ -378,20 +378,20 @@ value = 54.33
 show_percentage = false
 script = ExtResource("6_4c57u")
 
-[node name="Panel6" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel6" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=582423201 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="Label3" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer"]
+[node name="Label3" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=2035827106]
 layout_mode = 2
 theme_override_font_sizes/font_size = 28
 text = "健康"
 
-[node name="Panel8" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel8" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=2088739963 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="hp" type="ProgressBar" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer"]
+[node name="hp" type="ProgressBar" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=254915222]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
@@ -400,20 +400,20 @@ value = 100.0
 show_percentage = false
 script = ExtResource("6_4c57u")
 
-[node name="Panel7" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel7" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=175451220 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="Label4" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer"]
+[node name="Label4" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=2110478416]
 layout_mode = 2
 theme_override_font_sizes/font_size = 28
 text = "声望"
 
-[node name="Panel11" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel11" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=877544431 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="reputation" type="ProgressBar" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer"]
+[node name="reputation" type="ProgressBar" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=1748278237]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
@@ -422,53 +422,53 @@ value = 100.0
 show_percentage = false
 script = ExtResource("6_4c57u")
 
-[node name="Panel12" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel12" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/stateContainer" unique_id=1428535393 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="Panel4" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer" instance=ExtResource("3_272bh")]
+[node name="Panel4" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer" unique_id=2106795204 instance=ExtResource("3_272bh")]
 custom_minimum_size = Vector2(2, 0)
 layout_mode = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer" unique_id=466440568]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Label" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/VBoxContainer"]
+[node name="Label" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/VBoxContainer" unique_id=1594054126]
 custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 28
 text = "背包"
 
-[node name="水平分割线" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/VBoxContainer" instance=ExtResource("3_7mycd")]
+[node name="水平分割线" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/VBoxContainer" unique_id=1232454272 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="itemContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/VBoxContainer"]
+[node name="itemContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/VBoxContainer" unique_id=1792829088]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 script = ExtResource("7_efxa6")
 
-[node name="Panel4" parent="mainContainer/HBoxContainer" instance=ExtResource("3_272bh")]
+[node name="Panel4" parent="mainContainer/HBoxContainer" unique_id=1536507696 instance=ExtResource("3_272bh")]
 layout_mode = 2
 size_flags_horizontal = 0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer" unique_id=1595161353]
 custom_minimum_size = Vector2(1080, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 
-[node name="siteName" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer"]
+[node name="siteName" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=274972103]
 unique_name_in_owner = true
 layout_mode = 2
 text = "当前地点"
 
-[node name="Panel2" parent="mainContainer/HBoxContainer/VBoxContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel2" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=2060116615 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="backgroundImg" type="TextureRect" parent="mainContainer/HBoxContainer/VBoxContainer"]
+[node name="backgroundImg" type="TextureRect" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=1011035780]
 unique_name_in_owner = true
 material = SubResource("ShaderMaterial_ryguw")
 custom_minimum_size = Vector2(0, 540)
@@ -476,19 +476,19 @@ layout_mode = 2
 texture = ExtResource("2_0xm2m")
 expand_mode = 1
 
-[node name="Panel3" parent="mainContainer/HBoxContainer/VBoxContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel3" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=155045949 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="ScrollContainer" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=1509916779]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="HBoxContainer" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer" unique_id=1695326788]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="npcIcon" type="TextureRect" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer"]
+[node name="npcIcon" type="TextureRect" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer" unique_id=1665040662]
 unique_name_in_owner = true
 clip_contents = true
 layout_mode = 2
@@ -497,17 +497,17 @@ texture = ExtResource("2_0xm2m")
 expand_mode = 1
 stretch_mode = 3
 
-[node name="npcInfosContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer"]
+[node name="npcInfosContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer" unique_id=1489749021]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="speakerNameLabel" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer"]
+[node name="speakerNameLabel" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer" unique_id=859344369]
 unique_name_in_owner = true
 layout_mode = 2
 text = "NPC名字"
 
-[node name="ResponseLabel" type="RichTextLabel" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer"]
+[node name="ResponseLabel" type="RichTextLabel" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer" unique_id=539096746]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
@@ -516,19 +516,19 @@ size_flags_vertical = 3
 text = "回复文本"
 autowrap_mode = 1
 
-[node name="水平分割线" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer" instance=ExtResource("3_7mycd")]
+[node name="水平分割线" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer" unique_id=313242973 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="event" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer"]
+[node name="event" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer" unique_id=2011341078]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("8_5vw27")
 
-[node name="Panel" parent="mainContainer/HBoxContainer/VBoxContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=972205872 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="InputTextEdit" type="TextEdit" parent="mainContainer/HBoxContainer/VBoxContainer"]
+[node name="InputTextEdit" type="TextEdit" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=1186997061]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
@@ -536,7 +536,7 @@ placeholder_text = "输入文本"
 emoji_menu_enabled = false
 wrap_mode = 1
 
-[node name="SendButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/InputTextEdit"]
+[node name="SendButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/InputTextEdit" unique_id=1783778180]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 40)
 layout_mode = 1
@@ -551,26 +551,26 @@ grow_horizontal = 0
 grow_vertical = 0
 text = "发送"
 
-[node name="Panel2" parent="mainContainer/HBoxContainer" instance=ExtResource("3_272bh")]
+[node name="Panel2" parent="mainContainer/HBoxContainer" unique_id=620462807 instance=ExtResource("3_272bh")]
 layout_mode = 2
 
-[node name="VBoxContainer2" type="VBoxContainer" parent="mainContainer/HBoxContainer"]
+[node name="VBoxContainer2" type="VBoxContainer" parent="mainContainer/HBoxContainer" unique_id=820406063]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Label" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer2"]
+[node name="Label" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer2" unique_id=363885237]
 layout_mode = 2
 text = "日志"
 
-[node name="Panel" parent="mainContainer/HBoxContainer/VBoxContainer2" instance=ExtResource("3_7mycd")]
+[node name="Panel" parent="mainContainer/HBoxContainer/VBoxContainer2" unique_id=1121262990 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="ScrollContainer" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer2"]
+[node name="ScrollContainer" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer2" unique_id=885977058]
 layout_mode = 2
 size_flags_vertical = 3
 script = ExtResource("18_cegan")
 
-[node name="logContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer2/ScrollContainer"]
+[node name="logContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer2/ScrollContainer" unique_id=1473123810]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -578,24 +578,24 @@ size_flags_vertical = 3
 theme_override_constants/separation = 8
 alignment = 2
 
-[node name="Panel2" parent="mainContainer/HBoxContainer/VBoxContainer2" instance=ExtResource("3_7mycd")]
+[node name="Panel2" parent="mainContainer/HBoxContainer/VBoxContainer2" unique_id=1911404902 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="InputTextEdit" type="LineEdit" parent="mainContainer/HBoxContainer/VBoxContainer2"]
+[node name="InputTextEdit" type="LineEdit" parent="mainContainer/HBoxContainer/VBoxContainer2" unique_id=555174575]
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "在log中搜索"
 
-[node name="Panel" parent="mainContainer/HBoxContainer" instance=ExtResource("3_272bh")]
+[node name="Panel" parent="mainContainer/HBoxContainer" unique_id=1213243025 instance=ExtResource("3_272bh")]
 layout_mode = 2
 
-[node name="Panel" parent="mainContainer" instance=ExtResource("3_7mycd")]
+[node name="Panel" parent="mainContainer" unique_id=1318979298 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
-[node name="postProcess" type="CanvasLayer" parent="."]
+[node name="postProcess" type="CanvasLayer" parent="." unique_id=1382436150]
 visible = false
 
-[node name="ColorRect" type="ColorRect" parent="postProcess"]
+[node name="ColorRect" type="ColorRect" parent="postProcess" unique_id=1265937086]
 material = SubResource("ShaderMaterial_2cqfq")
 anchors_preset = 15
 anchor_right = 1.0

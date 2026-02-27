@@ -10,6 +10,10 @@ import os
 import openai
 from openai import OpenAI
 from key import key
+from image_key import image_key
+IMAGE_MODE = "cloud"  # 可选 "local" 或 "cloud"
+STABILITY_API_HOST = os.getenv("API_HOST", "https://api.stability.ai")
+SDXL_ENGINE_ID = "stable-diffusion-xl-1024-v1-0"
 # 初始化 Flask 应用
 app = Flask(__name__)
 CORS(app)
@@ -21,6 +25,12 @@ clientOpenAI = OpenAI(
     base_url="https://api.deepseek.com"
 )
 
+def comfy_headers():
+    headers = {"Content-Type": "application/json"}
+    if COMFYUI_API_KEY:
+        headers["Authorization"] = f"Bearer {COMFYUI_API_KEY}"
+    return headers
+
 # 原有的 Ollama 配置
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL_NAME = "deepseek-v2:16b"
@@ -28,7 +38,9 @@ AGENT_MODEL_NAME = "qwen3:8b"
 chat_mode = "openai"
 
 # ComfyUI 配置
-COMFYUI_URL = "http://localhost:8188"
+COMFYUI_URL = "https://your-comfyui-api.com"
+COMFYUI_API_KEY = "你的APIKEY"  # 如果不需要可以设为 None
+
 
 # 全局变量，用于缓存工作流和客户端
 workflow_cache = {}
@@ -164,80 +176,81 @@ def chat():
 
 @app.route("/generate_image", methods=["POST"])
 def generate_image():
-    print("开始生成图片")
     data = request.get_json()
     prompt = data.get("prompt", "")
-    
+    width = data.get("width", 1024)
+    height = data.get("height", 1024)
+
     if not prompt:
         return jsonify({"success": False, "error": "提示词不能为空"}), 400
 
-    try:
-        # 从缓存获取工作流，只更新必要的部分
-        workflow = get_cached_workflow()
-        
-        # 只更新正向提示词和种子
-        workflow["6"]["inputs"]["text"] = prompt+",photography"
-        workflow["3"]["inputs"]["seed"] = int(time.time() % (10**9))
+    if not image_key:
+        return jsonify({"success": False, "error": "未配置 image_key"}), 500
 
-        payload = {
-            "prompt": workflow
-        }
-        
-        # 提交生成任务
-        response = requests.post(f"{COMFYUI_URL}/api/prompt", json=payload)
-        response.raise_for_status()
-        prompt_response = response.json()
-        prompt_id = prompt_response["prompt_id"]
-        
-        # 轮询检查任务状态
-        max_attempts = 120
-        attempts = 0
-        
-        while attempts < max_attempts:
-            time.sleep(1)
-            
-            history_response = requests.get(f"{COMFYUI_URL}/history/{prompt_id}")
-            history_data = history_response.json()
-            
-            if prompt_id in history_data:
-                # 任务完成，获取图片
-                output_images = history_data[prompt_id]["outputs"]
-                for node_id, node_output in output_images.items():
-                    if "images" in node_output:
-                        image_info = node_output["images"][0]
-                        image_response = requests.get(
-                            f"{COMFYUI_URL}/view?filename={image_info['filename']}" +
-                            f"&subfolder={image_info.get('subfolder', '')}" +
-                            f"&type={image_info['type']}"
-                        )
-                        if image_response.status_code == 200:
-                            image_base64 = base64.b64encode(image_response.content).decode('utf-8')
-                            return jsonify({
-                                "success": True,
-                                "image": image_base64,
-                                "info": "图片生成成功",
-                                "prompt_id": prompt_id
-                            })
-                return jsonify({"success": False, "error": "生成结果中未找到图片"}), 500
-            
-            attempts += 1
-        
-        # 超时处理
+    # 允许的分辨率组合（官方规定）
+    allowed_sizes = [
+        (1024, 1024),
+        (1152, 896),
+        (896, 1152),
+        (1216, 832),
+        (1344, 768),
+        (768, 1344),
+        (1536, 640),
+        (640, 1536),
+    ]
+
+    if (width, height) not in allowed_sizes:
         return jsonify({
-            "success": False, 
-            "error": f"生成超时，请在 ComfyUI 界面检查任务状态。prompt_id: {prompt_id}"
-        }), 408
-                
-    except requests.exceptions.ConnectionError:
+            "success": False,
+            "error": f"不支持的分辨率 {width}x{height}"
+        }), 400
+
+    try:
+        response = requests.post(
+            f"{STABILITY_API_HOST}/v1/generation/{SDXL_ENGINE_ID}/text-to-image",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": f"Bearer {image_key}"
+            },
+            json={
+                "text_prompts": [
+                    {
+                        "text": prompt
+                    }
+                ],
+                "cfg_scale": 7,
+                "height": height,
+                "width": width,
+                "samples": 1,
+                "steps": 30
+            },
+            timeout=60
+        )
+
+        if response.status_code != 200:
+            return jsonify({
+                "success": False,
+                "error": response.text
+            }), response.status_code
+
+        data = response.json()
+
+        image_base64 = data["artifacts"][0]["base64"]
+
         return jsonify({
-            "success": False, 
-            "error": "无法连接到 ComfyUI 服务，请确保 ComfyUI 正在运行在 http://localhost:8188"
-        }), 503
+            "success": True,
+            "image": image_base64,
+            "model": "sdxl-1.0",
+            "provider": "stability-ai"
+        })
+
     except Exception as e:
         return jsonify({
-            "success": False, 
-            "error": f"生成图片时出错: {str(e)}"
+            "success": False,
+            "error": str(e)
         }), 500
+
 
 @app.route("/health", methods=["GET"])
 def health_check():
@@ -250,7 +263,12 @@ def check_image_service():
     """检查图片生成服务连接状态"""
     try:
         # 尝试连接到ComfyUI服务
-        response = requests.get(f"{COMFYUI_URL}/api/system_stats", timeout=5)
+        response = requests.get(
+    f"{COMFYUI_URL}/api/system_stats",
+    headers=comfy_headers(),
+    timeout=5
+)
+
         if response.status_code == 200:
             return jsonify({
                 "status": "connected",
