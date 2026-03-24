@@ -2,12 +2,28 @@
 
 [ext_resource type="Script" uid="uid://2reqsa0vhtpm" path="res://scripts/item_lable.gd" id="1_qujdj"]
 
-[node name="item" type="Label"]
-custom_minimum_size = Vector2(0, 20)
-offset_right = 167.0
-offset_bottom = 34.0
-theme_override_font_sizes/font_size = 24
-text = "生命药水*10"
-vertical_alignment = 2
-autowrap_mode = 1
+[node name="item" type="VBoxContainer"]
+custom_minimum_size = Vector2(120, 150)
+offset_right = 120.0
+offset_bottom = 150.0
+theme_override_constants/separation = 6
 script = ExtResource("1_qujdj")
+
+[node name="ItemImageButton" type="TextureButton" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 120)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+stretch_mode = 5
+texture_filter = 1
+
+[node name="QuantityLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 18
+text = "生命药水 x10"
+horizontal_alignment = 1
+
+[connection signal="pressed" from="ItemImageButton" to="." method="_on_item_image_button_pressed"]

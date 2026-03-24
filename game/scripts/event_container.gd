@@ -15,14 +15,19 @@ var itemNum
 var itemPrice
 func set_deal_event():
 	await create_tween().tween_property(self,"custom_minimum_size:y",50,0.2).finished
-	await scene.changeTextTo($Label,"以" + str(itemPrice) + "的价格购买" + itemToAdd + "X" + str(itemNum) + "？")
+	await scene.changeTextTo($Label,"以" + str(itemPrice) + "每件（共" + str(itemNum) + "件，总价" + str(itemPrice * itemNum) + "）购买" + itemToAdd + "？")
 	$yes.visible = true
 	$no.visible = true
 func _on_yes_button_down() -> void:
-	scene.money-=itemPrice
+	var total_price = itemPrice * itemNum
+	if scene.money < total_price:
+		scene.addLog("<金币不足，无法购买" + itemToAdd + "X" + str(itemNum) + ">")
+		close()
+		return
+	scene.money -= total_price
 	scene.player_update()
 	scene.add_item(itemToAdd,itemNum)
-	scene.addLog("你购买了"+itemToAdd + "X" + str(itemNum))
+	scene.addLog("你购买了" + itemToAdd + "X" + str(itemNum) + "，花费" + str(total_price))
 	close()
 	pass # Replace with function body.
 func close():

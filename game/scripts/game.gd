@@ -22,6 +22,7 @@ var npcs: Dictionary
 var items: Dictionary
 var rumors:Dictionary
 var siteImgs: Dictionary
+var itemProfiles: Dictionary = {}
 var playerName: String = "阿尔的秘宝"
 var currentSiteName: String
 var currentNpc: npc
@@ -71,13 +72,23 @@ var agent_prompt:String = """你是一个AI智能体，擅长确定需要调用�
 	如果输入信息类似于：<老约翰在酒馆，是一个靠在墙角的男人，右眼闪着红光，脚边放着行李箱>，那就是提及了某个地方有某个NPC。
 	如果输入信息类似于：<传闻：国王被暗杀-国王被暗杀，引起震惊>，那就是提及了类似于传闻、新闻、谣言的事件
 	如果输入信息类似于：<离开>，那就是想要离开，或者自己要死了。
+	如果一次输入里包含多个可执行指令，必须按顺序调用多个函数，不要只调用一个。
+	涉及物品数量时，quantity 必须填写真实数量，不能默认写1。
+"""
+
+var item_profile_prompt:String = """
+你是游戏道具设计助手。针对给定的物品名，输出严格 JSON：
+{
+	"description":"中文介绍，20~60字",
+	"image_prompt":"英文生图提示词，适合生成单个道具图标，纯净背景，无文字"
+}
+只输出 JSON，不要包含 markdown 代码块。
 """
 
 # ==================== 生命周期函数 ====================
 func _ready():
 	send_button.connect("pressed", _on_send_button_pressed)
-	#添加处
-	#%backgroundImg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	%backgroundImg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	player_update()
 var background:String
 
@@ -303,7 +314,7 @@ func npc_reply(reply: String):
 	if toolsTexts!="":
 		var prompts = [
 			{"role":"system","content": agent_prompt},
-			{"role":"assistant","content": toolsTexts}]
+			{"role":"user","content": toolsTexts}]
 		await ask_ai(prompts, aiMode.tools)
 
 func process_string(input: String) -> String:
@@ -340,20 +351,116 @@ func gen_img(prompt):
 		print("错误：请求创建失败")
 
 func _display_base64_image(base64_string):
-	var image_buffer = Marshalls.base64_to_raw(base64_string)
-	var image = Image.new()
-	var error = image.load_png_from_buffer(image_buffer)
-
-	if error != OK:
-		error = image.load_jpg_from_buffer(image_buffer)
-
-	if error == OK:
-		var texture = ImageTexture.create_from_image(image)
+	var texture = _base64_to_texture(base64_string)
+	if texture != null:
 		%backgroundImg.texture = texture
 		siteImgs[currentSiteName] = texture
 		print(texture)
 	else:
 		print("错误：图片格式不支持")
+
+func _base64_to_texture(base64_string: String) -> Texture2D:
+	if base64_string == "":
+		return null
+	var image_buffer = Marshalls.base64_to_raw(base64_string)
+	var image = Image.new()
+	var error = image.load_png_from_buffer(image_buffer)
+	if error != OK:
+		error = image.load_jpg_from_buffer(image_buffer)
+	if error != OK:
+		return null
+	return ImageTexture.create_from_image(image)
+
+func _request_json(url: String, body_json: String) -> Dictionary:
+	var request_node := HTTPRequest.new()
+	add_child(request_node)
+	var err = request_node.request(
+		url,
+		["Content-Type: application/json"],
+		HTTPClient.METHOD_POST,
+		body_json
+	)
+	if err != OK:
+		request_node.queue_free()
+		return {"ok": false, "error": "请求创建失败: " + str(err)}
+
+	var response = await request_node.request_completed
+	request_node.queue_free()
+
+	var result: int = response[0]
+	var response_code: int = response[1]
+	var body: PackedByteArray = response[3]
+	if result != HTTPRequest.RESULT_SUCCESS:
+		return {"ok": false, "error": "网络错误: " + str(result)}
+
+	var parser := JSON.new()
+	if parser.parse(body.get_string_from_utf8()) != OK:
+		return {"ok": false, "error": "响应解析失败"}
+
+	var data = parser.get_data()
+	if response_code != 200:
+		return {"ok": false, "error": str(data.get("error", "HTTP " + str(response_code)))}
+	return {"ok": true, "data": data}
+
+func _generate_item_profile(item_name: String) -> Dictionary:
+	var prompts = [
+		{"role":"system", "content": item_profile_prompt},
+		{"role":"user", "content": "物品名：" + item_name}
+	]
+	var req = await _request_json(chat_url, JSON.stringify([prompts, null, "json_object"]))
+	if !req.get("ok", false):
+		return {
+			"description": "这是一件实用的道具，可在冒险中派上用场。",
+			"image_prompt": "single game inventory item icon, clean background, detailed, centered"
+		}
+
+	var text = req["data"].get("text", "")
+	if text is Dictionary:
+		return text
+	if text is String:
+		var json_dic = extract_json_from_text(text)
+		if json_dic != {}:
+			return json_dic
+	return {
+		"description": "这是一件实用的道具，可在冒险中派上用场。",
+		"image_prompt": "single game inventory item icon, clean background, detailed, centered"
+	}
+
+func _generate_item_texture(image_prompt: String) -> Texture2D:
+	var req = await _request_json(
+		image_api_url,
+		JSON.stringify({"prompt": image_prompt, "width": 1024, "height": 1024})
+	)
+	if !req.get("ok", false):
+		return null
+	var image_data = req["data"].get("image", "")
+	return _base64_to_texture(image_data)
+
+func ensure_item_profile_async(item_name: String) -> void:
+	if !itemProfiles.has(item_name):
+		itemProfiles[item_name] = {
+			"description": "正在生成物品介绍...",
+			"texture": null,
+			"is_generating": false,
+			"is_ready": false
+		}
+
+	if itemProfiles[item_name].get("is_generating", false) or itemProfiles[item_name].get("is_ready", false):
+		return
+
+	itemProfiles[item_name]["is_generating"] = true
+	%itemContainer.update_item_visual(item_name, itemProfiles[item_name].get("texture", null), itemProfiles[item_name].get("description", "正在生成物品介绍..."))
+
+	var profile = await _generate_item_profile(item_name)
+	var item_description = profile.get("description", "这是一件实用的道具，可在冒险中派上用场。")
+	var image_prompt = profile.get("image_prompt", "single game inventory item icon, clean background, detailed, centered")
+	var item_texture = await _generate_item_texture(image_prompt)
+
+	itemProfiles[item_name]["description"] = item_description
+	itemProfiles[item_name]["texture"] = item_texture
+	itemProfiles[item_name]["is_generating"] = false
+	itemProfiles[item_name]["is_ready"] = true
+	%itemContainer.update_item_visual(item_name, item_texture, item_description)
 
 # ==================== UI 操作 ====================
 func _on_send_button_pressed():
@@ -451,8 +558,17 @@ func _on_request_completed(result, response_code, _header, body):
 				addLog("你结束了与" + currentNpc.npcName + "的对话。" + data["text"])
 			aiMode.tools:
 				if data["text"] is Array:
-					#此时应该是一个数组
 					handle_npc_instruction(data["text"])
+				elif data["text"] is Dictionary:
+					handle_npc_instruction([data["text"]])
+				elif data["text"] is String:
+					var parser = JSON.new()
+					if parser.parse(data["text"]) == OK:
+						var parsed = parser.get_data()
+						if parsed is Array:
+							handle_npc_instruction(parsed)
+						elif parsed is Dictionary and parsed.has("function"):
+							handle_npc_instruction([parsed])
 	else:
 		changeTextTo(response_label, "响应格式错误")
 
@@ -515,7 +631,7 @@ func initiate_transaction(item_name: String, quantity: int, price: int) -> void:
 
 # 给予物品：NPC想要送给玩家物品
 func got_items(item_name: String, quantity: int) -> void:
-	%itemContainer.add_item(item_name,quantity)
+	add_item(item_name, quantity)
 	addLog("<你获得了" + str(item_name) + "X" + str(quantity) + ">")
 	pass
 
@@ -589,16 +705,22 @@ func handle_npc_instruction(tool_calls: Array) -> void:
 		# 提取函数调用信息
 		var function_data = tool_call.get("function", {})
 		var method = function_data.get("name", "")
-		var arguments_str = function_data.get("arguments", "{}")
+		var arguments_data = function_data.get("arguments", "{}")
 
 		# 解析JSON参数
 		var parameters = {}
-		var json = JSON.new()
-		var error = json.parse(arguments_str)
-		if error == OK:
-			parameters = json.data
+		if arguments_data is Dictionary:
+			parameters = arguments_data
+		elif arguments_data is String:
+			var json = JSON.new()
+			var error = json.parse(arguments_data)
+			if error == OK:
+				parameters = json.data
+			else:
+				print("解析参数失败: ", arguments_data)
+				continue
 		else:
-			print("解析参数失败: ", arguments_str)
+			print("解析参数失败: ", arguments_data)
 			continue
 
 		# 根据方法名调用对应函数
@@ -637,5 +759,18 @@ func handle_npc_instruction(tool_calls: Array) -> void:
 			_:
 				response_label.text += "未知方法: " + method + "\n"
 		await get_tree().create_timer(0.4).timeout
-func add_item(itemToAdd,itemNum):
-	%itemContainer.add_item(itemToAdd,itemNum)
+func add_item(itemToAdd, itemNum):
+	if !itemProfiles.has(itemToAdd):
+		itemProfiles[itemToAdd] = {
+			"description": "正在生成物品介绍...",
+			"texture": null,
+			"is_generating": false,
+			"is_ready": false
+		}
+	%itemContainer.add_item(
+		itemToAdd,
+		itemNum,
+		itemProfiles[itemToAdd].get("texture", null),
+		itemProfiles[itemToAdd].get("description", "正在生成物品介绍...")
+	)
+	ensure_item_profile_async(itemToAdd)
