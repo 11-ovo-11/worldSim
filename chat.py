@@ -25,11 +25,11 @@ clientOpenAI = OpenAI(
     base_url="https://api.deepseek.com"
 )
 
-def comfy_headers():
-    headers = {"Content-Type": "application/json"}
-    if COMFYUI_API_KEY:
-        headers["Authorization"] = f"Bearer {COMFYUI_API_KEY}"
-    return headers
+#def comfy_headers():
+   # headers = {"Content-Type": "application/json"}
+  #  if COMFYUI_API_KEY:
+   #     headers["Authorization"] = f"Bearer {COMFYUI_API_KEY}"
+   # return headers
 
 # 原有的 Ollama 配置
 OLLAMA_URL = "http://localhost:11434/api/generate"
@@ -38,8 +38,8 @@ AGENT_MODEL_NAME = "qwen3:8b"
 chat_mode = "openai"
 
 # ComfyUI 配置
-COMFYUI_URL = "https://your-comfyui-api.com"
-COMFYUI_API_KEY = "你的APIKEY"  # 如果不需要可以设为 None
+#COMFYUI_URL = "https://your-comfyui-api.com"
+#COMFYUI_API_KEY = "你的APIKEY"  # 如果不需要可以设为 None
 
 
 # 全局变量，用于缓存工作流和客户端
@@ -180,6 +180,9 @@ def generate_image():
     prompt = data.get("prompt", "")
     width = data.get("width", 1024)
     height = data.get("height", 1024)
+    steps = int(data.get("steps", 30))
+    cfg_scale = float(data.get("cfg_scale", 7))
+    mode = data.get("mode", "default")
 
     if not prompt:
         return jsonify({"success": False, "error": "提示词不能为空"}), 400
@@ -205,6 +208,14 @@ def generate_image():
             "error": f"不支持的分辨率 {width}x{height}"
         }), 400
 
+    # 允许调用端按需调低参数提升速度
+    if mode == "ultra_fast_item":
+        steps = max(4, min(20, steps))
+        cfg_scale = max(1.0, min(12.0, cfg_scale))
+    else:
+        steps = max(10, min(40, steps))
+        cfg_scale = max(1.0, min(20.0, cfg_scale))
+
     try:
         response = requests.post(
             f"{STABILITY_API_HOST}/v1/generation/{SDXL_ENGINE_ID}/text-to-image",
@@ -219,11 +230,11 @@ def generate_image():
                         "text": prompt
                     }
                 ],
-                "cfg_scale": 7,
+                "cfg_scale": cfg_scale,
                 "height": height,
                 "width": width,
                 "samples": 1,
-                "steps": 30
+                "steps": steps
             },
             timeout=60
         )
@@ -257,50 +268,79 @@ def health_check():
     """健康检查端点"""
     return jsonify({"status": "healthy", "chat_mode": chat_mode})
 
+@app.route("/", methods=["GET"])
+def index():
+    """服务首页，避免浏览器访问根路径返回 404"""
+    return jsonify({
+        "message": "worldSim chat server is running",
+        "endpoints": [
+            "/health",
+            "/check_image_service",
+            "/check_chat_service",
+            "/service_status",
+            "/chat",
+            "/generate_image"
+        ]
+    })
+
 # 新增的服务状态检查端点
 @app.route("/check_image_service", methods=["GET"])
 def check_image_service():
     """检查图片生成服务连接状态"""
+    if not image_key:
+        return jsonify({
+            "status": "misconfigured",
+            "message": "未配置 image_key",
+            "service": "Stability AI"
+        }), 500
+
     try:
-        # 尝试连接到ComfyUI服务
+        # 通过 Stability API 引擎列表做连通性检查
         response = requests.get(
-    f"{COMFYUI_URL}/api/system_stats",
-    headers=comfy_headers(),
-    timeout=5
-)
+            f"{STABILITY_API_HOST}/v1/engines/list",
+            headers={
+                "Accept": "application/json",
+                "Authorization": f"Bearer {image_key}"
+            },
+            timeout=8
+        )
 
         if response.status_code == 200:
+            engines = response.json() if response.text else []
+            has_sdxl = any(engine.get("id") == SDXL_ENGINE_ID for engine in engines if isinstance(engine, dict))
             return jsonify({
                 "status": "connected",
                 "message": "视觉模块已连接",
-                "service": "ComfyUI"
+                "service": "Stability AI",
+                "engine": SDXL_ENGINE_ID,
+                "engine_available": has_sdxl
             })
         else:
             return jsonify({
                 "status": "disconnected",
                 "message": "视觉模块连接异常",
-                "service": "ComfyUI",
+                "service": "Stability AI",
                 "error": f"HTTP {response.status_code}"
             }), 503
     except requests.exceptions.ConnectionError:
         return jsonify({
             "status": "disconnected",
             "message": "视觉模块未连接",
-            "service": "ComfyUI",
+            "service": "Stability AI",
             "error": "无法连接到服务"
         }), 503
     except requests.exceptions.Timeout:
         return jsonify({
             "status": "timeout",
             "message": "视觉模块连接超时",
-            "service": "ComfyUI",
+            "service": "Stability AI",
             "error": "连接超时"
         }), 503
     except Exception as e:
         return jsonify({
             "status": "error",
             "message": "视觉模块检查失败",
-            "service": "ComfyUI",
+            "service": "Stability AI",
             "error": str(e)
         }), 500
 
@@ -385,12 +425,14 @@ def check_chat_service():
 @app.route("/service_status", methods=["GET"])
 def service_status():
     """检查所有服务的完整状态"""
-    image_status = check_image_service()
-    chat_status = check_chat_service()
-    
-    # 解析响应数据
-    image_data = image_status[0].get_json() if hasattr(image_status[0], 'get_json') else {}
-    chat_data = chat_status[0].get_json() if hasattr(chat_status[0], 'get_json') else {}
+    def _extract_status_data(status_result):
+        # 兼容 Flask 视图函数返回值：Response / tuple / str 等，统一转为 Response
+        response_obj = app.make_response(status_result)
+        data = response_obj.get_json(silent=True)
+        return data if isinstance(data, dict) else {}
+
+    image_data = _extract_status_data(check_image_service())
+    chat_data = _extract_status_data(check_chat_service())
     
     return jsonify({
         "image_service": image_data,
@@ -402,8 +444,12 @@ def service_status():
 if __name__ == "__main__":
     from waitress import serve
     print("启动服务器在 http://127.0.0.1:5000")
+    print("服务器已进入监听状态（这是常驻进程，不会自动退出）。")
     print("服务状态检查端点:")
+    print("  GET / - 服务首页")
+    print("  GET /health - 健康检查")
     print("  GET /check_image_service - 检查图片生成服务")
     print("  GET /check_chat_service - 检查问答生成服务") 
     print("  GET /service_status - 检查所有服务状态")
+    print("按 Ctrl+C 停止服务")
     serve(app, host="127.0.0.1", port=5000)

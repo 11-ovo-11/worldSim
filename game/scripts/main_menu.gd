@@ -129,7 +129,14 @@ func _input(event):
 		if event.keycode == KEY_ENTER and not $HBoxContainer/VBoxContainer/TextEdit/Button.disabled:
 			_on_button_button_down()
 var world_init_prompt = """
-你是一个小说家，擅长世界观构建，现在需要你根据用户提供的信息生成一个精简、高效、可直接用于后续故事开发的世界观设定。请将世界观组织成以下三个明确的部分，确保语言凝练，富有启发性。
+你是一个小说家，擅长世界观构建。你必须严格遵循用户输入，不得擅自替换题材。
+硬性约束：
+1) 若用户输入涉及现代日常题材（大学/高校/校园/都市/学生/职场等），必须保持对应的现代现实风格。
+2) 严格区分大学与中学：大学生活有宿舍楼、食堂、图书馆、社团、自习室、操场；中学有班级、班主任、高考压力。不要混淆。
+3) 不得默认加入赛博朋克、机器人、义体、外星、末日等元素，除非用户明确提出。
+4) 你输出的世界观描述必须足够具体，能直接约束后续地点与NPC生成风格。
+
+现在请根据用户提供的信息生成一个精简、高效、可直接用于后续故事开发的世界观设定。请将世界观组织成以下三个明确的部分，确保语言凝练，富有启发性。
 世界概览：
 （用2-3句话精准描述这个世界的核心概念、基调与核心冲突。）
 人群状态：
@@ -138,6 +145,7 @@ var world_init_prompt = """
 （描述世界的物理环境和天气现象。回答：环境有何特点？天气是常态化的异常，还是循环往复的极端？它如何影响人们的生活？）
 """
 func _init_world(location:String):
+	scene.world_seed_input = location
 	var prompts = [
 		{"role":"system","content": world_init_prompt},
 		{"role":"user","content": location}]

@@ -528,6 +528,26 @@ script = ExtResource("8_5vw27")
 [node name="Panel" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=972205872 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
+[node name="DialogueContainer" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=3000000001]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="DialogueTextEdit" type="TextEdit" parent="mainContainer/HBoxContainer/VBoxContainer/DialogueContainer" unique_id=3000000002]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 40)
+placeholder_text = "对话内容"
+emoji_menu_enabled = false
+wrap_mode = 1
+
+[node name="DialogueButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/DialogueContainer" unique_id=3000000003]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 40)
+layout_mode = 2
+text = "对话"
+
 [node name="InputTextEdit" type="TextEdit" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=1186997061]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 40)
@@ -549,7 +569,7 @@ offset_left = -52.0
 offset_top = -40.0
 grow_horizontal = 0
 grow_vertical = 0
-text = "发送"
+text = "行动"
 
 [node name="Panel2" parent="mainContainer/HBoxContainer" unique_id=620462807 instance=ExtResource("3_272bh")]
 layout_mode = 2
@@ -585,6 +605,21 @@ layout_mode = 2
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "在log中搜索"
+
+[node name="SaveLoadContainer" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer2" unique_id=4000000001]
+layout_mode = 2
+
+[node name="SaveButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer2/SaveLoadContainer" unique_id=4000000002]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "存档"
+
+[node name="LoadButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer2/SaveLoadContainer" unique_id=4000000003]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "读档"
 
 [node name="Panel" parent="mainContainer/HBoxContainer" unique_id=1213243025 instance=ExtResource("3_272bh")]
 layout_mode = 2

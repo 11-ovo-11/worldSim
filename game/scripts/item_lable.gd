@@ -1,6 +1,8 @@
 extends VBoxContainer
 class_name item
 
+const DEFAULT_ITEM_TEXTURE := preload("res://icon.svg")
+
 var item_name: String = ""
 var item_num: int = 0
 var item_description: String = "正在生成物品介绍..."
@@ -19,6 +21,7 @@ func setup(item_name_value: String, quantity: int, texture: Texture2D, descripti
 		item_texture = texture
 	if description != "":
 		item_description = description
+	visible = (item_texture != null)
 	_refresh_view()
 
 func add_quantity(quantity: int) -> void:
@@ -32,6 +35,7 @@ func consume_quantity(quantity: int) -> void:
 func set_item_visual(texture: Texture2D, description: String) -> void:
 	if texture != null:
 		item_texture = texture
+		visible = true
 	if description != "":
 		item_description = description
 	_refresh_view()
@@ -39,7 +43,7 @@ func set_item_visual(texture: Texture2D, description: String) -> void:
 func _refresh_view() -> void:
 	if quantity_label == null or image_button == null:
 		return
-	quantity_label.text = item_name + " x" + str(item_num)
+	quantity_label.text = "x" + str(item_num)
 	if item_texture != null:
 		image_button.texture_normal = item_texture
 		image_button.texture_pressed = item_texture
@@ -55,7 +59,7 @@ func _on_item_image_button_pressed() -> void:
 	var content := VBoxContainer.new()
 	content.custom_minimum_size = Vector2(480, 0)
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.theme_override_constants.separation = 12
+	content.add_theme_constant_override("separation", 12)
 
 	if item_texture != null:
 		var img := TextureRect.new()
