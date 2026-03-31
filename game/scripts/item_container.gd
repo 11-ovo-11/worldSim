@@ -1,21 +1,22 @@
 extends VBoxContainer
 
-func add_item(itemToAdd:String, itemNum:int, itemTexture: Texture2D = null, itemDescription: String = ""):
+func add_item(itemToAdd:String, itemNum:int, itemTexture: Texture2D = null, itemDescription: String = "", effect_type: String = "none", effect_value: int = 0):
 	for child in get_children():
 		if child is item and child.item_name == itemToAdd:
 			child.add_quantity(itemNum)
-			if itemTexture != null or itemDescription != "":
-				child.set_item_visual(itemTexture, itemDescription)
+			if itemTexture != null or itemDescription != "" or effect_type != "none" or effect_value > 0:
+				child.set_item_visual(itemTexture, itemDescription, effect_type, effect_value)
 			return
 
 	var new_item_lable = load("res://fabs/item_lable.tscn").instantiate() as item
 	new_item_lable.setup(itemToAdd, itemNum, itemTexture, itemDescription)
+	new_item_lable.set_item_visual(itemTexture, itemDescription, effect_type, effect_value)
 	add_child(new_item_lable)
 
-func update_item_visual(itemName: String, itemTexture: Texture2D, itemDescription: String) -> void:
+func update_item_visual(itemName: String, itemTexture: Texture2D, itemDescription: String, effect_type: String = "none", effect_value: int = 0) -> void:
 	for child in get_children():
 		if child is item and child.item_name == itemName:
-			child.set_item_visual(itemTexture, itemDescription)
+			child.set_item_visual(itemTexture, itemDescription, effect_type, effect_value)
 			return
 
 func consume_item(itemToConsume:String, itemNum:int) -> Dictionary:

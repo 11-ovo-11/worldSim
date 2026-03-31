@@ -1,0 +1,130 @@
+{
+	"background": "世界概览：\n一所位于现代都市边缘的普通综合性大学，以其平淡无奇的日常和内部微妙的阶层分化构成了主要基调。核心冲突潜藏于看似按部就班的学分、社团活动与社交圈层之下，是理想与现实、个体认同与群体规训之间的无声拉锯。\n\n人群状态：\n大多数学生遵循着“上课-食堂-宿舍-图书馆”四点一线的循环，生活被课程表、DDL（截止日期）和绩点焦虑所填充。他们普遍信仰“努力会有回报”的实用主义，同时隐秘地恐惧着成为“平庸的大多数”，在集体无意识中既渴望脱颖而出，又惧怕脱离安全的轨道。社交媒体上的精心展示与独处时的倦怠感形成鲜明对比。\n\n环境与天气：\n校园环境是规整功能性与刻意人文景观的结合体，拥有大片草坪、标准化教学楼、拥挤的宿舍区和几个作为地标的“网红”打卡点。天气遵循典型的温带季风气候，四季分明但并无异常。然而，持续的雾霾天、突如其来的暴雨或连绵的阴雨，常常成为学生情绪和日程安排的微妙背景板，放大着室内的困倦或室外的疏离感。",
+	"current_site": "大学正门广场",
+	"env_dic": {
+		"current_humidity": 65.0,
+		"current_temperature": 18.0,
+		"current_weather": "overcast",
+		"current_wind_speed": 8.0,
+		"humidity_range": [
+			30.0,
+			90.0
+		],
+		"temperature_range": [
+			-10.0,
+			35.0
+		],
+		"weather_duration_base": {
+			"cloudy": 100.0,
+			"overcast": 90.0,
+			"rain": 40.0,
+			"snow": 30.0,
+			"sunny": 140.0,
+			"thunder": 25.0
+		},
+		"weather_transition_probability": {
+			"cloudy": {
+				"cloudy": 0.5,
+				"overcast": 0.2,
+				"rain": 0.08,
+				"snow": 0.02,
+				"sunny": 0.2,
+				"thunder": 0.0
+			},
+			"overcast": {
+				"cloudy": 0.2,
+				"overcast": 0.4,
+				"rain": 0.25,
+				"snow": 0.05,
+				"sunny": 0.1,
+				"thunder": 0.0
+			},
+			"rain": {
+				"cloudy": 0.15,
+				"overcast": 0.3,
+				"rain": 0.4,
+				"snow": 0.05,
+				"sunny": 0.05,
+				"thunder": 0.05
+			},
+			"snow": {
+				"cloudy": 0.1,
+				"overcast": 0.25,
+				"rain": 0.05,
+				"snow": 0.5,
+				"sunny": 0.05,
+				"thunder": 0.05
+			},
+			"sunny": {
+				"cloudy": 0.25,
+				"overcast": 0.1,
+				"rain": 0.04,
+				"snow": 0.01,
+				"sunny": 0.6,
+				"thunder": 0.0
+			},
+			"thunder": {
+				"cloudy": 0.1,
+				"overcast": 0.2,
+				"rain": 0.4,
+				"snow": 0.0,
+				"sunny": 0.0,
+				"thunder": 0.3
+			}
+		},
+		"wind_range": [
+			0.0,
+			30.0
+		]
+	},
+	"items": [],
+	"logs": [
+		"你抵达了大学正门广场"
+	],
+	"nowtime": 522.400000000002,
+	"npcs": {
+		"张明": {
+			"npc_describe": "一名穿着稍正式衬衫的男生，站在雕塑旁，似乎在等人，眼神不时扫过人群，显得有点疏离。",
+			"特征": ""
+		},
+		"李华": {
+			"npc_describe": "一名戴着眼镜的男生，穿着普通的T恤和牛仔裤，背着沉重的书包，表情略显焦虑，正低头查看手机上的课程表。",
+			"特征": ""
+		},
+		"王芳": {
+			"npc_describe": "一名扎着马尾的女生，穿着休闲运动装，手里拿着咖啡杯，与朋友轻松交谈，脸上带着社交性的微笑。",
+			"特征": ""
+		}
+	},
+	"player": {
+		"energy": 97.7600000000004,
+		"hp": 100.0,
+		"money": 1000,
+		"name": "现代的大学学生",
+		"reputation": 100.0
+	},
+	"rumors": {
+
+	},
+	"sites": {
+		"大学正门广场": {
+			"npc": {
+				"张明": "一名穿着稍正式衬衫的男生，站在雕塑旁，似乎在等人，眼神不时扫过人群，显得有点疏离。",
+				"李华": "一名戴着眼镜的男生，穿着普通的T恤和牛仔裤，背着沉重的书包，表情略显焦虑，正低头查看手机上的课程表。",
+				"王芳": "一名扎着马尾的女生，穿着休闲运动装，手里拿着咖啡杯，与朋友轻松交谈，脸上带着社交性的微笑。"
+			},
+			"地点名称": "大学正门广场",
+			"地点描述": "这里是大学的主入口，一个宽阔的广场，连接着校园内外。广场上铺着整齐的石板，中央有一座简约的现代雕塑，周围点缀着几排长椅和绿化带。学生们匆匆进出，有的背着书包赶去上课，有的聚在一起聊天或查看手机，空气中弥漫着轻微的雾霾，阳光透过云层洒下，营造出一种既忙碌又疏离的氛围。远处可见标准化教学楼和宿舍楼的轮廓，背景是都市边缘的天际线。",
+			"能前往的地点": [
+				"教学楼区",
+				"学生宿舍区",
+				"图书馆",
+				"校园食堂",
+				"社团活动中心"
+			],
+			"英文描述": "A wide plaza at the main entrance of a modern university, with neat stone paving, a minimalist contemporary sculpture at the center, benches, and greenery. Students hurry in and out, carrying backpacks, chatting, or checking phones, under hazy sunlight with distant views of standardized buildings and the city skyline, evoking a busy yet detached college atmosphere."
+		}
+	},
+	"version": 1,
+	"world_seed_input": "\n学校"
+}

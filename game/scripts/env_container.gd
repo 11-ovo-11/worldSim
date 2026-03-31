@@ -15,12 +15,10 @@ func _process(delta: float) -> void:
 		_time_update(0.2)
 
 func _time_update(timeToAdd:float):
-	scene.nowtime+=timeToAdd
-	scene.energy-=timeToAdd/10
-	if scene.energy<=0:
-		scene.hp-=timeToAdd/20
+	var rec = scene.advance_time_minutes(timeToAdd)
 	$site_buttons/timeDis.text = minutes_to_time(scene.nowtime)
-	scene.player_update()
+	if float(rec.get("hours", 0.0)) >= 1.0:
+		scene.addLog("<时间流逝，体力与健康缓慢恢复。>")
 	update_weather_system()
 
 func minutes_to_time(minutes: int) -> String:
@@ -29,7 +27,7 @@ func minutes_to_time(minutes: int) -> String:
 		minutes = 0
 
 	# 计算小时和分钟
-	var total_hours = minutes / 60
+	var total_hours = int(floor(float(minutes) / 60.0))
 	var hours = total_hours % 24
 	var mins = minutes % 60
 	scene.timePrompt = "当前时间：%02d:%02d" % [hours, mins]
@@ -260,7 +258,7 @@ func load_weather_config_from_json(json_data: Dictionary) -> bool:
 	return true
 
 # 辅助函数：验证和分配范围数据
-func _validate_and_assign_range(range_data, field_name: String, target_range) -> bool:
+func _validate_and_assign_range(range_data, field_name: String, _target_range) -> bool:
 	if not (range_data is Array and range_data.size() == 2):
 		push_error(field_name + " 格式错误，应为包含2个数值的数组")
 		return false
@@ -269,8 +267,8 @@ func _validate_and_assign_range(range_data, field_name: String, target_range) ->
 		push_error(field_name + " 范围无效，最小值应小于最大值")
 		return false
 
-	# 创建Vector2范围
-	target_range = Vector2(range_data[0], range_data[1])
+	# 创建Vector2范围（由调用方自行赋值）
+	var _range = Vector2(range_data[0], range_data[1])
 	return true
 
 # 辅助函数：验证当前天气参数

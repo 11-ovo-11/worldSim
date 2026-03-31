@@ -308,9 +308,23 @@ def check_image_service():
         if response.status_code == 200:
             engines = response.json() if response.text else []
             has_sdxl = any(engine.get("id") == SDXL_ENGINE_ID for engine in engines if isinstance(engine, dict))
+            balance_msg = ""
+            try:
+                acc_resp = requests.get(
+                    f"{STABILITY_API_HOST}/v1/user/account",
+                    headers={"Accept": "application/json", "Authorization": f"Bearer {image_key}"},
+                    timeout=8
+                )
+                if acc_resp.status_code == 200:
+                    acc_data = acc_resp.json()
+                    credits = acc_data.get("credits", None)
+                    if credits is not None:
+                        balance_msg = "，余额" + str(round(float(credits), 2)) + "点"
+            except Exception:
+                pass
             return jsonify({
                 "status": "connected",
-                "message": "视觉模块已连接",
+                "message": "视觉模块已连接" + balance_msg,
                 "service": "Stability AI",
                 "engine": SDXL_ENGINE_ID,
                 "engine_available": has_sdxl
@@ -377,9 +391,25 @@ def check_chat_service():
                     stream=False
                 )
                 if test_response.choices:
+                    balance_msg = ""
+                    try:
+                        bal_resp = requests.get(
+                            "https://api.deepseek.com/user/balance",
+                            headers={"Authorization": f"Bearer {DEEP_SEEK_KEY}", "Accept": "application/json"},
+                            timeout=8
+                        )
+                        if bal_resp.status_code == 200:
+                            bal_data = bal_resp.json()
+                            infos = bal_data.get("balance_infos", [])
+                            for info in infos:
+                                if info.get("currency") == "CNY":
+                                    balance_msg = "，余额" + info.get("total_balance", "?") + "元"
+                                    break
+                    except Exception:
+                        pass
                     return jsonify({
                         "status": "connected",
-                        "message": "神经网络已连接",
+                        "message": "神经网络已连接" + balance_msg,
                         "service": "DeepSeek API",
                         "model": "deepseek-chat"
                     })
