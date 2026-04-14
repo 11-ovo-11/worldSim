@@ -1,39 +1,39 @@
 {
-	"background": "世界概览：\n一所位于现代都市边缘的普通综合性大学，以其平淡无奇的日常和内部微妙的阶层分化构成了主要基调。核心冲突潜藏于看似按部就班的学分、社团活动与社交圈层之下，是理想与现实、个体认同与群体规训之间的无声拉锯。\n\n人群状态：\n大多数学生遵循着“上课-食堂-宿舍-图书馆”四点一线的循环，生活被课程表、DDL（截止日期）和绩点焦虑所填充。他们普遍信仰“努力会有回报”的实用主义，同时隐秘地恐惧着成为“平庸的大多数”，在集体无意识中既渴望脱颖而出，又惧怕脱离安全的轨道。社交媒体上的精心展示与独处时的倦怠感形成鲜明对比。\n\n环境与天气：\n校园环境是规整功能性与刻意人文景观的结合体，拥有大片草坪、标准化教学楼、拥挤的宿舍区和几个作为地标的“网红”打卡点。天气遵循典型的温带季风气候，四季分明但并无异常。然而，持续的雾霾天、突如其来的暴雨或连绵的阴雨，常常成为学生情绪和日程安排的微妙背景板，放大着室内的困倦或室外的疏离感。",
-	"current_site": "大学正门广场",
+	"background": "世界概览：\n一所位于现代都市边缘的普通综合性大学，以其相对宽松的管理和多元化的学生社团文化而闻名。核心冲突潜藏在看似平静的校园生活之下，是个人理想与现实压力、青春期的迷茫与对未来的焦虑之间的无声对抗。\n\n人群状态：\n大多数学生过着三点一线（宿舍-教室-食堂/图书馆）的生活，被学分、社团活动、实习机会和人际关系所定义。他们普遍信仰“努力会有回报”，但内心深处恐惧平庸、落后于同龄人，以及在毕业时找不到方向。手机和社交媒体是他们构建自我认知和社交网络的主要工具。\n\n环境与天气：\n校园环境是精心规划的绿化和功能性建筑的混合体，新旧校区风格迥异。天气遵循典型的温带季风气候，四季分明。春季的柳絮、夏季的闷热暴雨、秋季的短暂晴朗和冬季的湿冷，不仅构成校园生活的背景板，也微妙地影响着学生的情绪与日常节奏（例如，雨季让往返宿舍与教学楼变得不便，而晴朗的秋日则会让操场和草坪挤满人群）。",
+	"current_site": "教学楼",
 	"env_dic": {
 		"current_humidity": 65.0,
 		"current_temperature": 18.0,
-		"current_weather": "overcast",
+		"current_weather": "cloudy",
 		"current_wind_speed": 8.0,
 		"humidity_range": [
 			30.0,
-			90.0
+			95.0
 		],
 		"temperature_range": [
 			-10.0,
 			35.0
 		],
 		"weather_duration_base": {
-			"cloudy": 100.0,
-			"overcast": 90.0,
+			"cloudy": 90.0,
+			"overcast": 70.0,
 			"rain": 40.0,
-			"snow": 30.0,
-			"sunny": 140.0,
+			"snow": 50.0,
+			"sunny": 150.0,
 			"thunder": 25.0
 		},
 		"weather_transition_probability": {
 			"cloudy": {
-				"cloudy": 0.5,
+				"cloudy": 0.4,
 				"overcast": 0.2,
 				"rain": 0.08,
 				"snow": 0.02,
-				"sunny": 0.2,
+				"sunny": 0.3,
 				"thunder": 0.0
 			},
 			"overcast": {
-				"cloudy": 0.2,
-				"overcast": 0.4,
+				"cloudy": 0.25,
+				"overcast": 0.35,
 				"rain": 0.25,
 				"snow": 0.05,
 				"sunny": 0.1,
@@ -42,34 +42,34 @@
 			"rain": {
 				"cloudy": 0.15,
 				"overcast": 0.3,
-				"rain": 0.4,
-				"snow": 0.05,
+				"rain": 0.45,
+				"snow": 0.0,
 				"sunny": 0.05,
 				"thunder": 0.05
 			},
 			"snow": {
 				"cloudy": 0.1,
 				"overcast": 0.25,
-				"rain": 0.05,
-				"snow": 0.5,
+				"rain": 0.0,
+				"snow": 0.55,
 				"sunny": 0.05,
 				"thunder": 0.05
 			},
 			"sunny": {
 				"cloudy": 0.25,
 				"overcast": 0.1,
-				"rain": 0.04,
-				"snow": 0.01,
+				"rain": 0.03,
+				"snow": 0.02,
 				"sunny": 0.6,
 				"thunder": 0.0
 			},
 			"thunder": {
 				"cloudy": 0.1,
 				"overcast": 0.2,
-				"rain": 0.4,
+				"rain": 0.6,
 				"snow": 0.0,
 				"sunny": 0.0,
-				"thunder": 0.3
+				"thunder": 0.1
 			}
 		},
 		"wind_range": [
@@ -79,50 +79,200 @@
 	},
 	"items": [],
 	"logs": [
-		"你抵达了大学正门广场"
+		"<BG_DEBUG> goto start, where=\n学校, current=",
+		"你抵达了学校正门",
+		"<BG_DEBUG> gen_img start, site=学校正门, prompt=The main gate of a modern university, featuring an arched entrance with the scho",
+		"<BG_DEBUG> img callback, result=0, code=429, body_len=256",
+		"<BG_DEBUG> img callback failed, error={\"id\":\"85dc435413721305494c86781696e736\",\"message\":\"Your organization does not have enough balance to request this action (need $0.009, have $0.007 in active grants, $0 in balance).\",\"name\":\"insufficient_balance\"}\n",
+		"你抵达了学校正门",
+		"你开始与李华交谈",
+		"<地图更新：发现了前往小卖部的路：银杏广场-小卖部>",
+		"你结束了与李华的对话。小卖部在从这栋楼出去右转，穿过银杏广场后的红色屋顶建筑。",
+		"你抵达了学校正门",
+		"<BG_DEBUG> goto start, where=银杏广场, current=学校正门",
+		"<BG_DEBUG> site json cache hit for 银杏广场",
+		"你抵达了银杏广场",
+		"<BG_DEBUG> gen_img start, site=银杏广场, prompt=A central open square on campus, named after the rows of tall ginkgo trees linin",
+		"<BG_DEBUG> img callback, result=0, code=429, body_len=256",
+		"<BG_DEBUG> img callback failed, error={\"id\":\"8ce9e6f41f3e7dfc90d4ed6f25fb8387\",\"message\":\"Your organization does not have enough balance to request this action (need $0.009, have $0.007 in active grants, $0 in balance).\",\"name\":\"insufficient_balance\"}\n",
+		"你抵达了银杏广场",
+		"<BG_DEBUG> goto start, where=小卖部, current=银杏广场",
+		"<BG_DEBUG> site json cache hit for 小卖部",
+		"<BG_DEBUG> scene image cache miss for 小卖部, prompt_len=56",
+		"<BG_DEBUG> gen_img start, site=小卖部, prompt=cinematic realistic campus environment, no text, 你来到了小卖部",
+		"<BG_DEBUG> img callback, result=0, code=429, body_len=256",
+		"<BG_DEBUG> img callback failed, error={\"id\":\"b2a1d6b8f27205a0312ae276d0b4c6f3\",\"message\":\"Your organization does not have enough balance to request this action (need $0.009, have $0.007 in active grants, $0 in balance).\",\"name\":\"insufficient_balance\"}\n",
+		"你抵达了小卖部",
+		"你开始与张阿姨交谈",
+		"<地图更新：发现了小卖部>",
+		"【行动】睡到12点",
+		"<时间跳跃至 12:00>",
+		"你结束了与张阿姨的对话。她在这里工作，熟悉这个地方，也有一些东西可以卖。",
+		"你开始与张阿姨交谈",
+		"<地图更新：发现了小卖部>",
+		"<张阿姨想要以25每件出售黄鹤楼X1>",
+		"<有人想送你抽纸X1>",
+		"你接受了抽纸X1",
+		"<张阿姨：收下吧。>",
+		"<你使用了抽纸，似乎没有明显效果。>",
+		"【行动】打她一拳",
+		"<张阿姨离开了，也许再也见不到了...>",
+		"你结束了与张阿姨的对话。张阿姨卖给你一包黄鹤楼，并送了你一包抽纸。",
+		"你开始与李明交谈",
+		"【行动】打李明一拳",
+		"你结束了与李明的对话。他在这里很久了，熟悉这个地方，也有一些东西可以卖。",
+		"你抵达了小卖部",
+		"<BG_DEBUG> goto start, where=教学楼, current=小卖部",
+		"<BG_DEBUG> site json cache hit for 教学楼",
+		"<BG_DEBUG> scene image cache miss for 教学楼, prompt_len=303",
+		"<BG_DEBUG> gen_img start, site=教学楼, prompt=A modern multi-story academic building with gray and white exterior, clean lines",
+		"<BG_DEBUG> img callback, result=0, code=429, body_len=256",
+		"<BG_DEBUG> img callback failed, error={\"id\":\"2e8666ad749b61b2234f99e6518cc5bb\",\"message\":\"Your organization does not have enough balance to request this action (need $0.009, have $0.007 in active grants, $0 in balance).\",\"name\":\"insufficient_balance\"}\n",
+		"你抵达了教学楼",
+		"你开始与李教授交谈",
+		"【行动】给教授跪下",
+		"你结束了与李教授的对话。你缺的学分有点多，一节课都没听。",
+		"你开始与李教授交谈"
 	],
-	"nowtime": 522.400000000002,
+	"nowtime": 769.200000000011,
 	"npcs": {
+		"张助教": {
+			"npc_describe": "一位研究生模样的男性，穿着格子衬衫，手里抱着一叠作业纸，在走廊里快步走着，显得匆忙而高效。",
+			"特征": ""
+		},
 		"张明": {
-			"npc_describe": "一名穿着稍正式衬衫的男生，站在雕塑旁，似乎在等人，眼神不时扫过人群，显得有点疏离。",
+			"npc_describe": "一名拿着单反相机、穿着休闲夹克的大三学生，正在拍摄银杏树的落叶，表情认真。",
+			"特征": ""
+		},
+		"张阿姨": {
+			"npc_describe": "一位中年女性店员，穿着朴素的蓝色工作服，总是面带微笑，熟练地整理货架或操作收银机。",
+			"npc_log": [
+				"她在这里工作，熟悉这个地方，也有一些东西可以卖。",
+				"张阿姨卖给你一包黄鹤楼，并送了你一包抽纸。"
+			],
 			"特征": ""
 		},
 		"李华": {
-			"npc_describe": "一名戴着眼镜的男生，穿着普通的T恤和牛仔裤，背着沉重的书包，表情略显焦虑，正低头查看手机上的课程表。",
+			"npc_describe": "一名戴着黑框眼镜、背着双肩包的大二男生，正坐在长椅上专注地刷手机，偶尔抬头张望。",
+			"npc_log": [
+				"小卖部在从这栋楼出去右转，穿过银杏广场后的红色屋顶建筑。"
+			],
+			"特征": ""
+		},
+		"李教授": {
+			"npc_describe": "一位中年男性，戴着细框眼镜，穿着整洁的衬衫和西裤，手里拿着教案，表情严肃而专注。",
+			"npc_log": [
+				"你缺的学分有点多，一节课都没听。"
+			],
+			"特征": ""
+		},
+		"李明": {
+			"npc_describe": "一名戴着黑框眼镜的计算机系学生，常在小卖部买咖啡，穿着简单的T恤和牛仔裤，看起来有些疲惫但专注。",
+			"npc_log": [
+				"他在这里很久了，熟悉这个地方，也有一些东西可以卖。"
+			],
+			"特征": ""
+		},
+		"王同学": {
+			"npc_describe": "一名年轻女大学生，背着双肩包，穿着休闲T恤和牛仔裤，脸上带着些许疲惫，正低头查看手机上的课程表。",
+			"特征": ""
+		},
+		"王小雨": {
+			"npc_describe": "一名扎着马尾辫、穿着运动服的大一女生，在广场边缘慢跑，耳机里播放着音乐。",
 			"特征": ""
 		},
 		"王芳": {
-			"npc_describe": "一名扎着马尾的女生，穿着休闲运动装，手里拿着咖啡杯，与朋友轻松交谈，脸上带着社交性的微笑。",
+			"npc_describe": "一名扎着马尾辫、穿着运动装的大二女生，手里拿着几本书，面带微笑地与朋友交谈。",
 			"特征": ""
 		}
 	},
 	"player": {
-		"energy": 97.7600000000004,
+		"energy": 100.0,
 		"hp": 100.0,
 		"money": 1000,
-		"name": "现代的大学学生",
+		"name": "大学生",
 		"reputation": 100.0
 	},
 	"rumors": {
 
 	},
 	"sites": {
-		"大学正门广场": {
+		"学校正门": {
 			"npc": {
-				"张明": "一名穿着稍正式衬衫的男生，站在雕塑旁，似乎在等人，眼神不时扫过人群，显得有点疏离。",
-				"李华": "一名戴着眼镜的男生，穿着普通的T恤和牛仔裤，背着沉重的书包，表情略显焦虑，正低头查看手机上的课程表。",
-				"王芳": "一名扎着马尾的女生，穿着休闲运动装，手里拿着咖啡杯，与朋友轻松交谈，脸上带着社交性的微笑。"
+				"张明": "一名穿着保安制服的中年门卫，站在门卫室门口，偶尔向进出的学生点头示意。",
+				"李华": "一名戴着黑框眼镜、背着双肩包的大三男生，穿着简单的T恤和牛仔裤，正低头快速滑动手机屏幕。",
+				"王芳": "一名扎着马尾辫、穿着运动装的大二女生，手里拿着几本书，面带微笑地与朋友交谈。"
 			},
-			"地点名称": "大学正门广场",
-			"地点描述": "这里是大学的主入口，一个宽阔的广场，连接着校园内外。广场上铺着整齐的石板，中央有一座简约的现代雕塑，周围点缀着几排长椅和绿化带。学生们匆匆进出，有的背着书包赶去上课，有的聚在一起聊天或查看手机，空气中弥漫着轻微的雾霾，阳光透过云层洒下，营造出一种既忙碌又疏离的氛围。远处可见标准化教学楼和宿舍楼的轮廓，背景是都市边缘的天际线。",
+			"地点名称": "学校正门",
+			"地点描述": "这里是学校的正门入口，一座现代化的拱形大门上镶嵌着校徽，两侧是修剪整齐的绿植和花坛。学生们三三两两地进出，有的匆忙赶去上课，有的悠闲地聊天或低头看手机。门卫室旁立着校园地图和公告栏，上面贴满了社团招新、讲座通知和实习信息。远处可以看到新旧校区建筑的交错轮廓，空气中弥漫着都市边缘特有的宁静与活力交织的氛围。",
 			"能前往的地点": [
-				"教学楼区",
+				"教学楼",
 				"学生宿舍区",
 				"图书馆",
-				"校园食堂",
-				"社团活动中心"
+				"食堂",
+				"操场",
+				"银杏广场"
 			],
-			"英文描述": "A wide plaza at the main entrance of a modern university, with neat stone paving, a minimalist contemporary sculpture at the center, benches, and greenery. Students hurry in and out, carrying backpacks, chatting, or checking phones, under hazy sunlight with distant views of standardized buildings and the city skyline, evoking a busy yet detached college atmosphere."
+			"英文描述": "The main gate of a modern university, featuring an arched entrance with the school emblem, flanked by neatly trimmed greenery and flower beds. Students walk in and out in small groups, some rushing to classes, others chatting casually or looking at their phones. A campus map and bulletin board with club recruitment, lecture notices, and internship information stand near the guardhouse. In the distance, the mixed outlines of old and new campus buildings are visible, with an atmosphere blending urban edge tranquility and youthful energy."
+		},
+		"小卖部": {
+			"accessible_locations": [
+				"宿舍楼",
+				"教学楼",
+				"图书馆",
+				"食堂"
+			],
+			"english_description": "A small convenience store near the dormitory area in a modern university campus, with shelves stocked with snacks, drinks, and daily necessities. Students gather here for quick breaks, creating a bustling atmosphere typical of college life.",
+			"location_description": "位于宿舍区附近的一间小型便利店，是学生日常补给零食、饮料和生活用品的便捷去处。店内空间紧凑，货架上摆满了泡面、薯片、瓶装水和文具等商品，收银台旁常备着热狗机和关东煮。这里总是人来人往，尤其在课间或深夜，成为学生短暂逃离学习压力的社交角落，空气中弥漫着咖啡和油炸食品的混合气味。",
+			"location_name": "校园小卖部",
+			"npc": {
+				"张阿姨": "一位中年女性店员，穿着朴素的蓝色工作服，总是面带微笑，熟练地整理货架或操作收银机。",
+				"李明": "一名戴着黑框眼镜的计算机系学生，常在小卖部买咖啡，穿着简单的T恤和牛仔裤，看起来有些疲惫但专注。"
+			},
+			"地点名称": "小卖部",
+			"地点描述": "你来到了小卖部",
+			"能前往的地点": [
+				"教学楼",
+				"小卖部"
+			],
+			"英文描述": ""
+		},
+		"教学楼": {
+			"npc": {
+				"张助教": "一位研究生模样的男性，穿着格子衬衫，手里抱着一叠作业纸，在走廊里快步走着，显得匆忙而高效。",
+				"李教授": "一位中年男性，戴着细框眼镜，穿着整洁的衬衫和西裤，手里拿着教案，表情严肃而专注。",
+				"王同学": "一名年轻女大学生，背着双肩包，穿着休闲T恤和牛仔裤，脸上带着些许疲惫，正低头查看手机上的课程表。"
+			},
+			"地点名称": "教学楼",
+			"地点描述": "一座现代化的多层建筑，外墙以灰色和白色为主，线条简洁。内部走廊宽敞明亮，两侧排列着标准化的教室，配有投影仪和空调。空气中弥漫着粉笔灰和打印纸的淡淡气味，课间时学生匆忙穿梭，低声讨论着课程和作业，氛围紧张而有序。",
+			"能前往的地点": [
+				"图书馆",
+				"学生食堂",
+				"宿舍区",
+				"校园广场",
+				"主教学楼",
+				"小操场",
+				"小卖部"
+			],
+			"英文描述": "A modern multi-story academic building with gray and white exterior, clean lines, and bright corridors lined with standardized classrooms equipped with projectors and air conditioning. Students move briskly between classes, discussing coursework in hushed tones, creating a tense yet orderly atmosphere."
+		},
+		"银杏广场": {
+			"npc": {
+				"张明": "一名拿着单反相机、穿着休闲夹克的大三学生，正在拍摄银杏树的落叶，表情认真。",
+				"李华": "一名戴着黑框眼镜、背着双肩包的大二男生，正坐在长椅上专注地刷手机，偶尔抬头张望。",
+				"王小雨": "一名扎着马尾辫、穿着运动服的大一女生，在广场边缘慢跑，耳机里播放着音乐。"
+			},
+			"地点名称": "银杏广场",
+			"地点描述": "位于校园中心的一个开阔广场，以广场边缘种植的几排高大银杏树命名。这里是学生日常聚集、放松和社交的热门地点，春秋两季尤其受欢迎——秋季时金黄的银杏叶铺满地面，吸引大量学生拍照和散步；春季则绿意盎然，成为户外学习和社团活动的理想场所。广场中央有一个小型喷泉，周围散布着长椅和石阶，经常能看到学生三三两两地坐着聊天、玩手机或吃零食。",
+			"能前往的地点": [
+				"图书馆",
+				"学生食堂",
+				"教学楼A区",
+				"宿舍区",
+				"学校正门",
+				"小卖部"
+			],
+			"英文描述": "A central open square on campus, named after the rows of tall ginkgo trees lining its edges. In autumn, golden ginkgo leaves carpet the ground, attracting students for photos and strolls; in spring, lush greenery makes it ideal for outdoor study and club activities. A small fountain stands at the center, surrounded by benches and stone steps where students gather to chat, use phones, or snack."
 		}
 	},
 	"version": 1,
