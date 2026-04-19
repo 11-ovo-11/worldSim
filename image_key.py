@@ -1,1 +1,1 @@
-image_key = "sk-GYdZ2bMsaNSfDEshS30RFedBFpEZgAYQKzJIFeU5G9bZR8SP"
+image_key = "sk-RjybELkRMGKMsF3YigP9OU9rlGXFJP9YHN2CFWY6pMMAsRM8"

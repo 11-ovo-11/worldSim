@@ -22,18 +22,31 @@ var agent_url = "http://127.0.0.1:5000/agent"
 var image_api_url = "http://localhost:5000/generate_image"
 
 const PICTURE_DIR = "D:/毕设/worldSim/game/picture/"
-const SCENE_IMG_DIR = PICTURE_DIR + "scenes/"
-const ITEM_IMG_DIR = PICTURE_DIR + "items/"
-const ITEM_PROFILE_DIR = PICTURE_DIR + "item_profiles/"
+const SESSION_RESOURCE_DIR = PICTURE_DIR + "session/"
+const SCENE_IMG_DIR = SESSION_RESOURCE_DIR + "scenes/"
+const ITEM_IMG_DIR = SESSION_RESOURCE_DIR + "items/"
+const ITEM_PROFILE_DIR = SESSION_RESOURCE_DIR + "item_profiles/"
 const SAVE_DIR = "D:/毕设/worldSim/game/saves/"
-const SAVE_FILE = SAVE_DIR + "save.json"
+const SAVE_SLOT_DIR = SAVE_DIR + "slot_1/"
+const SAVE_RESOURCE_DIR = SAVE_SLOT_DIR + "resources/"
+const SAVE_SCENE_IMG_DIR = SAVE_RESOURCE_DIR + "scenes/"
+const SAVE_ITEM_IMG_DIR = SAVE_RESOURCE_DIR + "items/"
+const SAVE_ITEM_PROFILE_DIR = SAVE_RESOURCE_DIR + "item_profiles/"
+const SAVE_FILE = SAVE_SLOT_DIR + "save.json"
 
 var pending_site_update: bool = false
 var pending_img_prompt: String = ""
+var pending_img_site: String = ""
+var inflight_img_site: String = ""
+var site_loading_lock: bool = false
+var event_flow_lock: bool = false
+var last_crime_event_context: String = ""
 var last_action_input: String = ""
 var last_dialogue_input: String = ""
 var pending_explore_target: String = ""
+var explore_route_retry_count: int = 0
 var bg_debug_enabled: bool = true
+var has_saved_in_session: bool = false
 
 # 游戏数据
 var sites: Dictionary
@@ -134,6 +147,8 @@ var action_prompt:String = """
 """
 
 var ai_busy: bool = false
+var _text_update_seq: int = 0
+var _active_text_tweens: Dictionary = {}
 
 # ==================== 生命周期函数 ====================
 func _ready():
@@ -141,6 +156,7 @@ func _ready():
 	dialogue_button.connect("pressed", _on_dialogue_button_pressed)
 	save_button.connect("pressed", save_game)
 	load_button.connect("pressed", load_game)
+	_prepare_session_resource_dir()
 	dialogue_container.visible = false
 	# %backgroundImg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	# 原先使用 Nearest 过滤会强化像素感，这里改回线性以更接近原图显示。
@@ -148,7 +164,14 @@ func _ready():
 	# %backgroundImg.material = preload("res://assets/asciiShader.gdshader")
 	# 关闭背景图的 ASCII/后处理材质，直接显示生成原图。
 	%backgroundImg.material = null
+	changeTextTo(%siteName, "未定位")
 	player_update()
+	_apply_interaction_locks()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_handle_exit_cleanup()
+
 var background:String
 
 func _input(event):
@@ -184,6 +207,7 @@ func changeStateInto(stateToChange: worldState):
 				site_update()
 	
 	currentState = stateToChange
+	refresh_interaction_locks()
 
 # ==================== 地点导航 ====================
 func _get_site_data(site_name: String) -> Dictionary:
@@ -200,14 +224,111 @@ func _get_site_data(site_name: String) -> Dictionary:
 
 func _build_scene_image_prompt(site_name: String, site_data: Dictionary) -> String:
 	var english_prompt = str(site_data.get("英文描述", "")).strip_edges()
-	if english_prompt != "":
-		return english_prompt
 	var cn_desc = str(site_data.get("地点描述", "")).strip_edges()
+	var world_hint = background.strip_edges()
+	var location_hint = _build_location_visual_hint(site_name, cn_desc)
+	var prompt_parts: Array = [
+		"cinematic realistic campus environment",
+		"daylight natural color",
+		"no text, no watermark",
+		"location:" + site_name
+	]
+	if world_hint != "":
+		prompt_parts.append("world context: " + world_hint.left(120))
+	if location_hint != "":
+		prompt_parts.append(location_hint)
+	if english_prompt != "":
+		prompt_parts.append(english_prompt)
+	elif cn_desc != "":
+		prompt_parts.append("scene detail: " + cn_desc)
+	else:
+		prompt_parts.append("scene detail: " + site_name)
+	if site_data.has("npc") and site_data["npc"] is Dictionary:
+		var npc_keys = (site_data["npc"] as Dictionary).keys()
+		if !npc_keys.is_empty():
+			prompt_parts.append("people style: modern Chinese university students and staff")
 	if cn_desc != "":
-		return "cinematic realistic campus environment, no text, " + cn_desc
-	if site_name.strip_edges() != "":
-		return "cinematic realistic campus environment, no text, " + site_name
-	return ""
+		prompt_parts.append("avoid unrelated places, keep architecture and props consistent with " + site_name)
+	prompt_parts.append("strictly match this location, do not depict other campus areas")
+	return ", ".join(prompt_parts)
+
+func _build_location_visual_hint(site_name: String, cn_desc: String) -> String:
+	var merged = (site_name + " " + cn_desc).strip_edges()
+	if merged.find("食堂") != -1:
+		return "indoor university cafeteria, serving counters, trays, dining tables, students eating and chatting"
+	if merged.find("图书馆") != -1:
+		return "university library interior, bookshelves, reading desks, study lamps, quiet atmosphere"
+	if merged.find("宿舍") != -1:
+		return "student dormitory area, corridor doors, parcel boxes, daily-life details"
+	if merged.find("操场") != -1 or merged.find("体育") != -1:
+		return "campus playground and running track, sports field, students training outdoors"
+	if merged.find("教室") != -1 or merged.find("教学楼") != -1:
+		return "teaching building interior, classroom desks, blackboard, corridor perspective"
+	if merged.find("超市") != -1 or merged.find("小卖部") != -1:
+		return "campus convenience store, shelves full of goods, checkout counter"
+	if merged.find("校门") != -1:
+		return "university main gate, campus sign, pedestrians entering and leaving"
+	return "modern Chinese university campus architecture consistent with the location"
+
+func _build_location_fallback_description(location_name: String, from_site_name: String = "") -> String:
+	var n = location_name.strip_edges()
+	if n == "":
+		return "你来到了一处新的地点。"
+	if n.find("食堂") != -1:
+		return "你来到" + n + "。窗口前排着学生，空气里混着热饭和汤面的香气，桌椅间人声不断。"
+	if n.find("图书馆") != -1:
+		return "你来到" + n + "。高书架与自习区被柔和灯光照亮，四周安静，只能听见翻页和敲键盘声。"
+	if n.find("宿舍") != -1:
+		return "你来到" + n + "。走廊里偶尔有人经过，门口堆着快递箱，生活气息很浓。"
+	if n.find("操场") != -1 or n.find("体育") != -1:
+		return "你来到" + n + "。跑道和球场上有人训练，风里带着草地和塑胶跑道的味道。"
+	if n.find("教室") != -1 or n.find("教学楼") != -1:
+		return "你来到" + n + "。教室里散着粉笔和纸张气味，走廊尽头传来断续的讨论声。"
+	if n.find("超市") != -1 or n.find("小卖部") != -1:
+		return "你来到" + n + "。货架摆得很满，收银台前有人结账，灯光明亮而紧凑。"
+	if from_site_name.strip_edges() != "":
+		return "你来到" + n + "。这里与" + from_site_name + "相连，环境细节逐渐清晰起来。"
+	return "你来到" + n + "。周围的布局和气氛有了明显变化，这里看起来是校园中可进一步探索的区域。"
+
+func _extract_route_candidates_from_site_json(json_dic: Dictionary) -> Array:
+	var route_keys = ["能前往的地点", "可前往地点", "可前往的地点", "前往地点", "可去地点", "可到达地点", "邻近地点", "连接地点"]
+	var candidates: Array = []
+	for key in route_keys:
+		if !json_dic.has(key):
+			continue
+		var raw_val = json_dic.get(key)
+		var raw_list: Array = []
+		if raw_val is Array:
+			raw_list = raw_val
+		elif raw_val is String:
+			var merged = str(raw_val)
+			var splitters = ["\r\n", "\n", "，", ",", "、", "；", ";", "|", "/"]
+			for sp in splitters:
+				merged = merged.replace(sp, ",")
+			raw_list = merged.split(",", false)
+		for raw_name in raw_list:
+			var route_name = str(raw_name).strip_edges()
+			if route_name == "":
+				continue
+			if !candidates.has(route_name):
+				candidates.append(route_name)
+	return candidates
+
+func _resolve_site_alias(site_name: String) -> String:
+	var cleaned = site_name.strip_edges()
+	if cleaned == "":
+		return ""
+	if sites.has(cleaned):
+		return cleaned
+	for key in sites.keys():
+		var existing = str(key).strip_edges()
+		if existing == "":
+			continue
+		if cleaned == existing:
+			return existing
+		if min(cleaned.length(), existing.length()) >= 2 and (cleaned.ends_with(existing) or existing.ends_with(cleaned)):
+			return existing
+	return cleaned
 
 func _bg_debug(msg: String) -> void:
 	if !bg_debug_enabled:
@@ -216,6 +337,11 @@ func _bg_debug(msg: String) -> void:
 	addLog("<BG_DEBUG> " + msg)
 
 func goto(where: String):
+	where = _resolve_site_alias(str(where).strip_edges())
+	if where == "":
+		changeTextTo(%siteName, "未定位")
+		return
+	changeTextTo(%siteName, where)
 	await changeStateInto(GameManager.worldState.explore)
 	_bg_debug("goto start, where=" + where + ", current=" + currentSiteName)
 	# 磁盘缓存恢复：内存中没有但磁盘JSON存在时补充
@@ -225,7 +351,15 @@ func goto(where: String):
 			sites[where] = disk_site
 			_bg_debug("site json cache hit for " + where)
 	var site_data = _get_site_data(where)
-	if !site_data.is_empty() && site_data.has("地点描述"):
+	var has_description = !site_data.is_empty() and str(site_data.get("地点描述", "")).strip_edges() != ""
+	var has_routes = false
+	if site_data.has("能前往的地点") and site_data["能前往的地点"] is Array:
+		for raw_route in site_data["能前往的地点"]:
+			var normalized_route = _resolve_site_alias(str(raw_route).strip_edges())
+			if normalized_route != "" and normalized_route != where:
+				has_routes = true
+				break
+	if has_description and has_routes:
 		print("地点已经存在")
 		currentSiteName = where
 		var has_bg := false
@@ -244,33 +378,83 @@ func goto(where: String):
 			var scene_prompt = _build_scene_image_prompt(where, site_data)
 			_bg_debug("scene image cache miss for " + where + ", prompt_len=" + str(scene_prompt.length()))
 			if scene_prompt != "":
-				gen_img(scene_prompt)
+				site_update(false, false, false)
+				_set_site_loading_lock(true)
+				gen_img(scene_prompt, where)
 				return
 			else:
 				pending_site_update = false
+				_set_site_loading_lock(false)
 		site_update()
 	else:
 		changeTextTo(response_label, "正在探索" + where + "...", 8)
 		pending_explore_target = where
+		explore_route_retry_count = 0
 		var prompts = [
 			{"role":"system","content": _build_explore_system_prompt()},
 			{"role":"user","content": "我想去"+where}]
 		await ask_ai(prompts, aiMode.explore)
-		var new_site = _get_site_data(currentSiteName)
+		var discovered_site = _resolve_site_alias(currentSiteName)
+		if discovered_site == "":
+			discovered_site = where
+		currentSiteName = discovered_site
+		var new_site = _get_site_data(discovered_site)
 		if !new_site.is_empty():
-			var prompt = _build_scene_image_prompt(currentSiteName, new_site)
+			var has_bg_new := false
+			if siteImgs.has(discovered_site):
+				%backgroundImg.texture = siteImgs[discovered_site]
+				has_bg_new = true
+			else:
+				var cached_new = _load_image_png(SCENE_IMG_DIR, discovered_site)
+				if cached_new != null:
+					%backgroundImg.texture = cached_new
+					siteImgs[discovered_site] = cached_new
+					has_bg_new = true
+			if has_bg_new:
+				pending_site_update = false
+				_set_site_loading_lock(false)
+				site_update()
+				return
+			var prompt = _build_scene_image_prompt(discovered_site, new_site)
 			if prompt != "":
-				gen_img(prompt)
+				site_update(false, false, false)
+				pending_site_update = true
+				_set_site_loading_lock(true)
+				gen_img(prompt, discovered_site)
+			else:
+				pending_site_update = false
+				_set_site_loading_lock(false)
+				site_update()
 
-func site_update():
+func site_update(show_description: bool = true, unlock_after: bool = true, add_arrival_log: bool = true):
 	var site_data = _get_site_data(currentSiteName)
 	if site_data.is_empty():
+		if unlock_after:
+			_set_site_loading_lock(false)
 		return
+	var display_routes: Array = []
+	if !site_data.has("能前往的地点") or !(site_data["能前往的地点"] is Array):
+		site_data["能前往的地点"] = []
+	if (site_data["能前往的地点"] as Array).is_empty() and sites.size() > 1:
+		for key in sites.keys():
+			var candidate = str(key)
+			if candidate != "" and candidate != currentSiteName and !(site_data["能前往的地点"] as Array).has(candidate):
+				(site_data["能前往的地点"] as Array).append(candidate)
+				if (site_data["能前往的地点"] as Array).size() >= 6:
+					break
+	for route_name in site_data.get("能前往的地点", []):
+		var normalized_route = _resolve_site_alias(str(route_name).strip_edges())
+		if normalized_route != "" and normalized_route != currentSiteName and !display_routes.has(normalized_route):
+			display_routes.append(normalized_route)
+	if display_routes.is_empty() and currentSiteName != "":
+		display_routes.append(currentSiteName)
+	_save_site_json(currentSiteName, site_data)
 	changeTextTo(%siteName, currentSiteName)
-	changeTextTo(response_label, str(site_data.get("地点描述", "")),15)
+	if show_description and currentState != worldState.chat:
+		changeTextTo(response_label, str(site_data.get("地点描述", "")),15)
 	clear_children(%site_buttons)
 	clear_children(%npc_buttons)
-	for i in site_data.get("能前往的地点", []):
+	for i in display_routes:
 		var new_site_button = load("res://fabs/site_button.tscn").instantiate() as siteButton
 		new_site_button.siteName = i
 		%site_buttons.add_child(new_site_button)
@@ -283,7 +467,10 @@ func site_update():
 		var new_npc_button = load("res://fabs/npc_button.tscn").instantiate() as npcButton
 		new_npc_button.npcName = i
 		%npc_buttons.add_child(new_npc_button)
-	addLog("你抵达了" + currentSiteName)
+	if add_arrival_log:
+		addLog("你抵达了" + currentSiteName)
+	if unlock_after:
+		_set_site_loading_lock(false)
 
 func player_update():
 	%moneyBar.target_value = str(money)
@@ -485,6 +672,12 @@ func _apply_direct_npc_tool_tags(reply: String) -> bool:
 			if path != "":
 				create_location(path)
 				handled_any = true
+		elif normalized.begins_with("声望值"):
+			var rep_text = normalized.trim_prefix("声望值").strip_edges()
+			if rep_text != "":
+				var rep_change = int(rep_text)
+				update_reputation(rep_change)
+				handled_any = true
 		else:
 			only_location_tags = false
 	return handled_any and only_location_tags
@@ -523,7 +716,7 @@ func npc_reply(reply: String):
 			{"role":"system","content": agent_prompt},
 			{"role":"user","content": toolsTexts}]
 		await ask_ai(prompts, aiMode.tools)
-	_auto_apply_action_effects("", reply, toolsTexts)
+	await _auto_apply_action_effects("", reply, toolsTexts)
 
 func process_string(input: String) -> String:
 	# 移除所有<...>标签
@@ -549,13 +742,16 @@ func get_content_in_angle_brackets(input_string: String)->String:
 	return results
 
 # ==================== 图片生成 ====================
-func gen_img(prompt):
+func gen_img(prompt: String, site_name: String = ""):
+	var target_site = site_name.strip_edges()
+	if target_site == "":
+		target_site = currentSiteName
 	if prompt == "":
 		if pending_site_update:
 			pending_site_update = false
 			site_update()
 		return
-	_bg_debug("gen_img start, site=" + currentSiteName + ", prompt=" + prompt.left(80))
+	_bg_debug("gen_img start, site=" + target_site + ", prompt=" + prompt.left(80))
 	print("正在同时生成图片...")
 	var headers = ["Content-Type: application/json"]
 	var image_json_data = JSON.stringify({"prompt": prompt})
@@ -564,6 +760,7 @@ func gen_img(prompt):
 	if error_image != OK:
 		if error_image == ERR_BUSY:
 			pending_img_prompt = prompt
+			pending_img_site = target_site
 			print("图片请求排队等待...")
 			_bg_debug("gen_img queued due ERR_BUSY")
 		else:
@@ -572,12 +769,92 @@ func gen_img(prompt):
 			if pending_site_update:
 				pending_site_update = false
 				site_update()
+		inflight_img_site = ""
+		return
+	inflight_img_site = target_site
 
 func _sanitize_filename(file_name: String) -> String:
 	return file_name.replace("/", "_").replace("\\", "_").replace(":", "_").replace("*", "_").replace("?", "_").replace("\"", "_").replace("<", "_").replace(">", "_").replace("|", "_")
 
 func _ensure_dir(path: String) -> void:
 	DirAccess.make_dir_recursive_absolute(path)
+
+func _clear_dir_contents(dir_path: String) -> void:
+	if !DirAccess.dir_exists_absolute(dir_path):
+		return
+	var dir = DirAccess.open(dir_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry = dir.get_next()
+	while entry != "":
+		if entry != "." and entry != "..":
+			var target_path = dir_path.path_join(entry)
+			if dir.current_is_dir():
+				_clear_dir_contents(target_path)
+				DirAccess.remove_absolute(target_path)
+			else:
+				DirAccess.remove_absolute(target_path)
+		entry = dir.get_next()
+	dir.list_dir_end()
+
+func _copy_file(src_path: String, dst_path: String) -> void:
+	if !FileAccess.file_exists(src_path):
+		return
+	_ensure_dir(dst_path.get_base_dir())
+	var bytes = FileAccess.get_file_as_bytes(src_path)
+	var file = FileAccess.open(dst_path, FileAccess.WRITE)
+	if file:
+		file.store_buffer(bytes)
+		file.close()
+
+func _copy_dir_recursive(src_dir: String, dst_dir: String) -> void:
+	if !DirAccess.dir_exists_absolute(src_dir):
+		return
+	_ensure_dir(dst_dir)
+	var dir = DirAccess.open(src_dir)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry = dir.get_next()
+	while entry != "":
+		if entry != "." and entry != "..":
+			var src_path = src_dir.path_join(entry)
+			var dst_path = dst_dir.path_join(entry)
+			if dir.current_is_dir():
+				_copy_dir_recursive(src_path, dst_path)
+			else:
+				_copy_file(src_path, dst_path)
+		entry = dir.get_next()
+	dir.list_dir_end()
+
+func _prepare_session_resource_dir() -> void:
+	_ensure_dir(SESSION_RESOURCE_DIR)
+	_clear_dir_contents(SESSION_RESOURCE_DIR)
+	_ensure_dir(SCENE_IMG_DIR)
+	_ensure_dir(ITEM_IMG_DIR)
+	_ensure_dir(ITEM_PROFILE_DIR)
+	has_saved_in_session = false
+
+func _sync_session_resources_to_save() -> void:
+	_ensure_dir(SAVE_SLOT_DIR)
+	_clear_dir_contents(SAVE_SLOT_DIR)
+	_ensure_dir(SAVE_RESOURCE_DIR)
+	_copy_dir_recursive(SCENE_IMG_DIR, SAVE_SCENE_IMG_DIR)
+	_copy_dir_recursive(ITEM_IMG_DIR, SAVE_ITEM_IMG_DIR)
+	_copy_dir_recursive(ITEM_PROFILE_DIR, SAVE_ITEM_PROFILE_DIR)
+
+func _restore_session_resources_from_save() -> void:
+	_ensure_dir(SESSION_RESOURCE_DIR)
+	_clear_dir_contents(SESSION_RESOURCE_DIR)
+	_copy_dir_recursive(SAVE_SCENE_IMG_DIR, SCENE_IMG_DIR)
+	_copy_dir_recursive(SAVE_ITEM_IMG_DIR, ITEM_IMG_DIR)
+	_copy_dir_recursive(SAVE_ITEM_PROFILE_DIR, ITEM_PROFILE_DIR)
+
+func _handle_exit_cleanup() -> void:
+	if has_saved_in_session:
+		return
+	_clear_dir_contents(SESSION_RESOURCE_DIR)
 
 func _save_image_png(image: Image, dir: String, file_name: String) -> void:
 	_ensure_dir(dir)
@@ -650,14 +927,18 @@ func _base64_to_image(base64_string: String) -> Image:
 		return null
 	return image
 
-func _display_base64_image(base64_string):
+func _display_base64_image(base64_string: String, site_name: String = ""):
+	var target_site = site_name.strip_edges()
+	if target_site == "":
+		target_site = currentSiteName
 	var image = _base64_to_image(base64_string)
 	if image != null:
 		var texture = ImageTexture.create_from_image(image)
-		%backgroundImg.texture = texture
-		siteImgs[currentSiteName] = texture
-		_save_image_png(image, SCENE_IMG_DIR, currentSiteName)
-		_bg_debug("display image ok, site=" + currentSiteName + ", b64_len=" + str(base64_string.length()))
+		siteImgs[target_site] = texture
+		_save_image_png(image, SCENE_IMG_DIR, target_site)
+		if target_site == currentSiteName:
+			%backgroundImg.texture = texture
+		_bg_debug("display image ok, site=" + target_site + ", b64_len=" + str(base64_string.length()))
 	else:
 		print("错误：图片格式不支持")
 		_bg_debug("display image failed, invalid image buffer")
@@ -768,15 +1049,61 @@ func _build_ultra_fast_item_prompt(base_prompt: String) -> String:
 		cleaned = "generic item"
 	return "minimalist inventory icon, single object, centered, plain clean background, no text, simple lighting, " + cleaned
 
+func _sanitize_item_profile(item_name: String, raw_profile: Dictionary) -> Dictionary:
+	var safe: Dictionary = {
+		"description": str(raw_profile.get("description", "这是一件实用的道具，可在冒险中派上用场。")).strip_edges(),
+		"image_prompt": str(raw_profile.get("image_prompt", "single game inventory item icon of " + item_name + ", clean background, centered")).strip_edges(),
+		"value": int(raw_profile.get("value", 50)),
+		"rarity": str(raw_profile.get("rarity", "common")).strip_edges(),
+		"effect_type": str(raw_profile.get("effect_type", "none")).strip_edges(),
+		"effect_value": int(raw_profile.get("effect_value", 0))
+	}
+	if safe["description"] == "":
+		safe["description"] = "这是一件实用的道具，可在冒险中派上用场。"
+	if safe["image_prompt"] == "":
+		safe["image_prompt"] = "single game inventory item icon of " + item_name + ", clean background, centered"
+	if safe["rarity"] == "":
+		safe["rarity"] = "common"
+	if safe["value"] < 1:
+		safe["value"] = 1
+	return safe
+
+func _ensure_item_profile_record_before_trade(item_name: String) -> void:
+	var key = str(item_name).strip_edges()
+	if key == "":
+		return
+	var disk_profile = _load_item_profile_json(key)
+	var profile: Dictionary = {}
+	if !disk_profile.is_empty():
+		profile = _sanitize_item_profile(key, disk_profile)
+	else:
+		var generated = await _generate_item_profile(key)
+		profile = _sanitize_item_profile(key, generated)
+		_save_item_profile_json(key, profile)
+	var cached_tex = _load_image_png(ITEM_IMG_DIR, key)
+	itemProfiles[key] = {
+		"description": profile.get("description", "这是一件实用的道具，可在冒险中派上用场。"),
+		"value": int(profile.get("value", 50)),
+		"rarity": str(profile.get("rarity", "common")),
+		"effect_type": str(profile.get("effect_type", "none")),
+		"effect_value": int(profile.get("effect_value", 0)),
+		"texture": cached_tex,
+		"is_generating": false,
+		"is_ready": cached_tex != null
+	}
+	ensure_item_profile_async(key)
+
 func _build_explore_system_prompt() -> String:
 	var guards = "用户初始设定：" + world_seed_input + "\n"
 	guards += "当前世界观：" + background + "\n"
 	guards += "请确保地点、NPC、英文生图提示词与上述设定完全一致。"
+	guards += "\n硬性要求：输出JSON中的“能前往的地点”必须是3~6个可直达、互不重复、且不包含当前地点本身的地点名，不能为空。"
 	return role_prompt + "\n" + guards
 
 func ensure_item_profile_async(item_name: String) -> void:
+	var disk_profile_full = _load_item_profile_json(item_name)
 	if !itemProfiles.has(item_name):
-		var disk_profile = _load_item_profile_json(item_name)
+		var disk_profile = disk_profile_full
 		itemProfiles[item_name] = {
 			"description": disk_profile.get("description", "正在生成物品介绍..."),
 			"value": int(disk_profile.get("value", 50)),
@@ -827,14 +1154,18 @@ func ensure_item_profile_async(item_name: String) -> void:
 		%itemContainer.update_item_visual(item_name, cached_tex, cached_desc, cached_effect_type, cached_effect_value)
 		return
 
-	var profile = await _generate_item_profile(item_name)
+	var profile: Dictionary = {}
+	if !disk_profile_full.is_empty():
+		profile = _sanitize_item_profile(item_name, disk_profile_full)
+	else:
+		profile = _sanitize_item_profile(item_name, await _generate_item_profile(item_name))
+		_save_item_profile_json(item_name, profile)
 	var item_description = str(profile.get("description", "这是一件实用的道具，可在冒险中派上用场。"))
 	var item_value = int(profile.get("value", 50))
 	var item_rarity = str(profile.get("rarity", "common"))
 	var item_effect_type = str(profile.get("effect_type", "none"))
 	var item_effect_value = int(profile.get("effect_value", 0))
 	var image_prompt = str(profile.get("image_prompt", "single game inventory item icon, clean background, detailed, centered"))
-	_save_item_profile_json(item_name, profile)
 	var item_texture = await _generate_item_texture(image_prompt)
 
 	if item_texture != null:
@@ -855,7 +1186,7 @@ func ensure_item_profile_async(item_name: String) -> void:
 # ==================== UI 操作 ====================
 func _on_send_button_pressed():
 	var user_input = input_text_edit.text.strip_edges()
-	if user_input == "" or ai_busy:
+	if user_input == "" or ai_busy or event_flow_lock:
 		return
 	%InputTextEdit.text = ""
 	last_action_input = user_input
@@ -878,39 +1209,135 @@ func _on_dialogue_button_pressed():
 	var user_input = dialogue_input.text.strip_edges()
 	if user_input == "":
 		return
+	var leave_words = ["离开", "结束对话", "退出对话", "不聊了", "再见"]
+	if leave_words.has(user_input):
+		dialogue_input.text = ""
+		await changeStateInto(GameManager.worldState.explore)
+		return
 	last_dialogue_input = user_input
 	dialogue_input.text = ""
 	changeTextTo(%speakerNameLabel, playerName)
 	changeTextTo(response_label, user_input)
-	currentNpc.chatWithNpc(user_input)
+	await currentNpc.chatWithNpc(user_input)
 	currentNpc.currentChat += "玩家：" + user_input + "\n"
+
+func _has_active_event_panel() -> bool:
+	for child in %event.get_children():
+		if child is eventContainer:
+			return true
+	return false
+
+func refresh_interaction_locks() -> void:
+	if event_flow_lock and !_has_active_event_panel() and !ai_busy:
+		event_flow_lock = false
+	_apply_interaction_locks()
+
+func _set_event_flow_lock(v: bool) -> void:
+	event_flow_lock = v
+	_apply_interaction_locks()
+
+func _apply_interaction_locks() -> void:
+	var has_event_panel = _has_active_event_panel()
+	var text_busy = !_active_text_tweens.is_empty()
+	send_button.disabled = ai_busy or currentState == worldState.chat or event_flow_lock or has_event_panel or text_busy
+	dialogue_button.disabled = ai_busy or currentState != worldState.chat or has_event_panel or text_busy
+	var map_lock = ai_busy or site_loading_lock or event_flow_lock or has_event_panel or text_busy
+	for btn in %site_buttons.get_children():
+		if btn is BaseButton:
+			btn.disabled = map_lock
+	for btn in %npc_buttons.get_children():
+		if btn is BaseButton:
+			btn.disabled = map_lock
+
+func _set_site_loading_lock(v: bool) -> void:
+	site_loading_lock = v
+	_apply_interaction_locks()
 
 func set_ai_busy(v: bool) -> void:
 	ai_busy = v
-	send_button.disabled = v
-	dialogue_button.disabled = v
-	for btn in %site_buttons.get_children():
-		if btn is BaseButton:
-			btn.disabled = v
-	for btn in %npc_buttons.get_children():
-		if btn is BaseButton:
-			btn.disabled = v
+	if ai_busy:
+		_apply_interaction_locks()
+	else:
+		refresh_interaction_locks()
+
+func _sanitize_response_text(raw_text: String) -> String:
+	var t = str(raw_text)
+	t = t.replace("\ufeff", "").replace("\u200b", "")
+	t = t.replace("\r\n", "\n").replace("\r", "\n")
+	var lines: Array = t.split("\n", true)
+	while !lines.is_empty() and str(lines[0]).strip_edges() == "":
+		lines.remove_at(0)
+	t = "\n".join(lines)
+	return t.strip_edges(false, true)
 
 func changeTextTo(nodeToChange: Control, text: String, speed = 30):
-	if nodeToChange.text == text:
+	if nodeToChange == null:
 		return
-	await create_tween().tween_property(nodeToChange, "visible_ratio", 0, 0.4).finished
-	nodeToChange.text = text
-	await create_tween().tween_property(nodeToChange, "visible_ratio", 1, float(text.length()) / speed).finished
+	var safe_text = text
+	if nodeToChange == response_label:
+		safe_text = _sanitize_response_text(text)
+	var key = str(nodeToChange.get_instance_id())
+	if _active_text_tweens.has(key):
+		var old_tween = _active_text_tweens[key]
+		if old_tween is Tween and old_tween.is_valid():
+			old_tween.kill()
+		_active_text_tweens.erase(key)
+
+	if nodeToChange.text == safe_text:
+		nodeToChange.visible_ratio = 1.0
+		return
+
+	_text_update_seq += 1
+	var request_id = _text_update_seq
+	nodeToChange.set_meta("text_request_id", request_id)
+	nodeToChange.text = safe_text
+	nodeToChange.visible_ratio = 0.0
+
+	var char_count = max(1, safe_text.length())
+	var safe_speed = max(1.0, float(speed))
+	var duration = clamp(float(char_count) / safe_speed, 0.08, 1.6)
+	var tween = create_tween()
+	_active_text_tweens[key] = tween
+	_apply_interaction_locks()
+	tween.tween_property(nodeToChange, "visible_ratio", 1.0, duration)
+	await tween.finished
+
+	if !is_instance_valid(nodeToChange):
+		return
+	if int(nodeToChange.get_meta("text_request_id", -1)) != request_id:
+		refresh_interaction_locks()
+		return
+	if _active_text_tweens.get(key, null) == tween:
+		_active_text_tweens.erase(key)
+	refresh_interaction_locks()
 
 func clear_children(node: Node):
-	for i in node.get_children():
+	var children = node.get_children()
+	for i in children:
+		node.remove_child(i)
 		i.queue_free()
 
-func addLog(logText: String):
+func addLog(logText: String, instant: bool = false):
 	var newLog = load("res://fabs/log_rich_text_label.tscn").instantiate()
 	newLog.text = logText
+	if instant and newLog is RichTextLabel:
+		newLog.visible_ratio = 1.0
 	%logContainer.add_child(newLog)
+
+func _is_important_log(log_text: String) -> bool:
+	var t = str(log_text).strip_edges()
+	if t == "":
+		return false
+	if t.find("<BG_DEBUG>") != -1:
+		return false
+	var keywords = [
+		"【行动】", "你抵达了", "地图更新", "传闻", "声望", "时间", "购买", "失去", "获得",
+		"违规", "防盗", "警报", "主动", "交谈", "读档", "保存", "交易", "送你"
+	]
+	for k in keywords:
+		if t.find(k) != -1:
+			return true
+	return false
 
 func _build_inventory_snapshot(max_items: int = 10) -> String:
 	var parts: Array = []
@@ -959,22 +1386,54 @@ func _on_request_completed(result, response_code, _header, body):
 					goto(currentSiteName)
 					return
 				# 先确保必要字段存在
-				if !jsonDic.has("能前往的地点") or !(jsonDic["能前往的地点"] is Array):
-					jsonDic["能前往的地点"] = []
+				jsonDic["能前往的地点"] = _extract_route_candidates_from_site_json(jsonDic)
 				if !jsonDic.has("npc") or !(jsonDic["npc"] is Dictionary):
 					jsonDic["npc"] = {}
 				if !jsonDic.has("英文描述") or str(jsonDic.get("英文描述", "")).strip_edges() == "":
 					jsonDic["英文描述"] = str(jsonDic.get("地点描述", ""))
 				var location_name = str(jsonDic.get("地点名称", ""))
+				var model_location_name = location_name
 				if location_name == "" and pending_explore_target != "":
 					location_name = pending_explore_target
 					jsonDic["地点名称"] = location_name
+				if pending_explore_target != "":
+					var target_name = _resolve_site_alias(pending_explore_target)
+					if target_name != "":
+						location_name = target_name
+						jsonDic["地点名称"] = location_name
+				if model_location_name != "" and model_location_name != location_name:
+					var aliases: Array = []
+					if jsonDic.has("别名") and jsonDic["别名"] is Array:
+						aliases = jsonDic["别名"]
+					if !aliases.has(model_location_name):
+						aliases.append(model_location_name)
+					jsonDic["别名"] = aliases
 				if !jsonDic.has("地点描述") or str(jsonDic.get("地点描述", "")).strip_edges() == "":
-					jsonDic["地点描述"] = "你来到了" + location_name
+					jsonDic["地点描述"] = _build_location_fallback_description(location_name, currentSiteName)
 				if location_name == "":
 					changeTextTo(response_label, "地点信息解析失败，请重试")
 					set_ai_busy(false)
 					return
+				var cleaned_routes: Array = []
+				for raw_route in jsonDic.get("能前往的地点", []):
+					var normalized_route = _resolve_site_alias(str(raw_route).strip_edges())
+					if normalized_route == "" or normalized_route == location_name or cleaned_routes.has(normalized_route):
+						continue
+					cleaned_routes.append(normalized_route)
+				jsonDic["能前往的地点"] = cleaned_routes
+				if cleaned_routes.is_empty() and explore_route_retry_count < 1:
+					explore_route_retry_count += 1
+					var retry_target = location_name
+					if retry_target == "":
+						retry_target = pending_explore_target
+					_bg_debug("explore empty routes, retry target=" + retry_target)
+					var retry_prompts = [
+						{"role":"system","content": _build_explore_system_prompt() + "\n再次强调：只能输出JSON，且“能前往的地点”不得为空。"},
+						{"role":"user","content": "我想去" + retry_target}
+					]
+					await ask_ai(retry_prompts, aiMode.explore)
+					return
+				explore_route_retry_count = 0
 				print("能前往的地点", jsonDic["能前往的地点"])
 				if currentSiteName != "" && !jsonDic["能前往的地点"].has(currentSiteName):
 					jsonDic["能前往的地点"].append(currentSiteName)
@@ -995,50 +1454,72 @@ func _on_request_completed(result, response_code, _header, body):
 								jsonDic["npc"][npc_name] = old_site["npc"][npc_name]
 						print("发现了预先存在的npc")
 
+				if model_location_name != "" and model_location_name != location_name and sites.has(model_location_name):
+					var alias_site = sites[model_location_name]
+					if alias_site is Dictionary:
+						if alias_site.has("能前往的地点") and alias_site["能前往的地点"] is Array:
+							for old_route in alias_site["能前往的地点"]:
+								if !jsonDic["能前往的地点"].has(old_route):
+									jsonDic["能前往的地点"].append(old_route)
+						if alias_site.has("npc") and alias_site["npc"] is Dictionary:
+							for npc_name in alias_site["npc"].keys():
+								if !jsonDic["npc"].has(npc_name):
+									jsonDic["npc"][npc_name] = alias_site["npc"][npc_name]
+					sites.erase(model_location_name)
+
 				sites[location_name] = jsonDic
+				if currentSiteName != "" and currentSiteName != location_name:
+					create_location(currentSiteName + "-" + location_name)
 				currentSiteName = location_name
 				pending_explore_target = ""
 				_save_site_json(location_name, jsonDic)
-				pending_site_update = true
-				site_update()
+				pending_site_update = false
 			aiMode.chat:
 				#print("开始聊天")
 				npc_reply(data["text"])
 			aiMode.action:
 				var action_reply = data.get("text", "")
 				if action_reply is String and action_reply.strip_edges() != "":
+					_set_event_flow_lock(true)
 					changeTextTo(%speakerNameLabel, "【旁白】")
 					changeTextTo(response_label, process_string(action_reply))
 					var tool_tags = get_content_in_angle_brackets(action_reply)
-					if tool_tags != "":
+					var direct_tag_result = _apply_direct_action_tool_tags(action_reply)
+					var handled_direct = bool(direct_tag_result.get("handled_any", false))
+					var unresolved_tags = str(direct_tag_result.get("unresolved_tags", ""))
+					if unresolved_tags != "":
 						var aprompts = [
 							{"role":"system","content": agent_prompt},
-							{"role":"user","content": tool_tags}]
+							{"role":"user","content": unresolved_tags}]
 						await ask_ai(aprompts, aiMode.tools)
-					else:
+					elif !handled_direct:
 						var infer_prompts = [
 							{"role":"system","content": agent_prompt + "\n若输入没有<>标签，也要从语义中尽力提取可执行方法；如果确实没有再回复没有方法被调用。"},
 							{"role":"user","content": action_reply}
 						]
 						await ask_ai(infer_prompts, aiMode.tools)
 						_auto_handle_action_search(last_action_input, action_reply)
-					_auto_apply_action_effects(last_action_input, action_reply, tool_tags)
+					await _auto_apply_action_effects(last_action_input, action_reply, unresolved_tags)
+					if currentState != worldState.chat and !_has_active_event_panel():
+						_set_event_flow_lock(false)
+				else:
+					_set_event_flow_lock(false)
 			aiMode.sum:
 				npcs[currentNpc.npcName]["npc_log"].append(data["text"])
 				addLog("你结束了与" + currentNpc.npcName + "的对话。" + data["text"])
 			aiMode.tools:
 				if data["text"] is Array:
-					handle_npc_instruction(data["text"])
+					await handle_npc_instruction(data["text"])
 				elif data["text"] is Dictionary:
-					handle_npc_instruction([data["text"]])
+					await handle_npc_instruction([data["text"]])
 				elif data["text"] is String:
 					var parser = JSON.new()
 					if parser.parse(data["text"]) == OK:
 						var parsed = parser.get_data()
 						if parsed is Array:
-							handle_npc_instruction(parsed)
+							await handle_npc_instruction(parsed)
 						elif parsed is Dictionary and parsed.has("function"):
-							handle_npc_instruction([parsed])
+							await handle_npc_instruction([parsed])
 	else:
 		changeTextTo(response_label, "响应格式错误")
 
@@ -1096,11 +1577,17 @@ var weather:String = """
 func _drain_pending_img() -> void:
 	if pending_img_prompt != "":
 		var queued = pending_img_prompt
+		var queued_site = pending_img_site
 		pending_img_prompt = ""
-		gen_img(queued)
+		pending_img_site = ""
+		gen_img(queued, queued_site)
 
 func _on_img_http_request_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	_bg_debug("img callback, result=" + str(result) + ", code=" + str(response_code) + ", body_len=" + str(body.size()))
+	var callback_site = inflight_img_site
+	inflight_img_site = ""
+	if callback_site == "":
+		callback_site = currentSiteName
+	_bg_debug("img callback, site=" + callback_site + ", result=" + str(result) + ", code=" + str(response_code) + ", body_len=" + str(body.size()))
 	if result != HTTPRequest.RESULT_SUCCESS:
 		print("图片生成失败：网络错误")
 		_bg_debug("img callback network failed")
@@ -1127,21 +1614,38 @@ func _on_img_http_request_request_completed(result: int, response_code: int, _he
 	if response_code == 200 and response.get("success", false):
 		var image_data = response.get("image", "")
 		if image_data:
-			_display_base64_image(image_data)
+			_display_base64_image(image_data, callback_site)
 		else:
 			print("图片生成失败：未收到图片数据")
 			_bg_debug("img callback success=true but image empty")
 			if pending_site_update:
 				pending_site_update = false
 				site_update()
+		if pending_site_update:
+			pending_site_update = false
+			site_update()
 		_drain_pending_img()
 	else:
 		var error_msg = response.get("error", "未知错误")
 		print("图片生成失败：" + error_msg)
-		_bg_debug("img callback failed, error=" + error_msg)
+		var debug_data = response.get("debug", {})
+		if debug_data is Dictionary and !debug_data.is_empty():
+			print("[IMG_CLIENT_DEBUG] provider=", str(debug_data.get("provider", "")),
+				" status=", str(debug_data.get("status_code", "")),
+				" content_type=", str(debug_data.get("content_type", "")),
+				" cf_ray=", str(debug_data.get("cf_ray", "")))
+			if debug_data.has("response_preview"):
+				print("[IMG_CLIENT_DEBUG] response_preview=", str(debug_data.get("response_preview", "")))
+			if debug_data.has("exception"):
+				print("[IMG_CLIENT_DEBUG] exception=", str(debug_data.get("exception", "")))
+			if debug_data.has("request"):
+				print("[IMG_CLIENT_DEBUG] request=", JSON.stringify(debug_data.get("request", {})))
+		_bg_debug("img callback failed, error=" + error_msg + ", has_debug=" + str(debug_data is Dictionary and !debug_data.is_empty()))
 		if pending_site_update:
 			pending_site_update = false
 			site_update()
+		elif site_loading_lock:
+			site_update(true, true, false)
 		_drain_pending_img()
 
 func _extract_first_number(text: String) -> int:
@@ -1193,10 +1697,11 @@ func _extract_target_time(text: String) -> Dictionary:
 
 func _auto_initiate_npc_chat(npc_name: String, npc_describe: String) -> void:
 	var retry = 0
-	while ai_busy and retry < 20:
+	while (ai_busy or currentState == worldState.chat) and retry < 40:
 		await get_tree().create_timer(0.15).timeout
 		retry += 1
 	if ai_busy or currentState == worldState.chat:
+		_set_event_flow_lock(false)
 		return
 	if !npcs.has(npc_name):
 		npcs[npc_name] = {"npc_describe": npc_describe, "npc_log": [], "特征": ""}
@@ -1213,7 +1718,8 @@ func _auto_initiate_npc_chat(npc_name: String, npc_describe: String) -> void:
 		logs += log_entry
 	new_npc.npcLog = logs
 	newNpc = new_npc
-	changeStateInto(GameManager.worldState.chat)
+	await changeStateInto(GameManager.worldState.chat)
+	_set_event_flow_lock(false)
 
 func _pick_crime_npc_from_action(action_input: String) -> Dictionary:
 	var cleaned = action_input.strip_edges()
@@ -1236,6 +1742,7 @@ func _pick_crime_npc_from_action(action_input: String) -> Dictionary:
 func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}) -> void:
 	if currentSiteName == "":
 		return
+	_set_event_flow_lock(true)
 	var npcs_by_reason = {
 		"money": [
 			{"name": "路过的清洁阿姨", "describe": "一位戴着手套、动作麻利的阿姨"},
@@ -1265,20 +1772,40 @@ func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}) -> void:
 		npc_describe = str(forced_npc.get("describe", "正在此地活动"))
 	else:
 		if !npcs_by_reason.has(reason):
+			_set_event_flow_lock(false)
 			return
 		var pool: Array = npcs_by_reason[reason]
 		if pool.is_empty():
+			_set_event_flow_lock(false)
 			return
 		var pick = pool[randi_range(0, pool.size() - 1)]
 		npc_name = str(pick.get("name", "路人"))
 		npc_describe = str(pick.get("describe", "正在此地活动"))
 
 	if npc_name == "":
+		_set_event_flow_lock(false)
 		return
+	var npc_existed = npcs.has(npc_name)
+	if !npcs.has(npc_name):
+		npcs[npc_name] = {"npc_describe": npc_describe, "npc_log": [], "特征": ""}
+	if !npcs[npc_name].has("npc_describe"):
+		npcs[npc_name]["npc_describe"] = npc_describe
+	if !npcs[npc_name].has("npc_log") or !(npcs[npc_name]["npc_log"] is Array):
+		npcs[npc_name]["npc_log"] = []
+	if reason == "crime":
+		var context_text = last_crime_event_context.strip_edges()
+		if context_text == "":
+			context_text = "可疑行为"
+		var crime_event_note = "系统记录：玩家刚刚因【" + context_text + "】触发警报，你需要围绕这件事追问。"
+		var npc_log_arr: Array = npcs[npc_name]["npc_log"]
+		if npc_log_arr.is_empty() or str(npc_log_arr[npc_log_arr.size() - 1]) != crime_event_note:
+			npc_log_arr.append(crime_event_note)
+			npcs[npc_name]["npc_log"] = npc_log_arr
+		addLog("<" + npc_name + "拦住了你，开始质问刚才的异常动静。>")
 
-	if npcs.has(npc_name):
+	if npc_existed:
 		await get_tree().create_timer(0.4).timeout
-		_auto_initiate_npc_chat(npc_name, str(npcs[npc_name].get("npc_describe", npc_describe)))
+		await _auto_initiate_npc_chat(npc_name, str(npcs[npc_name].get("npc_describe", npc_describe)))
 		return
 
 	# 旧逻辑（保留）: create_NPC + addLog，仅记录不主动对话
@@ -1289,13 +1816,74 @@ func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}) -> void:
 	create_NPC(npc_name, currentSiteName, npc_describe)
 	addLog("<" + npc_name + "注意到了你，主动走了过来。>")
 	await get_tree().create_timer(0.8).timeout
-	_auto_initiate_npc_chat(npc_name, npc_describe)
+	await _auto_initiate_npc_chat(npc_name, npc_describe)
 
 func _trigger_time_pass_npc_event(hours: float) -> void:
-	if hours < 1.0:
+	if hours < 0.5:
 		return
-	if randf() < 0.35:
+	var trigger_rate = clamp(0.2 + hours * 0.15, 0.2, 0.85)
+	if randf() < trigger_rate:
 		_spawn_context_npc("time_pass")
+
+func _extract_signed_number(text: String) -> int:
+	var regex = RegEx.new()
+	if regex.compile("([+-]?\\d+)") != OK:
+		return 0
+	var m = regex.search(text)
+	if m == null:
+		return 0
+	return int(m.get_string(1))
+
+func _build_crime_context(action_input: String, action_reply: String, tool_tags: String) -> String:
+	var tags = _extract_angle_tags(tool_tags)
+	for tag in tags:
+		var normalized = str(tag).replace("：", ":").strip_edges()
+		if normalized.begins_with("犯罪:"):
+			return normalized.trim_prefix("犯罪:").strip_edges()
+	var input_text = action_input.strip_edges()
+	if input_text != "":
+		return input_text.left(36)
+	var plain = process_string(action_reply).strip_edges()
+	if plain != "":
+		return plain.left(36)
+	return "可疑行为"
+
+func _apply_direct_action_tool_tags(action_reply: String) -> Dictionary:
+	var tags = _extract_angle_tags(action_reply)
+	if tags.is_empty():
+		return {"handled_any": false, "unresolved_tags": ""}
+	var unresolved = ""
+	var handled_any = false
+	for raw_tag in tags:
+		var normalized = str(raw_tag).replace("：", ":").strip_edges()
+		if normalized == "":
+			continue
+		if normalized.begins_with("资产") or normalized.begins_with("金币") or normalized.begins_with("金钱"):
+			var money_delta = _extract_signed_number(normalized)
+			if money_delta != 0:
+				var before_money = money
+				money = max(0, money + money_delta)
+				var real_delta = money - before_money
+				if real_delta != 0:
+					var sign = "+" if real_delta > 0 else ""
+					addLog("<资产变化" + sign + str(real_delta) + "，当前资产" + str(money) + ">")
+				handled_any = true
+			else:
+				unresolved += "<" + raw_tag + ">"
+		elif normalized.begins_with("声望值"):
+			var rep_delta = _extract_signed_number(normalized.trim_prefix("声望值").strip_edges())
+			if rep_delta != 0:
+				update_reputation(rep_delta)
+				handled_any = true
+			else:
+				unresolved += "<" + raw_tag + ">"
+		elif normalized.begins_with("犯罪"):
+			handled_any = true
+		else:
+			unresolved += "<" + raw_tag + ">"
+	if handled_any:
+		player_update()
+	return {"handled_any": handled_any, "unresolved_tags": unresolved}
 
 func _auto_apply_action_effects(action_input: String, action_reply: String, tool_tags: String) -> void:
 	var source = (action_input + "\n" + action_reply).strip_edges()
@@ -1340,14 +1928,36 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 		changed = true
 
 	if source.find("睡") != -1 and (source.find("睡觉") != -1 or source.find("睡一觉") != -1 or source.find("入睡") != -1):
+		var sleep_hours = _extract_duration_hours(source)
 		if !has_time_tool:
-			var target_time = _extract_target_time(source)
-			if target_time.get("valid", false):
-				passed_hours += set_time(int(target_time.get("hour", 8)), int(target_time.get("minute", 0)))
+			if sleep_hours > 0.0:
+				var rec_sleep = advance_time_minutes(sleep_hours * 60.0)
+				passed_hours += float(rec_sleep.get("hours", 0.0))
 			else:
-				var wake_hour = randi_range(6, 10)
-				var wake_min = randi_range(0, 59)
-				passed_hours += set_time(wake_hour, wake_min)
+				var target_time = _extract_target_time(source)
+				if target_time.get("valid", false):
+					var current_in_day = fmod(nowtime, 1440.0)
+					var target_minutes = float(int(target_time.get("hour", 8)) * 60 + int(target_time.get("minute", 0)))
+					var delta = target_minutes - current_in_day
+					var has_next_day_hint = source.find("明天") != -1 or source.find("次日") != -1 or source.find("第二天") != -1
+					if delta <= 0.0 and !has_next_day_hint:
+						delta = 90.0
+					elif delta <= 0.0:
+						delta += 1440.0
+					var rec_sleep_target = advance_time_minutes(delta)
+					passed_hours += float(rec_sleep_target.get("hours", 0.0))
+				else:
+					var current_hour = int(floor(fmod(nowtime, 1440.0) / 60.0))
+					if current_hour >= 22 or current_hour < 5:
+						var wake_hour = randi_range(6, 8)
+						var wake_min = 0 if randi_range(0, 1) == 0 else 30
+						passed_hours += set_time(wake_hour, wake_min)
+					else:
+						var default_sleep_hours = 1.5
+						if source.find("午觉") != -1 or source.find("小睡") != -1 or source.find("打盹") != -1 or source.find("眯") != -1:
+							default_sleep_hours = 0.5
+						var rec_sleep_default = advance_time_minutes(default_sleep_hours * 60.0)
+						passed_hours += float(rec_sleep_default.get("hours", 0.0))
 		energy = min(100.0, energy + 40.0)
 		hp = min(100.0, hp + 8.0)
 		addLog("<你睡了一觉，醒来精神恢复了不少。>")
@@ -1361,18 +1971,26 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 
 	# 犯罪行为检测：响应 action_prompt 追加的 <犯罪：...> 标签
 	var has_crime_tag = action_reply.find("<犯罪") != -1 or tool_tags.find("犯罪") != -1
+	if !has_crime_tag:
+		var crime_keywords = ["偷", "盗窃", "行窃", "防盗", "警报", "报警", "被抓", "保安"]
+		for keyword in crime_keywords:
+			if source.find(keyword) != -1:
+				has_crime_tag = true
+				break
 	if has_crime_tag:
+		last_crime_event_context = _build_crime_context(action_input, action_reply, tool_tags)
 		var penalty = randi_range(8, 20)
 		reputation = max(0.0, reputation - penalty)
-		addLog("<违规行为被记录，声誉-" + str(penalty) + ">")
+		addLog("<违规行为被记录（" + last_crime_event_context + "），声誉-" + str(penalty) + ">")
 		var crime_npc = _pick_crime_npc_from_action(action_input)
 		if !crime_npc.is_empty():
-			_spawn_context_npc("crime", crime_npc)
+			await _spawn_context_npc("crime", crime_npc)
 		else:
-			_spawn_context_npc("crime")
+			await _spawn_context_npc("crime")
 		changed = true
 
-	_trigger_time_pass_npc_event(passed_hours)
+	if !has_crime_tag:
+		_trigger_time_pass_npc_event(passed_hours)
 
 	if changed:
 		player_update()
@@ -1401,17 +2019,21 @@ func extract_json_from_text(input_string: String) -> Dictionary:
 
 # 初始化交易：NPC想要卖给玩家物品，is_total=true 表示price为总价而非单价
 func initiate_transaction(item_name: String, quantity: int, price: int, is_total: bool = false) -> void:
+	await _ensure_item_profile_record_before_trade(item_name)
 	var price_label = ("总价" + str(price)) if is_total else (str(price) + "每件")
 	var seller_name = "附近商贩"
 	if currentNpc != null:
 		seller_name = str(currentNpc.npcName)
 	addLog("<" + seller_name + "想要以" + price_label + "出售" + str(item_name) + "X" + str(quantity) + ">")
 	%event.got_deal_event(item_name, quantity, price, is_total)
+	refresh_interaction_locks()
 
 # 给予物品：NPC想要送给玩家物品
 func got_items(item_name: String, quantity: int) -> void:
+	await _ensure_item_profile_record_before_trade(item_name)
 	%event.got_gift_event(item_name, quantity)
 	addLog("<有人想送你" + str(item_name) + "X" + str(quantity) + ">")
+	refresh_interaction_locks()
 	pass
 
 # 消耗物品：NPC接受了玩家的物品
@@ -1439,6 +2061,8 @@ func consume_items(item_name: String, quantity: int) -> void:
 		addLog("<你拿出了" + str(quantity) + "块钱，剩余" + str(money) + "块钱>")
 		return
 
+	await _ensure_item_profile_record_before_trade(item_name)
+
 	var consume_result: Dictionary = %itemContainer.consume_item(item_name, quantity)
 	if !consume_result.get("success", false):
 		var available = int(consume_result.get("available", 0))
@@ -1460,8 +2084,8 @@ func create_location(path: String) -> void:
 	var raw_sites = path.split("-", false)
 	var new_sites: Array = []
 	for site_name in raw_sites:
-		var cleaned = str(site_name).strip_edges()
-		if cleaned != "":
+		var cleaned = _resolve_site_alias(str(site_name).strip_edges())
+		if cleaned != "" and !new_sites.has(cleaned):
 			new_sites.append(cleaned)
 
 	if new_sites.is_empty():
@@ -1475,6 +2099,8 @@ func create_location(path: String) -> void:
 	var chain: Array = new_sites.duplicate()
 	if chain[0] != currentSiteName:
 		chain.push_front(currentSiteName)
+	if chain.size() < 2:
+		return
 
 	for i in range(chain.size() - 1):
 		var from_site = str(chain[i])
@@ -1559,10 +2185,15 @@ func create_rumors(rumor_name: String, content: String) -> void:
 	pass
 
 func update_reputation(quantity:int)->void:
-	reputation-=quantity
-	quantity = clamp(quantity,0,100)
+	var delta = clamp(quantity, -100, 100)
+	if delta == 0:
+		return
+	reputation = clamp(reputation + float(delta), 0.0, 100.0)
 	player_update()
-	addLog("<声望减少了：" + str(quantity)+">")
+	if delta > 0:
+		addLog("<声望增加了：" + str(delta) + ">")
+	else:
+		addLog("<声望减少了：" + str(abs(delta)) + ">")
 
 func set_time(hour: int, minute: int) -> float:
 	var target = float(hour * 60 + minute)
@@ -1613,7 +2244,7 @@ func handle_npc_instruction(tool_calls: Array) -> void:
 			print("解析参数失败: ", arguments_data)
 			continue
 
-		if parameters is Dictionary and parameters.has("quantity"):
+		if parameters is Dictionary and parameters.has("quantity") and method in ["initiate_transaction", "got_items", "consume_items"]:
 			parameters["quantity"] = max(1, int(parameters.get("quantity", 1)))
 
 		if !normalized_calls.is_empty():
@@ -1638,14 +2269,14 @@ func handle_npc_instruction(tool_calls: Array) -> void:
 		var parameters: Dictionary = tool_call_item.get("parameters", {})
 		match method:
 			"initiate_transaction":
-				initiate_transaction(
+				await initiate_transaction(
 					parameters.get("item_name", ""),
 					max(1, int(parameters.get("quantity", 1))),
 					int(parameters.get("price", 0)),
 					bool(parameters.get("is_total_price", false))
 				)
 			"got_items":
-				got_items(
+				await got_items(
 					parameters.get("item_name", ""),
 					max(1, int(parameters.get("quantity", 1)))
 				)
@@ -1729,7 +2360,21 @@ func use_item(item_name: String) -> Dictionary:
 
 # ==================== 存读档 ====================
 func save_game() -> void:
-	_ensure_dir(SAVE_DIR)
+	for profile_key in itemProfiles.keys():
+		var item_name = str(profile_key)
+		var prof = itemProfiles.get(item_name, {})
+		if prof is Dictionary and item_name != "":
+			var packed_profile = _sanitize_item_profile(item_name, {
+				"description": prof.get("description", ""),
+				"image_prompt": prof.get("image_prompt", "single game inventory item icon of " + item_name + ", clean background, centered"),
+				"value": int(prof.get("value", 50)),
+				"rarity": str(prof.get("rarity", "common")),
+				"effect_type": str(prof.get("effect_type", "none")),
+				"effect_value": int(prof.get("effect_value", 0))
+			})
+			_save_item_profile_json(item_name, packed_profile)
+	_sync_session_resources_to_save()
+	_ensure_dir(SAVE_SLOT_DIR)
 	var item_list: Array = []
 	for child in %itemContainer.get_children():
 		if child is item:
@@ -1746,7 +2391,11 @@ func save_game() -> void:
 
 	var log_list: Array = []
 	for log_node in %logContainer.get_children():
-		log_list.append(log_node.text)
+		var log_text = str(log_node.text)
+		if _is_important_log(log_text):
+			log_list.append(log_text)
+	if log_list.size() > 200:
+		log_list = log_list.slice(max(0, log_list.size() - 200), log_list.size())
 
 	var save_data = {
 		"version": 1,
@@ -1773,23 +2422,28 @@ func save_game() -> void:
 	if file:
 		file.store_string(JSON.stringify(save_data, "\t"))
 		file.close()
+		has_saved_in_session = true
 		addLog("<游戏已保存>")
 	else:
 		addLog("<保存失败：" + str(FileAccess.get_open_error()) + ">")
 
-func load_game() -> void:
-	if !FileAccess.file_exists(SAVE_FILE):
+func has_save_file() -> bool:
+	return FileAccess.file_exists(SAVE_FILE)
+
+func load_game() -> bool:
+	if !has_save_file():
 		addLog("<没有存档文件>")
-		return
+		return false
+	_restore_session_resources_from_save()
 	var file = FileAccess.open(SAVE_FILE, FileAccess.READ)
 	if !file:
 		addLog("<读档失败>")
-		return
+		return false
 	var json = JSON.new()
 	if json.parse(file.get_as_text()) != OK:
 		file.close()
 		addLog("<存档文件损坏>")
-		return
+		return false
 	file.close()
 	var data = json.get_data()
 
@@ -1837,6 +2491,14 @@ func load_game() -> void:
 			"is_generating": false,
 			"is_ready": tex != null
 		}
+		_save_item_profile_json(iname, _sanitize_item_profile(iname, {
+			"description": idesc,
+			"value": ivalue,
+			"rarity": irarity,
+			"effect_type": ieffect_type,
+			"effect_value": ieffect_value,
+			"image_prompt": "single game inventory item icon of " + iname + ", clean background, centered"
+		}))
 		%itemContainer.add_item(iname, inum, tex, idesc, ieffect_type, ieffect_value)
 		if tex == null:
 			ensure_item_profile_async(iname)
@@ -1844,10 +2506,12 @@ func load_game() -> void:
 	# 恢复日志
 	clear_children(%logContainer)
 	for log_text in data.get("logs", []):
-		addLog(log_text)
+		addLog(str(log_text), true)
 
 	# 恢复当前场景
-	var site_name = data.get("current_site", "")
+	var site_name = str(data.get("current_site", "")).strip_edges()
+	if (site_name == "" or !sites.has(site_name)) and !sites.is_empty():
+		site_name = str(sites.keys()[0])
 	if site_name != "" and sites.has(site_name):
 		currentSiteName = site_name
 		var has_bg := false
@@ -1862,8 +2526,23 @@ func load_game() -> void:
 			var scene_prompt = _build_scene_image_prompt(site_name, site_data)
 			_bg_debug("load_game image cache miss for " + site_name + ", prompt_len=" + str(scene_prompt.length()))
 			if scene_prompt != "":
+				site_update(false, false, false)
 				pending_site_update = true
-				gen_img(scene_prompt)
-		site_update()
+				_set_site_loading_lock(true)
+				gen_img(scene_prompt, site_name)
+			else:
+				pending_site_update = false
+				_set_site_loading_lock(false)
+				site_update()
+		else:
+			pending_site_update = false
+			site_update(false, true, true)
+	else:
+		_set_site_loading_lock(false)
+		clear_children(%site_buttons)
+		clear_children(%npc_buttons)
+		changeTextTo(%siteName, "未定位")
 
+	has_saved_in_session = false
 	addLog("<读档完成>")
+	return true

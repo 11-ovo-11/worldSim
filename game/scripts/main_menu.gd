@@ -1,9 +1,10 @@
 extends CanvasLayer
-enum startState {getName,getLocation}
-var currentState = startState.getName
+enum startState {chooseMode,getName,getLocation}
+var currentState = startState.chooseMode
 var scene :GameManager
 var playerName:String
 var playerLocation:String
+var start_mode: String = ""
 # 获取场景中的HTTPRequest节点
 @onready var start_http_request: HTTPRequest = $startHTTPRequest
 func _ready() -> void:
@@ -25,7 +26,7 @@ func _ready() -> void:
 	await get_tree().create_timer(2).timeout
 	add_start_log("你好...")
 	await get_tree().create_timer(2).timeout
-	add_start_log("你是谁？")
+	add_start_log("请选择：新游戏 / 继续游戏")
 	$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 
 
@@ -88,6 +89,38 @@ func _on_button_button_down() -> void:
 		return
 
 	match currentState:
+		startState.chooseMode:
+			$HBoxContainer/VBoxContainer/TextEdit.text = ""
+			$HBoxContainer/VBoxContainer/TextEdit/Button.button_pressed = false
+			$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = true
+			await add_start_log(user_input,true)
+			var normalized = _normalize_start_mode(user_input)
+			if normalized == "continue":
+				start_mode = "continue"
+				if !scene.has_save_file():
+					add_start_log("未检测到可用存档，请输入“新游戏”开始。")
+					$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
+					return
+				add_start_log("已选择：继续游戏")
+				await get_tree().create_timer(1).timeout
+				add_start_log("正在读取存档...")
+				var loaded_ok = scene.load_game()
+				if loaded_ok:
+					await _enter_loaded_game()
+				else:
+					add_start_log("读档失败，请输入“新游戏”重试。")
+					start_mode = ""
+					$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
+			elif normalized == "new":
+				start_mode = "new"
+				currentState = startState.getName
+				add_start_log("已选择：新游戏")
+				await get_tree().create_timer(1).timeout
+				add_start_log("你是谁？")
+				$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
+			else:
+				add_start_log("请输入“新游戏”或“继续游戏”。")
+				$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 		startState.getName:
 			playerName = $HBoxContainer/VBoxContainer/TextEdit.text
 			$HBoxContainer/VBoxContainer/TextEdit.text = ""
@@ -113,6 +146,36 @@ func _on_button_button_down() -> void:
 			add_start_log("指令接收完成，开始世界初始化...")
 
 	pass # Replace with function body.
+
+func _normalize_start_mode(input_text: String) -> String:
+	var t = input_text.strip_edges().to_lower()
+	if t == "":
+		return ""
+	var continue_words = ["继续", "继续游戏", "读档", "加载", "加载存档", "continue", "load", "2"]
+	for w in continue_words:
+		if t == w:
+			return "continue"
+	var new_words = ["新游戏", "新的游戏", "开始", "开始游戏", "重新开始", "new", "newgame", "1"]
+	for w in new_words:
+		if t == w:
+			return "new"
+	if t.find("继续") != -1 or t.find("读档") != -1:
+		return "continue"
+	if t.find("新") != -1 or t.find("开始") != -1:
+		return "new"
+	return ""
+
+func _enter_loaded_game() -> void:
+	var loaded_name = str(scene.playerName).strip_edges()
+	if loaded_name == "":
+		loaded_name = "玩家"
+	playerName = loaded_name
+	add_start_log("欢迎回来," + loaded_name)
+	%speakerNameLabel.text = ""
+	scene.changeTextTo(%speakerNameLabel, loaded_name)
+	$"../mainContainer".showUP()
+	await create_tween().tween_property($HBoxContainer,"modulate",Color(0.0, 0.0, 0.0, 0.0),0.5).finished
+	visible = false
 
 
 func _on_start_log_child_entered_tree(_node: Node) -> void:

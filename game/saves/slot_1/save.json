@@ -1,0 +1,138 @@
+{
+	"background": "世界概览：\n一所位于现代都市边缘的综合性大学，校园内新旧建筑交错，形成了微缩的社会生态。核心冲突源于表面自由的学术氛围与无处不在的隐性规则之间的张力，以及个体理想与现实压力间的无声对抗。\n\n人群状态：\n大多数学生过着宿舍、教室、食堂三点一线的生活，被绩点、社团活动、实习机会和未来焦虑所驱动。他们普遍信仰“努力即正义”，却又在深夜为内卷文化感到疲惫；恐惧被同龄人甩在身后，更恐惧毕业后失去校园这层保护壳，直面社会的筛选。\n\n环境与天气：\n校园环境被精心规划却又因年代叠加略显凌乱，老校区梧桐成荫，新校区建筑现代但缺乏树荫。天气遵循典型的温带季风气候，四季分明——春日短暂，夏日闷热多雨，秋日晴朗但易起雾，冬日干冷。突如其来的暴雨常打乱学生的出行计划，而连绵的阴雨和换季时的温差，则微妙地影响着集体情绪与出勤率。",
+	"current_site": "学校",
+	"env_dic": {
+		"current_humidity": 65.0,
+		"current_temperature": 18.0,
+		"current_weather": "cloudy",
+		"current_wind_speed": 8.0,
+		"humidity_range": [
+			25.0,
+			95.0
+		],
+		"temperature_range": [
+			-12.0,
+			38.0
+		],
+		"weather_duration_base": {
+			"cloudy": 90.0,
+			"overcast": 70.0,
+			"rain": 45.0,
+			"snow": 50.0,
+			"sunny": 140.0,
+			"thunder": 25.0
+		},
+		"weather_transition_probability": {
+			"cloudy": {
+				"cloudy": 0.4,
+				"overcast": 0.25,
+				"rain": 0.08,
+				"snow": 0.01,
+				"sunny": 0.25,
+				"thunder": 0.01
+			},
+			"overcast": {
+				"cloudy": 0.25,
+				"overcast": 0.35,
+				"rain": 0.25,
+				"snow": 0.03,
+				"sunny": 0.1,
+				"thunder": 0.02
+			},
+			"rain": {
+				"cloudy": 0.15,
+				"overcast": 0.3,
+				"rain": 0.4,
+				"snow": 0.05,
+				"sunny": 0.05,
+				"thunder": 0.05
+			},
+			"snow": {
+				"cloudy": 0.1,
+				"overcast": 0.2,
+				"rain": 0.05,
+				"snow": 0.55,
+				"sunny": 0.05,
+				"thunder": 0.05
+			},
+			"sunny": {
+				"cloudy": 0.3,
+				"overcast": 0.15,
+				"rain": 0.03,
+				"snow": 0.01,
+				"sunny": 0.5,
+				"thunder": 0.01
+			},
+			"thunder": {
+				"cloudy": 0.08,
+				"overcast": 0.15,
+				"rain": 0.6,
+				"snow": 0.0,
+				"sunny": 0.02,
+				"thunder": 0.15
+			}
+		},
+		"wind_range": [
+			0.0,
+			35.0
+		]
+	},
+	"items": [],
+	"logs": [
+		"你抵达了学校",
+		"你抵达了学校",
+		"你抵达了学校",
+		"你抵达了学校",
+		"<读档完成>"
+	],
+	"nowtime": 536.000000000005,
+	"npcs": {
+		"张教授": {
+			"npc_describe": "一位中年男教师，穿着简约的西装，夹着公文包，站在广场边缘与一名学生交谈，神情严肃但耐心。",
+			"特征": ""
+		},
+		"李晨": {
+			"npc_describe": "一名戴着黑框眼镜、背着双肩包的大三男生，穿着格子衬衫和牛仔裤，表情略显疲惫，正低头查看手机上的课程表。",
+			"特征": ""
+		},
+		"王悦": {
+			"npc_describe": "一名扎着马尾辫、穿着运动外套的大二女生，手里拿着咖啡杯，快步走向教学楼，眼神中透露出紧迫感。",
+			"特征": ""
+		}
+	},
+	"player": {
+		"energy": 100.0,
+		"hp": 100.0,
+		"money": 1000,
+		"name": "\n大学生",
+		"reputation": 100.0
+	},
+	"rumors": {
+
+	},
+	"sites": {
+		"学校": {
+			"accessible_locations": [
+				"图书馆",
+				"教学楼A栋",
+				"学生食堂",
+				"宿舍区",
+				"体育场"
+			],
+			"english_description": "A central plaza in a modern university campus, with a mix of old and new buildings, gray paving stones, plane trees, and a small fountain. Students in casual modern attire walk briskly, some chatting or using smartphones, under a temperate seasonal sky.",
+			"location_description": "位于大学中心的主广场，连接着新旧校区，是学生日常通勤、社交和活动的枢纽。广场上铺着灰色地砖，周围环绕着梧桐树和现代教学楼，中央有一个小型喷泉，但常因维护而关闭。学生们匆匆走过，有的在讨论课程，有的低头看手机，空气中弥漫着淡淡的咖啡香和隐约的焦虑感。",
+			"location_name": "校园主广场",
+			"npc": {
+				"张教授": "一位中年男教师，穿着简约的西装，夹着公文包，站在广场边缘与一名学生交谈，神情严肃但耐心。",
+				"李晨": "一名戴着黑框眼镜、背着双肩包的大三男生，穿着格子衬衫和牛仔裤，表情略显疲惫，正低头查看手机上的课程表。",
+				"王悦": "一名扎着马尾辫、穿着运动外套的大二女生，手里拿着咖啡杯，快步走向教学楼，眼神中透露出紧迫感。"
+			},
+			"地点名称": "学校",
+			"地点描述": "你来到学校。周围的布局和气氛有了明显变化，这里看起来是校园中可进一步探索的区域。",
+			"能前往的地点": [],
+			"英文描述": ""
+		}
+	},
+	"version": 1,
+	"world_seed_input": "\n学校"
+}
