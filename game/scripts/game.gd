@@ -77,6 +77,7 @@ var hp:float = 100
 var reputation:float = 100
 const PASSIVE_ENERGY_RECOVERY_PER_HOUR: float = 4.0
 const PASSIVE_HP_RECOVERY_PER_HOUR: float = 1.2
+const ACTION_PROACTIVE_NPC_RATE: float = 0.2
 
 # 系统提示词
 var role_prompt = """
@@ -227,6 +228,7 @@ func _build_scene_image_prompt(site_name: String, site_data: Dictionary) -> Stri
 	var cn_desc = str(site_data.get("地点描述", "")).strip_edges()
 	var world_hint = background.strip_edges()
 	var location_hint = _build_location_visual_hint(site_name, cn_desc)
+	var desc_anchor = _build_cn_desc_visual_anchor(cn_desc)
 	var prompt_parts: Array = [
 		"cinematic realistic campus environment",
 		"daylight natural color",
@@ -237,10 +239,16 @@ func _build_scene_image_prompt(site_name: String, site_data: Dictionary) -> Stri
 		prompt_parts.append("world context: " + world_hint.left(120))
 	if location_hint != "":
 		prompt_parts.append(location_hint)
+	if cn_desc != "":
+		prompt_parts.append("narrative anchor: " + cn_desc.left(180))
+	if desc_anchor != "":
+		prompt_parts.append("must include visual elements: " + desc_anchor)
 	if english_prompt != "":
 		prompt_parts.append(english_prompt)
+		if cn_desc != "":
+			prompt_parts.append("if english prompt conflicts with narrative anchor, follow narrative anchor first")
 	elif cn_desc != "":
-		prompt_parts.append("scene detail: " + cn_desc)
+		prompt_parts.append("scene detail: " + cn_desc.left(180))
 	else:
 		prompt_parts.append("scene detail: " + site_name)
 	if site_data.has("npc") and site_data["npc"] is Dictionary:
@@ -248,7 +256,7 @@ func _build_scene_image_prompt(site_name: String, site_data: Dictionary) -> Stri
 		if !npc_keys.is_empty():
 			prompt_parts.append("people style: modern Chinese university students and staff")
 	if cn_desc != "":
-		prompt_parts.append("avoid unrelated places, keep architecture and props consistent with " + site_name)
+		prompt_parts.append("keep architecture, facilities and props strictly aligned with narrative anchor")
 	prompt_parts.append("strictly match this location, do not depict other campus areas")
 	return ", ".join(prompt_parts)
 
@@ -269,6 +277,35 @@ func _build_location_visual_hint(site_name: String, cn_desc: String) -> String:
 	if merged.find("校门") != -1:
 		return "university main gate, campus sign, pedestrians entering and leaving"
 	return "modern Chinese university campus architecture consistent with the location"
+
+func _build_cn_desc_visual_anchor(cn_desc: String) -> String:
+	var desc = cn_desc.strip_edges()
+	if desc == "":
+		return ""
+	var keyword_map = {
+		"跑道": "running track",
+		"足球场": "football field",
+		"篮球场": "basketball court",
+		"看台": "stadium stands",
+		"草坪": "open grass field",
+		"健身": "sports training atmosphere",
+		"图书馆": "library interior",
+		"书架": "bookshelves",
+		"自习": "study desks and lamps",
+		"食堂": "cafeteria serving counters",
+		"宿舍": "dormitory corridor",
+		"教学楼": "teaching building corridor",
+		"教室": "classroom interior",
+		"超市": "convenience store shelves",
+		"小卖部": "small campus store"
+	}
+	var anchors: Array = []
+	for key in keyword_map.keys():
+		if desc.find(str(key)) != -1:
+			var anchor = str(keyword_map[key])
+			if !anchors.has(anchor):
+				anchors.append(anchor)
+	return ", ".join(anchors)
 
 func _build_location_fallback_description(location_name: String, from_site_name: String = "") -> String:
 	var n = location_name.strip_edges()
@@ -1739,7 +1776,7 @@ func _pick_crime_npc_from_action(action_input: String) -> Dictionary:
 		return {"name": "值班老师", "describe": "皱着眉、快步走来的值班老师"}
 	return {}
 
-func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}) -> void:
+func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}, context_text: String = "") -> void:
 	if currentSiteName == "":
 		return
 	_set_event_flow_lock(true)
@@ -1792,15 +1829,28 @@ func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}) -> void:
 		npcs[npc_name]["npc_describe"] = npc_describe
 	if !npcs[npc_name].has("npc_log") or !(npcs[npc_name]["npc_log"] is Array):
 		npcs[npc_name]["npc_log"] = []
+	var scoped_context = context_text.strip_edges()
+	if scoped_context == "" and reason == "crime":
+		scoped_context = last_crime_event_context.strip_edges()
+	if scoped_context != "":
+		var context_note = ""
+		match reason:
+			"money":
+				context_note = "系统记录：玩家刚进行与金钱有关的行动【" + scoped_context + "】。你要围绕这件事开场。"
+			"exercise":
+				context_note = "系统记录：玩家刚进行体能相关行动【" + scoped_context + "】。你要围绕这件事开场。"
+			"time_pass":
+				context_note = "系统记录：玩家刚完成一段行动【" + scoped_context + "】。你要围绕这件事开场。"
+			"crime":
+				context_note = "系统记录：玩家刚刚因【" + scoped_context + "】触发警报，你需要围绕这件事追问。"
+			_:
+				context_note = ""
+		if context_note != "":
+			var context_log_arr: Array = npcs[npc_name]["npc_log"]
+			if context_log_arr.is_empty() or str(context_log_arr[context_log_arr.size() - 1]) != context_note:
+				context_log_arr.append(context_note)
+				npcs[npc_name]["npc_log"] = context_log_arr
 	if reason == "crime":
-		var context_text = last_crime_event_context.strip_edges()
-		if context_text == "":
-			context_text = "可疑行为"
-		var crime_event_note = "系统记录：玩家刚刚因【" + context_text + "】触发警报，你需要围绕这件事追问。"
-		var npc_log_arr: Array = npcs[npc_name]["npc_log"]
-		if npc_log_arr.is_empty() or str(npc_log_arr[npc_log_arr.size() - 1]) != crime_event_note:
-			npc_log_arr.append(crime_event_note)
-			npcs[npc_name]["npc_log"] = npc_log_arr
 		addLog("<" + npc_name + "拦住了你，开始质问刚才的异常动静。>")
 
 	if npc_existed:
@@ -1818,12 +1868,19 @@ func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}) -> void:
 	await get_tree().create_timer(0.8).timeout
 	await _auto_initiate_npc_chat(npc_name, npc_describe)
 
-func _trigger_time_pass_npc_event(hours: float) -> void:
+func _trigger_time_pass_npc_event(hours: float, action_context: String = "") -> void:
 	if hours < 0.5:
 		return
-	var trigger_rate = clamp(0.2 + hours * 0.15, 0.2, 0.85)
-	if randf() < trigger_rate:
-		_spawn_context_npc("time_pass")
+	if randf() < ACTION_PROACTIVE_NPC_RATE:
+		_spawn_context_npc("time_pass", {}, action_context)
+
+func _build_action_context_text(action_input: String, action_reply: String) -> String:
+	var context_text = action_input.strip_edges()
+	if context_text == "":
+		context_text = process_string(action_reply).strip_edges()
+	if context_text == "":
+		context_text = (action_input + " " + process_string(action_reply)).strip_edges()
+	return context_text.left(64)
 
 func _extract_signed_number(text: String) -> int:
 	var regex = RegEx.new()
@@ -1889,6 +1946,7 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 	var source = (action_input + "\n" + action_reply).strip_edges()
 	if source == "":
 		return
+	var action_context = _build_action_context_text(action_input, action_reply)
 
 	var has_time_tool = tool_tags.find("设置时间") != -1 or tool_tags.find("set_time") != -1
 	var has_money_tool = tool_tags.find("consume_items") != -1 or tool_tags.find("initiate_transaction") != -1
@@ -1908,8 +1966,8 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 			var real_cost = min(amount, money)
 			money -= real_cost
 			addLog("<你扔掉了" + str(real_cost) + "块钱，当前资产" + str(money) + ">")
-			if real_cost > 0 and randf() < 0.6:
-				_spawn_context_npc("money")
+			if real_cost > 0 and randf() < ACTION_PROACTIVE_NPC_RATE:
+				_spawn_context_npc("money", {}, action_context)
 			changed = true
 
 	if source.find("锻炼") != -1 or source.find("训练") != -1 or source.find("健身") != -1 or source.find("跑步") != -1:
@@ -1923,8 +1981,8 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 		energy = max(0.0, energy - energy_cost)
 		hp = min(100.0, hp + hours * 1.5)
 		addLog("<锻炼" + str(hours) + "小时：体力-" + str(int(energy_cost)) + "，生命+" + str(int(hours * 1.5)) + ">")
-		if randf() < 0.5:
-			_spawn_context_npc("exercise")
+		if randf() < ACTION_PROACTIVE_NPC_RATE:
+			_spawn_context_npc("exercise", {}, action_context)
 		changed = true
 
 	if source.find("睡") != -1 and (source.find("睡觉") != -1 or source.find("睡一觉") != -1 or source.find("入睡") != -1):
@@ -1982,15 +2040,16 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 		var penalty = randi_range(8, 20)
 		reputation = max(0.0, reputation - penalty)
 		addLog("<违规行为被记录（" + last_crime_event_context + "），声誉-" + str(penalty) + ">")
-		var crime_npc = _pick_crime_npc_from_action(action_input)
-		if !crime_npc.is_empty():
-			await _spawn_context_npc("crime", crime_npc)
-		else:
-			await _spawn_context_npc("crime")
+		if randf() < ACTION_PROACTIVE_NPC_RATE:
+			var crime_npc = _pick_crime_npc_from_action(action_input)
+			if !crime_npc.is_empty():
+				await _spawn_context_npc("crime", crime_npc, last_crime_event_context)
+			else:
+				await _spawn_context_npc("crime", {}, last_crime_event_context)
 		changed = true
 
 	if !has_crime_tag:
-		_trigger_time_pass_npc_event(passed_hours)
+		_trigger_time_pass_npc_event(passed_hours, action_context)
 
 	if changed:
 		player_update()

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cvfqeqqjohtje"
-path="res://.godot/imported/学校.png-01891689e79aac0fc68da26b6792f3b2.ctex"
+uid="uid://cp3gmepiucmjs"
+path="res://.godot/imported/小卖部.png-be84d9a8edb424d1de284ae5ce08ed38.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://picture/session/scenes/学校.png"
-dest_files=["res://.godot/imported/学校.png-01891689e79aac0fc68da26b6792f3b2.ctex"]
+source_file="res://saves/slot_1/resources/scenes/小卖部.png"
+dest_files=["res://.godot/imported/小卖部.png-be84d9a8edb424d1de284ae5ce08ed38.ctex"]
 
 [params]
 

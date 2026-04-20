@@ -1,109 +1,127 @@
 {
-	"background": "世界概览：\n一所位于现代都市边缘的综合性大学，校园内新旧建筑交错，形成了微缩的社会生态。核心冲突源于表面自由的学术氛围与无处不在的隐性规则之间的张力，以及个体理想与现实压力间的无声对抗。\n\n人群状态：\n大多数学生过着宿舍、教室、食堂三点一线的生活，被绩点、社团活动、实习机会和未来焦虑所驱动。他们普遍信仰“努力即正义”，却又在深夜为内卷文化感到疲惫；恐惧被同龄人甩在身后，更恐惧毕业后失去校园这层保护壳，直面社会的筛选。\n\n环境与天气：\n校园环境被精心规划却又因年代叠加略显凌乱，老校区梧桐成荫，新校区建筑现代但缺乏树荫。天气遵循典型的温带季风气候，四季分明——春日短暂，夏日闷热多雨，秋日晴朗但易起雾，冬日干冷。突如其来的暴雨常打乱学生的出行计划，而连绵的阴雨和换季时的温差，则微妙地影响着集体情绪与出勤率。",
-	"current_site": "学校",
+	"background": "世界概览：\n这是一所位于城市边缘的普通综合性大学，校园生活平静而规律，表面下涌动着青春期的迷茫、人际关系的微妙张力，以及对未来的普遍焦虑。核心冲突在于个体对自我价值的探索与外部社会期待之间的无声对抗。\n\n人群状态：\n大多数学生过着三点一线（宿舍-教室-食堂/图书馆）的生活，被学分、社团活动、实习机会和人际关系所裹挟。他们普遍信仰“努力会有回报”，但内心深处恐惧成为平庸的大多数，害怕在毕业时找不到方向，与同龄人拉开难以逾越的差距。\n\n环境与天气：\n校园绿化良好，但建筑风格新旧杂糅，颇有年代感的红砖楼与崭新的玻璃幕墙教学楼并存。天气遵循典型的温带季风气候，四季分明。春秋短暂宜人，夏季闷热多雨，潮湿感渗透进老宿舍的墙壁；冬季干燥寒冷，北风穿过楼宇间的空地，催促着学生们加快赶往教室或图书馆的脚步。天气变化直接影响着学生的出行、衣着和心情，雨季的连绵和冬日的严寒常常成为推迟计划或滋生惰性的借口。",
+	"current_site": "小卖部",
 	"env_dic": {
 		"current_humidity": 65.0,
 		"current_temperature": 18.0,
 		"current_weather": "cloudy",
-		"current_wind_speed": 8.0,
+		"current_wind_speed": 12.0,
 		"humidity_range": [
-			25.0,
-			95.0
+			30.0,
+			90.0
 		],
 		"temperature_range": [
-			-12.0,
-			38.0
+			-15.0,
+			35.0
 		],
 		"weather_duration_base": {
 			"cloudy": 90.0,
 			"overcast": 70.0,
 			"rain": 45.0,
-			"snow": 50.0,
+			"snow": 40.0,
 			"sunny": 140.0,
 			"thunder": 25.0
 		},
 		"weather_transition_probability": {
 			"cloudy": {
 				"cloudy": 0.4,
-				"overcast": 0.25,
+				"overcast": 0.2,
 				"rain": 0.08,
-				"snow": 0.01,
-				"sunny": 0.25,
-				"thunder": 0.01
+				"snow": 0.02,
+				"sunny": 0.3,
+				"thunder": 0.0
 			},
 			"overcast": {
 				"cloudy": 0.25,
 				"overcast": 0.35,
 				"rain": 0.25,
-				"snow": 0.03,
+				"snow": 0.05,
 				"sunny": 0.1,
-				"thunder": 0.02
+				"thunder": 0.0
 			},
 			"rain": {
 				"cloudy": 0.15,
 				"overcast": 0.3,
-				"rain": 0.4,
-				"snow": 0.05,
+				"rain": 0.45,
+				"snow": 0.0,
 				"sunny": 0.05,
 				"thunder": 0.05
 			},
 			"snow": {
 				"cloudy": 0.1,
-				"overcast": 0.2,
-				"rain": 0.05,
+				"overcast": 0.25,
+				"rain": 0.0,
 				"snow": 0.55,
 				"sunny": 0.05,
 				"thunder": 0.05
 			},
 			"sunny": {
-				"cloudy": 0.3,
-				"overcast": 0.15,
+				"cloudy": 0.25,
+				"overcast": 0.1,
 				"rain": 0.03,
-				"snow": 0.01,
-				"sunny": 0.5,
-				"thunder": 0.01
+				"snow": 0.02,
+				"sunny": 0.6,
+				"thunder": 0.0
 			},
 			"thunder": {
-				"cloudy": 0.08,
-				"overcast": 0.15,
+				"cloudy": 0.1,
+				"overcast": 0.2,
 				"rain": 0.6,
 				"snow": 0.0,
-				"sunny": 0.02,
-				"thunder": 0.15
+				"sunny": 0.0,
+				"thunder": 0.1
 			}
 		},
 		"wind_range": [
 			0.0,
-			35.0
+			40.0
 		]
 	},
 	"items": [],
 	"logs": [
 		"你抵达了学校",
+		"【行动】扔100块钱到地上",
+		"【行动】锻炼",
+		"<时间跳跃至 17:30>",
+		"【行动】睡觉",
+		"<时间跳跃至 07:00>",
+		"你开始与李华交谈",
+		"【行动】寻找小卖部",
+		"<地图更新：发现了小卖部>",
 		"你抵达了学校",
-		"你抵达了学校",
-		"你抵达了学校",
-		"<读档完成>"
+		"<地图更新：发现了小卖部>",
+		"你抵达了小卖部"
 	],
-	"nowtime": 536.000000000005,
+	"nowtime": 1870.0,
 	"npcs": {
-		"张教授": {
-			"npc_describe": "一位中年男教师，穿着简约的西装，夹着公文包，站在广场边缘与一名学生交谈，神情严肃但耐心。",
+		"张明": {
+			"npc_describe": "一个身材高大的男生，穿着运动服，站在收银台旁和朋友聊天，显得精力充沛。",
 			"特征": ""
 		},
-		"李晨": {
-			"npc_describe": "一名戴着黑框眼镜、背着双肩包的大三男生，穿着格子衬衫和牛仔裤，表情略显疲惫，正低头查看手机上的课程表。",
+		"张老师": {
+			"npc_describe": "一名中年教授，穿着整洁的衬衫和西裤，手里拿着教案，步伐匆匆赶往下一节课。",
 			"特征": ""
 		},
-		"王悦": {
-			"npc_describe": "一名扎着马尾辫、穿着运动外套的大二女生，手里拿着咖啡杯，快步走向教学楼，眼神中透露出紧迫感。",
+		"李华": {
+			"npc_describe": "一个戴着黑框眼镜的男生，穿着简单的T恤和牛仔裤，手里拿着一瓶饮料，表情略显疲惫。",
+			"npc_log": [
+				"早。"
+			],
+			"特征": ""
+		},
+		"王明": {
+			"npc_describe": "一名活泼的大二社团成员，穿着印有社团logo的卫衣，正在热情地向新生分发传单。",
+			"特征": ""
+		},
+		"王芳": {
+			"npc_describe": "一个扎着马尾辫的女生，背着双肩包，正在货架前挑选零食，脸上带着轻松的微笑。",
 			"特征": ""
 		}
 	},
 	"player": {
 		"energy": 100.0,
 		"hp": 100.0,
-		"money": 1000,
+		"money": 900,
 		"name": "\n大学生",
 		"reputation": 100.0
 	},
@@ -112,25 +130,44 @@
 	},
 	"sites": {
 		"学校": {
-			"accessible_locations": [
-				"图书馆",
-				"教学楼A栋",
-				"学生食堂",
-				"宿舍区",
-				"体育场"
-			],
-			"english_description": "A central plaza in a modern university campus, with a mix of old and new buildings, gray paving stones, plane trees, and a small fountain. Students in casual modern attire walk briskly, some chatting or using smartphones, under a temperate seasonal sky.",
-			"location_description": "位于大学中心的主广场，连接着新旧校区，是学生日常通勤、社交和活动的枢纽。广场上铺着灰色地砖，周围环绕着梧桐树和现代教学楼，中央有一个小型喷泉，但常因维护而关闭。学生们匆匆走过，有的在讨论课程，有的低头看手机，空气中弥漫着淡淡的咖啡香和隐约的焦虑感。",
-			"location_name": "校园主广场",
 			"npc": {
-				"张教授": "一位中年男教师，穿着简约的西装，夹着公文包，站在广场边缘与一名学生交谈，神情严肃但耐心。",
-				"李晨": "一名戴着黑框眼镜、背着双肩包的大三男生，穿着格子衬衫和牛仔裤，表情略显疲惫，正低头查看手机上的课程表。",
-				"王悦": "一名扎着马尾辫、穿着运动外套的大二女生，手里拿着咖啡杯，快步走向教学楼，眼神中透露出紧迫感。"
+				"张老师": "一名中年教授，穿着整洁的衬衫和西裤，手里拿着教案，步伐匆匆赶往下一节课。",
+				"李华": "一名戴着黑框眼镜的大三学生，穿着简单的T恤和牛仔裤，背着沉重的书包，表情略显疲惫但眼神专注。",
+				"王明": "一名活泼的大二社团成员，穿着印有社团logo的卫衣，正在热情地向新生分发传单。"
 			},
 			"地点名称": "学校",
-			"地点描述": "你来到学校。周围的布局和气氛有了明显变化，这里看起来是校园中可进一步探索的区域。",
-			"能前往的地点": [],
-			"英文描述": ""
+			"地点描述": "这是一所位于城市边缘的普通综合性大学，校园内红砖老楼与玻璃幕墙新教学楼并存，绿化良好但略显杂乱。学生们穿梭于宿舍、教室和食堂之间，空气中弥漫着青春期的迷茫和对未来的焦虑，生活平静而规律，表面下涌动着人际关系的微妙张力。天气温带季风气候，当前季节为春季，短暂宜人，偶尔有细雨增添潮湿感。",
+			"能前往的地点": [
+				"图书馆",
+				"学生宿舍",
+				"教学楼",
+				"食堂",
+				"校园操场",
+				"社团活动中心",
+				"小卖部"
+			],
+			"英文描述": "A typical comprehensive university on the city outskirts, with a mix of old red-brick buildings and modern glass-walled classrooms, surrounded by green but slightly unkempt lawns. Students move between dorms, lecture halls, and cafeterias, embodying youthful uncertainty and subtle social tensions under a calm, routine surface. Spring weather, mild with occasional light rain adding a damp atmosphere."
+		},
+		"小卖部": {
+			"npc": {
+				"张明": "一个身材高大的男生，穿着运动服，站在收银台旁和朋友聊天，显得精力充沛。",
+				"李华": "一个戴着黑框眼镜的男生，穿着简单的T恤和牛仔裤，手里拿着一瓶饮料，表情略显疲惫。",
+				"王芳": "一个扎着马尾辫的女生，背着双肩包，正在货架前挑选零食，脸上带着轻松的微笑。"
+			},
+			"别名": [
+				"校园小卖部"
+			],
+			"地点名称": "小卖部",
+			"地点描述": "位于学生宿舍区附近的一间小型便利店，店面不大但货品齐全，主要售卖零食、饮料、文具和生活用品。内部光线略显昏暗，货架摆放紧凑，空气中弥漫着泡面和关东煮的混合气味。这里是学生们课间或晚自习后常来的地方，经常能看到三五成群的学生在此短暂停留，交流着课堂八卦或抱怨作业压力，氛围轻松而嘈杂。",
+			"能前往的地点": [
+				"学生宿舍",
+				"教学楼",
+				"图书馆",
+				"食堂",
+				"操场",
+				"学校"
+			],
+			"英文描述": "A small convenience store near the student dormitory area on a university campus, with a cozy but slightly dim interior, shelves stocked with snacks, drinks, stationery, and daily necessities. Students gather here during breaks or after evening study sessions, chatting casually in a lively atmosphere."
 		}
 	},
 	"version": 1,
