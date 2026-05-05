@@ -1,5 +1,5 @@
 extends CanvasLayer
-enum startState {chooseMode,getName,getLocation}
+enum startState {chooseMode, getName, getLocation, validateSetup}
 var currentState = startState.chooseMode
 var scene :GameManager
 var playerName:String
@@ -47,6 +47,16 @@ func check_chat_service():
 
 # HTTP请求完成时的回调函数[citation:1][citation:2][citation:3]
 func _on_start_http_request_request_completed(result, _response_code, _headers, body):
+	if currentState == startState.validateSetup:
+		var reply_text = ""
+		if result == HTTPRequest.RESULT_SUCCESS:
+			var jv = JSON.new()
+			if jv.parse(body.get_string_from_utf8()) == OK:
+				var rdata = jv.get_data()
+				if rdata is Dictionary and rdata.has("text"):
+					reply_text = str(rdata["text"]).strip_edges()
+		_handle_conflict_check_result(reply_text)
+		return
 	if result != HTTPRequest.RESULT_SUCCESS:
 		add_start_log("HTTP请求失败，错误代码: "+str(result))
 		return
@@ -138,12 +148,13 @@ func _on_button_button_down() -> void:
 		startState.getLocation:
 			playerLocation = $HBoxContainer/VBoxContainer/TextEdit.text
 			$HBoxContainer/VBoxContainer/TextEdit.text = ""
-			_init_world(playerLocation)
-			await add_start_log(playerLocation,true)
-			await get_tree().create_timer(1).timeout
-			add_start_log("好...")
-			await get_tree().create_timer(1).timeout
-			add_start_log("指令接收完成，开始世界初始化...")
+			$HBoxContainer/VBoxContainer/TextEdit/Button.button_pressed = false
+			$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = true
+			currentState = startState.validateSetup
+			await add_start_log(playerLocation, true)
+			await get_tree().create_timer(0.5).timeout
+			add_start_log("正在验证设定兼容性...")
+			_send_conflict_check(playerName, playerLocation)
 
 	pass # Replace with function body.
 
@@ -191,6 +202,39 @@ func _input(event):
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ENTER and not $HBoxContainer/VBoxContainer/TextEdit/Button.disabled:
 			_on_button_button_down()
+var conflict_check_prompt = """你是角色与场景兼容性检测助手。判断以下角色身份与目标场景是否存在明显冲突（时代背景、逻辑矛盾等）。
+规则：若兼容则只回复英文 OK（仅此两字母，无其他内容）；若有冲突，用一句中文说明原因（不超过40字），不输出其他任何内容。"""
+
+func _send_conflict_check(char_name: String, location: String) -> void:
+	var messages = [
+		{"role": "system", "content": conflict_check_prompt},
+		{"role": "user", "content": "角色：" + char_name + "\n场景：" + location}
+	]
+	var body_data = JSON.stringify([messages, null, "text"])
+	start_http_request.request(
+		scene.chat_url,
+		["Content-Type: application/json"],
+		HTTPClient.METHOD_POST,
+		body_data
+	)
+
+func _handle_conflict_check_result(reply_text: String) -> void:
+	if reply_text.strip_edges().to_upper() == "OK" or reply_text.strip_edges() == "":
+		if reply_text.strip_edges() == "":
+			add_start_log("兼容性检测未返回结果，继续初始化...")
+		else:
+			add_start_log("设定兼容，好...")
+		await get_tree().create_timer(0.5).timeout
+		add_start_log("指令接收完成，开始世界初始化...")
+		currentState = startState.getLocation
+		_init_world(playerLocation)
+	else:
+		add_start_log("⚠ 检测到设定冲突：" + reply_text)
+		await get_tree().create_timer(1).timeout
+		add_start_log("请重新输入你的角色身份：")
+		currentState = startState.getName
+		$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
+
 var world_init_prompt = """
 你是一个小说家，擅长世界观构建。你必须严格遵循用户输入，不得擅自替换题材。
 硬性约束：

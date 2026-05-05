@@ -60,6 +60,16 @@ func close():
 	queue_free()
 	if scene != null and scene.has_method("refresh_interaction_locks"):
 		scene.call_deferred("refresh_interaction_locks")
+
+func close_immediate() -> void:
+	$Label.text = ""
+	$yes.visible = false
+	$no.visible = false
+	custom_minimum_size.y = 0
+	queue_free()
+	if scene != null and scene.has_method("refresh_interaction_locks"):
+		scene.call_deferred("refresh_interaction_locks")
+
 func _on_no_button_down() -> void:
 	var total_price = itemPrice if is_total_price else itemPrice * itemNum
 	if event_mode == EventMode.GIFT:

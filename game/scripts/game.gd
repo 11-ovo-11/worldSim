@@ -38,6 +38,7 @@ var pending_site_update: bool = false
 var pending_img_prompt: String = ""
 var pending_img_site: String = ""
 var inflight_img_site: String = ""
+var explore_needs_retry: bool = false
 var site_loading_lock: bool = false
 var event_flow_lock: bool = false
 var last_crime_event_context: String = ""
@@ -430,7 +431,18 @@ func goto(where: String):
 		var prompts = [
 			{"role":"system","content": _build_explore_system_prompt()},
 			{"role":"user","content": "我想去"+where}]
+		explore_needs_retry = false
 		await ask_ai(prompts, aiMode.explore)
+		if explore_needs_retry and currentSiteName != "":
+			explore_needs_retry = false
+			var retry_target = currentSiteName
+			_bg_debug("goto() retry explore for " + retry_target)
+			var retry_prompts = [
+				{"role":"system","content": _build_explore_system_prompt() + "\n再次强调：只能输出JSON，且\"能前往的地点\"不得为空。"},
+				{"role":"user","content": "我想去" + retry_target}
+			]
+			await ask_ai(retry_prompts, aiMode.explore)
+		explore_needs_retry = false
 		var discovered_site = _resolve_site_alias(currentSiteName)
 		if discovered_site == "":
 			discovered_site = where
@@ -462,6 +474,10 @@ func goto(where: String):
 				pending_site_update = false
 				_set_site_loading_lock(false)
 				site_update()
+		else:
+			pending_site_update = false
+			_set_site_loading_lock(false)
+			changeTextTo(response_label, "无法探索「" + where + "」，请检查角色与场景设定后重试。")
 
 func site_update(show_description: bool = true, unlock_after: bool = true, add_arrival_log: bool = true):
 	var site_data = _get_site_data(currentSiteName)
@@ -487,7 +503,7 @@ func site_update(show_description: bool = true, unlock_after: bool = true, add_a
 		display_routes.append(currentSiteName)
 	_save_site_json(currentSiteName, site_data)
 	changeTextTo(%siteName, currentSiteName)
-	if show_description and currentState != worldState.chat:
+	if show_description and currentState != worldState.chat and !event_flow_lock:
 		changeTextTo(response_label, str(site_data.get("地点描述", "")),15)
 	clear_children(%site_buttons)
 	clear_children(%npc_buttons)
@@ -689,10 +705,13 @@ func ask_ai(message: Array, askmode: aiMode):
 
 func _extract_angle_tags(input_string: String) -> Array:
 	var tags: Array = []
+	var normalized_input = str(input_string)
+	normalized_input = normalized_input.replace("\\<", "<").replace("\\>", ">")
+	normalized_input = normalized_input.replace("＜", "<").replace("＞", ">")
 	var regex = RegEx.new()
 	if regex.compile("<([^>]+)>") != OK:
 		return tags
-	for m in regex.search_all(input_string):
+	for m in regex.search_all(normalized_input):
 		tags.append(str(m.get_string(1)).strip_edges())
 	return tags
 
@@ -768,11 +787,14 @@ func process_string(input: String) -> String:
 	return result.strip_edges()
 func get_content_in_angle_brackets(input_string: String)->String:
 	var results = ""
+	var normalized_input = str(input_string)
+	normalized_input = normalized_input.replace("\\<", "<").replace("\\>", ">")
+	normalized_input = normalized_input.replace("＜", "<").replace("＞", ">")
 	var regex = RegEx.new()
 
 	# 编译正则表达式，匹配<和>之间的内容（包括<和>本身）
 	regex.compile("<[^>]+>")
-	var matches = regex.search_all(input_string)
+	var matches = regex.search_all(normalized_input)
 	for match_obj in matches:
 		var content = match_obj.get_string(0)
 		results+=content
@@ -1120,6 +1142,7 @@ func _ensure_item_profile_record_before_trade(item_name: String) -> void:
 	var cached_tex = _load_image_png(ITEM_IMG_DIR, key)
 	itemProfiles[key] = {
 		"description": profile.get("description", "这是一件实用的道具，可在冒险中派上用场。"),
+		"image_prompt": profile.get("image_prompt", "single game inventory item icon of " + key + ", clean background, centered"),
 		"value": int(profile.get("value", 50)),
 		"rarity": str(profile.get("rarity", "common")),
 		"effect_type": str(profile.get("effect_type", "none")),
@@ -1143,6 +1166,7 @@ func ensure_item_profile_async(item_name: String) -> void:
 		var disk_profile = disk_profile_full
 		itemProfiles[item_name] = {
 			"description": disk_profile.get("description", "正在生成物品介绍..."),
+			"image_prompt": disk_profile.get("image_prompt", "single game inventory item icon of " + item_name + ", clean background, centered"),
 			"value": int(disk_profile.get("value", 50)),
 			"rarity": str(disk_profile.get("rarity", "common")),
 			"effect_type": str(disk_profile.get("effect_type", "none")),
@@ -1162,12 +1186,14 @@ func ensure_item_profile_async(item_name: String) -> void:
 	if cached_tex != null:
 		var disk_profile = _load_item_profile_json(item_name)
 		var cached_desc: String
+		var cached_image_prompt: String
 		var cached_value: int
 		var cached_rarity: String
 		var cached_effect_type: String
 		var cached_effect_value: int
 		if !disk_profile.is_empty():
 			cached_desc = str(disk_profile.get("description", "这是一件实用的道具。"))
+			cached_image_prompt = str(disk_profile.get("image_prompt", "single game inventory item icon of " + item_name + ", clean background, centered"))
 			cached_value = int(disk_profile.get("value", 50))
 			cached_rarity = str(disk_profile.get("rarity", "common"))
 			cached_effect_type = str(disk_profile.get("effect_type", "none"))
@@ -1175,12 +1201,14 @@ func ensure_item_profile_async(item_name: String) -> void:
 		else:
 			var fresh = await _generate_item_profile(item_name)
 			cached_desc = str(fresh.get("description", "这是一件实用的道具。"))
+			cached_image_prompt = str(fresh.get("image_prompt", "single game inventory item icon of " + item_name + ", clean background, centered"))
 			cached_value = int(fresh.get("value", 50))
 			cached_rarity = str(fresh.get("rarity", "common"))
 			cached_effect_type = str(fresh.get("effect_type", "none"))
 			cached_effect_value = int(fresh.get("effect_value", 0))
 			_save_item_profile_json(item_name, fresh)
 		itemProfiles[item_name]["description"] = cached_desc
+		itemProfiles[item_name]["image_prompt"] = cached_image_prompt
 		itemProfiles[item_name]["value"] = cached_value
 		itemProfiles[item_name]["rarity"] = cached_rarity
 		itemProfiles[item_name]["effect_type"] = cached_effect_type
@@ -1211,6 +1239,7 @@ func ensure_item_profile_async(item_name: String) -> void:
 			_save_image_png(item_image, ITEM_IMG_DIR, item_name)
 
 	itemProfiles[item_name]["description"] = item_description
+	itemProfiles[item_name]["image_prompt"] = image_prompt
 	itemProfiles[item_name]["value"] = item_value
 	itemProfiles[item_name]["rarity"] = item_rarity
 	itemProfiles[item_name]["effect_type"] = item_effect_type
@@ -1419,8 +1448,9 @@ func _on_request_completed(result, response_code, _header, body):
 			aiMode.explore:
 				var jsonDic = extract_json_from_text(data["text"])
 				if jsonDic == {}:
-					changeTextTo(response_label, "你并没有找到" + currentSiteName + "，休息了一会，你再次进行了尝试")
-					goto(currentSiteName)
+					_bg_debug("explore JSON parse failed for " + pending_explore_target)
+					pending_site_update = false
+					_set_site_loading_lock(false)
 					return
 				# 先确保必要字段存在
 				jsonDic["能前往的地点"] = _extract_route_candidates_from_site_json(jsonDic)
@@ -1460,17 +1490,10 @@ func _on_request_completed(result, response_code, _header, body):
 				jsonDic["能前往的地点"] = cleaned_routes
 				if cleaned_routes.is_empty() and explore_route_retry_count < 1:
 					explore_route_retry_count += 1
-					var retry_target = location_name
-					if retry_target == "":
-						retry_target = pending_explore_target
-					_bg_debug("explore empty routes, retry target=" + retry_target)
-					var retry_prompts = [
-						{"role":"system","content": _build_explore_system_prompt() + "\n再次强调：只能输出JSON，且“能前往的地点”不得为空。"},
-						{"role":"user","content": "我想去" + retry_target}
-					]
-					await ask_ai(retry_prompts, aiMode.explore)
-					return
-				explore_route_retry_count = 0
+					_bg_debug("explore empty routes, signaling goto() to retry")
+					explore_needs_retry = true
+				else:
+					explore_route_retry_count = 0
 				print("能前往的地点", jsonDic["能前往的地点"])
 				if currentSiteName != "" && !jsonDic["能前往的地点"].has(currentSiteName):
 					jsonDic["能前往的地点"].append(currentSiteName)
@@ -1536,7 +1559,7 @@ func _on_request_completed(result, response_code, _header, body):
 						]
 						await ask_ai(infer_prompts, aiMode.tools)
 						_auto_handle_action_search(last_action_input, action_reply)
-					await _auto_apply_action_effects(last_action_input, action_reply, unresolved_tags)
+					await _auto_apply_action_effects(last_action_input, action_reply, tool_tags)
 					if currentState != worldState.chat and !_has_active_event_panel():
 						_set_event_flow_lock(false)
 				else:
@@ -1847,9 +1870,13 @@ func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}, context_tex
 				context_note = ""
 		if context_note != "":
 			var context_log_arr: Array = npcs[npc_name]["npc_log"]
+			for i in range(context_log_arr.size() - 1, -1, -1):
+				var old_note = str(context_log_arr[i])
+				if old_note.begins_with("系统记录：玩家刚"):
+					context_log_arr.remove_at(i)
 			if context_log_arr.is_empty() or str(context_log_arr[context_log_arr.size() - 1]) != context_note:
 				context_log_arr.append(context_note)
-				npcs[npc_name]["npc_log"] = context_log_arr
+			npcs[npc_name]["npc_log"] = context_log_arr
 	if reason == "crime":
 		addLog("<" + npc_name + "拦住了你，开始质问刚才的异常动静。>")
 
@@ -1868,11 +1895,13 @@ func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}, context_tex
 	await get_tree().create_timer(0.8).timeout
 	await _auto_initiate_npc_chat(npc_name, npc_describe)
 
-func _trigger_time_pass_npc_event(hours: float, action_context: String = "") -> void:
+func _trigger_time_pass_npc_event(hours: float, action_context: String = "") -> bool:
 	if hours < 0.5:
-		return
+		return false
 	if randf() < ACTION_PROACTIVE_NPC_RATE:
-		_spawn_context_npc("time_pass", {}, action_context)
+		await _spawn_context_npc("time_pass", {}, action_context)
+		return true
+	return false
 
 func _build_action_context_text(action_input: String, action_reply: String) -> String:
 	var context_text = action_input.strip_edges()
@@ -1891,8 +1920,28 @@ func _extract_signed_number(text: String) -> int:
 		return 0
 	return int(m.get_string(1))
 
+func _extract_money_delta_from_text(text: String) -> int:
+	var plain = process_string(text).strip_edges()
+	if plain == "":
+		return 0
+	var spend_patterns = ["花费", "花了", "花去", "支付", "付了", "付款", "消费", "支出", "扣除", "减少", "损失", "收你"]
+	for p in spend_patterns:
+		var spend_regex = RegEx.new()
+		if spend_regex.compile(p + "\\s*(\\d+)") == OK:
+			var spend_match = spend_regex.search(plain)
+			if spend_match != null:
+				return -int(spend_match.get_string(1))
+	var income_patterns = ["获得", "赚了", "收入", "得到", "返还", "退款", "增加了"]
+	for p in income_patterns:
+		var income_regex = RegEx.new()
+		if income_regex.compile(p + "\\s*(\\d+)") == OK:
+			var income_match = income_regex.search(plain)
+			if income_match != null:
+				return int(income_match.get_string(1))
+	return 0
+
 func _build_crime_context(action_input: String, action_reply: String, tool_tags: String) -> String:
-	var tags = _extract_angle_tags(tool_tags)
+	var tags = _extract_angle_tags(tool_tags + action_reply)
 	for tag in tags:
 		var normalized = str(tag).replace("：", ":").strip_edges()
 		if normalized.begins_with("犯罪:"):
@@ -1950,9 +1999,16 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 
 	var has_time_tool = tool_tags.find("设置时间") != -1 or tool_tags.find("set_time") != -1
 	var has_money_tool = tool_tags.find("consume_items") != -1 or tool_tags.find("initiate_transaction") != -1
+	if !has_money_tool:
+		for ct in _extract_angle_tags(action_reply):
+			var ctn = str(ct).replace("：", ":").strip_edges()
+			if (ctn.begins_with("资产") or ctn.begins_with("金币") or ctn.begins_with("金钱")) and _extract_signed_number(ctn) != 0:
+				has_money_tool = true
+				break
 	var passed_hours = 0.0
 
 	var changed = false
+	var money_changed = false
 
 	var money_words = ["块钱", "元", "人民币", "现金", "钱"]
 	var has_money_word = false
@@ -1965,10 +2021,24 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 		if amount > 0:
 			var real_cost = min(amount, money)
 			money -= real_cost
+			money_changed = true
 			addLog("<你扔掉了" + str(real_cost) + "块钱，当前资产" + str(money) + ">")
 			if real_cost > 0 and randf() < ACTION_PROACTIVE_NPC_RATE:
-				_spawn_context_npc("money", {}, action_context)
+				await _spawn_context_npc("money", {}, action_context)
 			changed = true
+
+	if !has_money_tool and !money_changed:
+		var inferred_money_delta = _extract_money_delta_from_text(source)
+		if inferred_money_delta != 0:
+			var before_money = money
+			money = max(0, money + inferred_money_delta)
+			var real_delta = money - before_money
+			if real_delta != 0:
+				if real_delta < 0:
+					addLog("<行动花费" + str(abs(real_delta)) + "，当前资产" + str(money) + ">")
+				else:
+					addLog("<行动获得" + str(real_delta) + "，当前资产" + str(money) + ">")
+				changed = true
 
 	if source.find("锻炼") != -1 or source.find("训练") != -1 or source.find("健身") != -1 or source.find("跑步") != -1:
 		var hours = _extract_duration_hours(source)
@@ -1982,7 +2052,7 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 		hp = min(100.0, hp + hours * 1.5)
 		addLog("<锻炼" + str(hours) + "小时：体力-" + str(int(energy_cost)) + "，生命+" + str(int(hours * 1.5)) + ">")
 		if randf() < ACTION_PROACTIVE_NPC_RATE:
-			_spawn_context_npc("exercise", {}, action_context)
+			await _spawn_context_npc("exercise", {}, action_context)
 		changed = true
 
 	if source.find("睡") != -1 and (source.find("睡觉") != -1 or source.find("睡一觉") != -1 or source.find("入睡") != -1):
@@ -2040,16 +2110,15 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 		var penalty = randi_range(8, 20)
 		reputation = max(0.0, reputation - penalty)
 		addLog("<违规行为被记录（" + last_crime_event_context + "），声誉-" + str(penalty) + ">")
-		if randf() < ACTION_PROACTIVE_NPC_RATE:
-			var crime_npc = _pick_crime_npc_from_action(action_input)
-			if !crime_npc.is_empty():
-				await _spawn_context_npc("crime", crime_npc, last_crime_event_context)
-			else:
-				await _spawn_context_npc("crime", {}, last_crime_event_context)
+		var crime_npc = _pick_crime_npc_from_action(action_input)
+		if !crime_npc.is_empty():
+			await _spawn_context_npc("crime", crime_npc, last_crime_event_context)
+		else:
+			await _spawn_context_npc("crime", {}, last_crime_event_context)
 		changed = true
 
 	if !has_crime_tag:
-		_trigger_time_pass_npc_event(passed_hours, action_context)
+		await _trigger_time_pass_npc_event(passed_hours, action_context)
 
 	if changed:
 		player_update()
@@ -2315,7 +2384,8 @@ func handle_npc_instruction(tool_calls: Array) -> void:
 				var prev_item_name = str(prev_params.get("item_name", ""))
 				var can_merge = item_name != "" and item_name == prev_item_name
 				if can_merge and method == "initiate_transaction":
-					can_merge = int(parameters.get("price", 0)) == int(prev_params.get("price", 0))
+					can_merge = int(parameters.get("price", 0)) == int(prev_params.get("price", 0)) \
+						and bool(parameters.get("is_total_price", false)) == bool(prev_params.get("is_total_price", false))
 				if can_merge:
 					prev_params["quantity"] = int(prev_params.get("quantity", 1)) + int(parameters.get("quantity", 1))
 					normalized_calls[normalized_calls.size() - 1]["parameters"] = prev_params
@@ -2372,6 +2442,7 @@ func add_item(itemToAdd, itemNum):
 		var disk_profile = _load_item_profile_json(itemToAdd)
 		itemProfiles[itemToAdd] = {
 			"description": disk_profile.get("description", "正在生成物品介绍..."),
+			"image_prompt": disk_profile.get("image_prompt", "single game inventory item icon of " + str(itemToAdd) + ", clean background, centered"),
 			"value": int(disk_profile.get("value", 50)),
 			"rarity": str(disk_profile.get("rarity", "common")),
 			"effect_type": str(disk_profile.get("effect_type", "none")),
@@ -2539,9 +2610,12 @@ func load_game() -> bool:
 		var ieffect_value = int(item_data.get("effect_value", 0))
 		if iname == "":
 			continue
+		var disk_profile = _load_item_profile_json(iname)
+		var iimage_prompt = str(disk_profile.get("image_prompt", "single game inventory item icon of " + iname + ", clean background, centered"))
 		var tex = _load_image_png(ITEM_IMG_DIR, iname)
 		itemProfiles[iname] = {
 			"description": idesc,
+			"image_prompt": iimage_prompt,
 			"value": ivalue,
 			"rarity": irarity,
 			"effect_type": ieffect_type,
@@ -2556,7 +2630,7 @@ func load_game() -> bool:
 			"rarity": irarity,
 			"effect_type": ieffect_type,
 			"effect_value": ieffect_value,
-			"image_prompt": "single game inventory item icon of " + iname + ", clean background, centered"
+			"image_prompt": iimage_prompt
 		}))
 		%itemContainer.add_item(iname, inum, tex, idesc, ieffect_type, ieffect_value)
 		if tex == null:
@@ -2595,7 +2669,7 @@ func load_game() -> bool:
 				site_update()
 		else:
 			pending_site_update = false
-			site_update(false, true, true)
+			site_update(true, true, false)
 	else:
 		_set_site_loading_lock(false)
 		clear_children(%site_buttons)

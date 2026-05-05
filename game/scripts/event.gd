@@ -12,7 +12,7 @@ func got_deal_event(item_name: String, quantity: int, price: int, is_total: bool
 	# 关闭当前所有未完成的交易，避免堆叠
 	for child in get_children():
 		if child is eventContainer:
-			child.close()
+			child.close_immediate()
 	var newEvent = load("res://fabs/event_container.tscn").instantiate() as eventContainer
 	newEvent.event_mode = 0 # DEAL
 	newEvent.itemToAdd = item_name
@@ -25,7 +25,7 @@ func got_deal_event(item_name: String, quantity: int, price: int, is_total: bool
 func got_gift_event(item_name: String, quantity: int):
 	for child in get_children():
 		if child is eventContainer:
-			child.close()
+			child.close_immediate()
 	var newEvent = load("res://fabs/event_container.tscn").instantiate() as eventContainer
 	newEvent.event_mode = 1 # GIFT
 	newEvent.itemToAdd = item_name
