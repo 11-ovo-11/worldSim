@@ -1,8 +1,0 @@
-{
-	"description": "一个红透的番茄，散发着淡淡的果香，可以直接食用。",
-	"effect_type": "hp_restore",
-	"effect_value": 5,
-	"image_prompt": "A ripe red tomato on a white background, clean and simple, no text",
-	"rarity": "common",
-	"value": 10
-}

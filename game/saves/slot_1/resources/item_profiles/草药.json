@@ -1,0 +1,8 @@
+{
+	"description": "一束新鲜采摘的草药，可用于治疗轻微伤口或恢复体力。",
+	"effect_type": "both_restore",
+	"effect_value": 10,
+	"image_prompt": "A small bundle of fresh green herbs tied with a string, isolated on white background, game item icon, simple, no text",
+	"rarity": "common",
+	"value": 15
+}
