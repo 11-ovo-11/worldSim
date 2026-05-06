@@ -44,6 +44,8 @@ var event_flow_lock: bool = false
 var last_crime_event_context: String = ""
 var last_action_input: String = ""
 var last_dialogue_input: String = ""
+var pending_action_confirm: Dictionary = {}
+var important_event_memories: Array = []
 var pending_explore_target: String = ""
 var explore_route_retry_count: int = 0
 var bg_debug_enabled: bool = true
@@ -132,6 +134,8 @@ var validation_feedback_prompt:String = """
 var action_prompt:String = """
 你是文字游戏的世界叙述者。玩家进行了一个行动，请根据世界背景与当前玩家数据，用一句简短中文（15~50字）叙述自然结果。
 你必须先判断是否符合常理与数据（资产、背包、数量、地点关系、角色身份与当前场景）。
+玩家身份（玩家名称/设定）由系统确认，为当前世界中的真实事实，不得质疑、否认或重置为普通人设。
+涉及NPC反应时，必须综合玩家身份、玩家声望、当前NPC身份、历史重要事件来给出态度（敬畏/尊重/戒备/敌意等），不能与设定脱节。
 若不成立（如钱不够、背包没有该物品、地点不合理、角色在当前场景中无法完成该行动——例如大学生在学校找不到菜市场），只输出失败反馈，不要伪造成功，不要添加交易/物品变更指令。
 若行动结果导致创建了地点或NPC，必须在叙述中明确表示找到了该地点或NPC；若失败，不得添加任何地点创建指令。
 
@@ -169,6 +173,9 @@ func _ready():
 	dialogue_button.connect("pressed", _on_dialogue_button_pressed)
 	save_button.connect("pressed", save_game)
 	load_button.connect("pressed", load_game)
+	if %npcIcon is Control:
+		(%npcIcon as Control).mouse_filter = Control.MOUSE_FILTER_STOP
+		(%npcIcon as Control).gui_input.connect(_on_npc_icon_gui_input)
 	_prepare_session_resource_dir()
 	dialogue_container.visible = false
 	# %backgroundImg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -775,22 +782,112 @@ func _apply_direct_npc_tool_tags(reply: String) -> bool:
 			only_location_tags = false
 	return handled_any and only_location_tags
 
+func _is_location_query_dialogue(input_text: String) -> bool:
+	var t = _normalize_single_line_input(input_text)
+	if t == "":
+		return false
+	var query_words = ["在哪", "在哪里", "在哪儿", "怎么去", "怎么走", "怎么到", "去哪", "去哪里", "路线", "路怎么走", "哪条路"]
+	for w in query_words:
+		if t.find(w) != -1:
+			return true
+	return false
+
+func _cleanup_location_candidate(raw_text: String) -> String:
+	var t = str(raw_text).strip_edges()
+	t = t.replace("？", "").replace("?", "").replace("。", "").replace("，", "")
+	var trims = ["请问", "问下", "一下", "告诉我", "你知道", "我想问", "这个", "那个", "一下子", "去", "到"]
+	for p in trims:
+		if t.begins_with(p):
+			t = t.trim_prefix(p).strip_edges()
+	if t.begins_with("的"):
+		t = t.trim_prefix("的").strip_edges()
+	if t.ends_with("在哪"):
+		t = t.left(t.length() - 2).strip_edges()
+	if t.ends_with("在哪里"):
+		t = t.left(t.length() - 3).strip_edges()
+	if t.ends_with("在哪儿"):
+		t = t.left(t.length() - 3).strip_edges()
+	if t.ends_with("怎么去"):
+		t = t.left(t.length() - 3).strip_edges()
+	if t.ends_with("怎么走"):
+		t = t.left(t.length() - 3).strip_edges()
+	if t.ends_with("怎么到"):
+		t = t.left(t.length() - 3).strip_edges()
+	return t
+
+func _looks_like_person_reference(target: String) -> bool:
+	if target == "":
+		return false
+	if npcs.has(target):
+		return true
+	var person_words = ["同学", "老师", "阿姨", "大叔", "叔叔", "阿姨", "学长", "学姐", "室友", "店员", "保安", "路人"]
+	for w in person_words:
+		if target.find(w) != -1:
+			return true
+	return false
+
+func _extract_location_target_from_dialogue(input_text: String) -> String:
+	var t = _normalize_single_line_input(input_text)
+	if t == "":
+		return ""
+	var regex = RegEx.new()
+	var patterns = [
+		"(?:去|到)([^，。！？?]{1,24})(?:怎么走|怎么去|怎么到|在哪|在哪里|在哪儿)",
+		"(?:怎么去|怎么到)([^，。！？?]{1,24})",
+		"([^，。！？?]{1,24})(?:在哪|在哪里|在哪儿)",
+		"([^，。！？?]{1,24})(?:路线|路怎么走|哪条路)"
+	]
+	for p in patterns:
+		if regex.compile(p) != OK:
+			continue
+		var m = regex.search(t)
+		if m == null:
+			continue
+		var candidate = _cleanup_location_candidate(str(m.get_string(1)))
+		if candidate.length() < 2 or candidate.length() > 20:
+			continue
+		var reject_words = ["你", "我", "他", "她", "它", "这里", "那里", "哪儿", "哪里", "什么", "怎么", "时候"]
+		var bad = false
+		for rw in reject_words:
+			if candidate == rw:
+				bad = true
+				break
+		if bad:
+			continue
+		if _looks_like_person_reference(candidate):
+			continue
+		return candidate
+	return ""
+
+func _reply_has_location_clue(reply_text: String) -> bool:
+	var plain = process_string(reply_text).strip_edges()
+	if plain == "":
+		return false
+	for site_key in sites.keys():
+		var site_name = str(site_key).strip_edges()
+		if site_name != "" and plain.find(site_name) != -1:
+			return true
+	var clue_words = ["在", "位于", "往", "沿着", "直走", "左转", "右转", "经过", "到", "前面", "后面", "旁边", "路线", "路上"]
+	for w in clue_words:
+		if plain.find(w) != -1:
+			return true
+	return false
+
 func _try_create_location_from_dialogue(reply: String) -> bool:
 	if last_dialogue_input == "":
 		return false
-	if last_dialogue_input.find("在哪") == -1 and last_dialogue_input.find("在哪里") == -1:
+	if !_is_location_query_dialogue(last_dialogue_input):
 		return false
-	var fail_words = ["不知道", "不清楚", "没听说", "找不到", "不在这", "不确定"]
+	var fail_words = ["不知道", "不清楚", "没听说", "找不到", "不在这", "不确定", "没去过", "不认识路", "不晓得"]
 	for w in fail_words:
 		if reply.find(w) != -1:
 			return false
-	var target = last_dialogue_input.replace("？", "").replace("?", "").strip_edges()
-	if target.find("在哪里") != -1:
-		target = target.substr(0, target.find("在哪里"))
-	elif target.find("在哪") != -1:
-		target = target.substr(0, target.find("在哪"))
-	target = target.strip_edges()
+	var target = _extract_location_target_from_dialogue(last_dialogue_input)
 	if target == "":
+		return false
+	if _resolve_site_alias(target) == currentSiteName:
+		return false
+	if !_reply_has_location_clue(reply):
 		return false
 	create_location(currentSiteName + "-" + target)
 	return true
@@ -799,6 +896,7 @@ func npc_reply(reply: String):
 	changeTextTo(%speakerNameLabel, currentNpc.npcName)
 	changeTextTo(response_label, process_string(reply))
 	currentNpc.currentChat +=  currentNpc.npcName +":"+ reply + "\n"
+	_remember_important_event("<对话>" + currentNpc.npcName + "：" + process_string(reply), currentSiteName, currentNpc.npcName)
 	var direct_location_only = _apply_direct_npc_tool_tags(reply)
 	if !direct_location_only:
 		_try_create_location_from_dialogue(reply)
@@ -809,12 +907,18 @@ func npc_reply(reply: String):
 			{"role":"system","content": agent_prompt},
 			{"role":"user","content": toolsTexts}]
 		await ask_ai(prompts, aiMode.tools)
-	elif toolsTexts == "" and _has_trade_keywords(reply):
+	elif toolsTexts == "" and _needs_tool_inference_from_context(last_dialogue_input, reply):
 		var infer_prompts = [
-			{"role":"system","content": agent_prompt + "\n若输入没有<>标签，也要从语义中尽力提取买卖或赠送相关的可执行方法；如果确实没有再回复没有方法被调用。"},
-			{"role":"user","content": reply}]
+			{"role":"system","content": agent_prompt + "\n若输入没有<>标签，也要从语义中尽力提取买卖、赠送、交付、协助执行等可执行方法；如果确实没有再回复没有方法被调用。"},
+			{"role":"user","content": "玩家输入：" + last_dialogue_input + "\nNPC回复：" + reply}]
 		await ask_ai(infer_prompts, aiMode.tools)
 	await _auto_apply_action_effects("", reply, toolsTexts)
+	if !_has_active_event_panel():
+		var action_req = _extract_npc_action_request(reply)
+		if !action_req.is_empty():
+			_queue_action_confirm(action_req)
+		else:
+			_maybe_offer_intent_confirm_from_dialogue(reply)
 
 func process_string(input: String) -> String:
 	# 移除所有<...>标签
@@ -1307,10 +1411,21 @@ func update_item_trade_price(item_name: String, per_unit_price: int) -> void:
 
 # ==================== UI 操作 ====================
 func _on_send_button_pressed():
-	var user_input = input_text_edit.text.strip_edges()
-	if user_input == "" or ai_busy or event_flow_lock:
+	await _submit_action_input(input_text_edit.text, false)
+
+func _normalize_single_line_input(raw_text: String) -> String:
+	var t = str(raw_text).replace("\r\n", "\n").replace("\r", "\n")
+	if t.find("\n") != -1:
+		t = t.substr(0, t.find("\n"))
+	return t.strip_edges()
+
+func _submit_action_input(raw_input: String, bypass_lock_check: bool = false) -> void:
+	var user_input = _normalize_single_line_input(raw_input)
+	if user_input == "" or ai_busy:
 		return
-	%InputTextEdit.text = ""
+	if !bypass_lock_check and (event_flow_lock or _has_active_event_panel()):
+		return
+	input_text_edit.text = ""
 	last_action_input = user_input
 	addLog("【行动】" + user_input)
 	changeTextTo(%speakerNameLabel, playerName)
@@ -1319,7 +1434,22 @@ func _on_send_button_pressed():
 	action_context += "\n当前世界观：" + background
 	action_context += "\n当前地点：" + currentSiteName
 	action_context += "\n玩家资产：" + str(money)
+	action_context += "\n玩家身份：" + playerName
 	action_context += "\n玩家背包：" + _build_inventory_snapshot()
+	var focus_npc_name = ""
+	var focus_npc_desc = ""
+	if currentState == worldState.chat and currentNpc != null:
+		focus_npc_name = str(currentNpc.npcName)
+		focus_npc_desc = str(currentNpc.npcDescribe)
+		action_context += "\n当前对话对象：" + focus_npc_name
+		action_context += "\n对方身份描述：" + focus_npc_desc
+		action_context += "\n行动理解规则：当行动没有明确对象时，优先视为对当前对话对象发起。"
+	var identity_guidance = _build_identity_attitude_guidance(focus_npc_name, focus_npc_desc)
+	if identity_guidance != "":
+		action_context += "\n身份与态度导向：\n" + identity_guidance
+	var related_events = _build_related_event_memory_for_action(user_input, focus_npc_name)
+	if related_events != "":
+		action_context += "\n相关重要事件记忆：\n" + related_events
 	var aprompts = [
 		{"role":"system","content": action_prompt + "\n" + action_context},
 		{"role":"user","content": user_input}]
@@ -1328,7 +1458,7 @@ func _on_send_button_pressed():
 func _on_dialogue_button_pressed():
 	if currentState != worldState.chat or currentNpc == null or ai_busy:
 		return
-	var user_input = dialogue_input.text.strip_edges()
+	var user_input = _normalize_single_line_input(dialogue_input.text)
 	if user_input == "":
 		return
 	var leave_words = ["离开", "结束对话", "退出对话", "不聊了", "再见"]
@@ -1347,6 +1477,31 @@ func _on_dialogue_button_pressed():
 	changeTextTo(response_label, user_input)
 	await currentNpc.chatWithNpc(user_input)
 	currentNpc.currentChat += "玩家：" + user_input + "\n"
+
+func _on_npc_icon_gui_input(event: InputEvent) -> void:
+	if !(event is InputEventMouseButton):
+		return
+	var mb = event as InputEventMouseButton
+	if !mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if currentState != worldState.chat or currentNpc == null:
+		return
+	_show_current_npc_profile()
+
+func _show_current_npc_profile() -> void:
+	if currentNpc == null:
+		return
+	var npc_name = str(currentNpc.npcName)
+	var desc = str(currentNpc.npcDescribe).strip_edges()
+	if desc == "":
+		desc = "暂无详细介绍"
+	var mem = get_relevant_event_memory_for_npc(npc_name, desc).strip_edges()
+	if mem == "":
+		mem = "- 暂无与该角色直接相关的重要事件"
+	var panel_text = "人物：" + npc_name + "\n介绍：" + desc + "\n相关重要事件：\n" + mem
+	changeTextTo(%speakerNameLabel, "【人物档案】")
+	changeTextTo(response_label, panel_text, 80)
+	addLog("<查看了" + npc_name + "的人物档案>")
 
 func _has_active_event_panel() -> bool:
 	for child in %event.get_children():
@@ -1459,6 +1614,11 @@ func addLog(logText: String, instant: bool = false):
 	if instant and newLog is RichTextLabel:
 		newLog.visible_ratio = 1.0
 	%logContainer.add_child(newLog)
+	if _is_important_log(logText):
+		var focus_npc = ""
+		if currentNpc != null:
+			focus_npc = str(currentNpc.npcName)
+		_remember_important_event(logText, currentSiteName, focus_npc)
 
 func _is_important_log(log_text: String) -> bool:
 	var t = str(log_text).strip_edges()
@@ -1474,6 +1634,134 @@ func _is_important_log(log_text: String) -> bool:
 		if t.find(k) != -1:
 			return true
 	return false
+
+func _extract_npc_mentions(text: String) -> Array:
+	var found: Array = []
+	var t = str(text)
+	if t.strip_edges() == "":
+		return found
+	for k in npcs.keys():
+		var npc_name_text = str(k)
+		if npc_name_text != "" and t.find(npc_name_text) != -1 and !found.has(npc_name_text):
+			found.append(npc_name_text)
+	return found
+
+func _remember_important_event(raw_text: String, site_name: String = "", focus_npc: String = "") -> void:
+	var text = str(raw_text).strip_edges()
+	if text == "":
+		return
+	var site = str(site_name).strip_edges()
+	if site == "":
+		site = currentSiteName
+	var npc_names: Array = _extract_npc_mentions(text)
+	if focus_npc.strip_edges() != "" and !npc_names.has(focus_npc):
+		npc_names.append(focus_npc)
+	var sig = _extract_interaction_signals(text)
+	var record = {
+		"text": text,
+		"site": site,
+		"npcs": npc_names,
+		"trade": int(sig.get("trade", 0)),
+		"gift": int(sig.get("gift", 0)),
+		"assist": int(sig.get("assist", 0)),
+		"t": Time.get_unix_time_from_system()
+	}
+	for i in range(important_event_memories.size() - 1, -1, -1):
+		var old = important_event_memories[i]
+		if old is Dictionary and str(old.get("text", "")) == text:
+			important_event_memories.remove_at(i)
+	important_event_memories.append(record)
+	if important_event_memories.size() > 200:
+		important_event_memories = important_event_memories.slice(max(0, important_event_memories.size() - 200), important_event_memories.size())
+
+func _score_event_relevance(mem: Dictionary, site_name: String, npc_name: String, intent_hint: Dictionary = {}) -> int:
+	var score = 0
+	if str(mem.get("site", "")) == site_name and site_name != "":
+		score += 2
+	if npc_name != "":
+		var arr = mem.get("npcs", [])
+		if arr is Array and arr.has(npc_name):
+			score += 4
+	if !intent_hint.is_empty():
+		score += min(int(mem.get("trade", 0)), int(intent_hint.get("trade", 0)))
+		score += min(int(mem.get("gift", 0)), int(intent_hint.get("gift", 0)))
+		score += min(int(mem.get("assist", 0)), int(intent_hint.get("assist", 0)))
+	return score
+
+func _get_recent_related_event_memories(site_name: String, npc_name: String = "", limit_count: int = 4, intent_hint: Dictionary = {}) -> Array:
+	var scored: Array = []
+	for mem_item in important_event_memories:
+		if !(mem_item is Dictionary):
+			continue
+		var mem: Dictionary = mem_item
+		var score = _score_event_relevance(mem, site_name, npc_name, intent_hint)
+		if score <= 0:
+			continue
+		scored.append({"score": score, "mem": mem})
+	scored.sort_custom(func(a, b):
+		var sa = int(a.get("score", 0))
+		var sb = int(b.get("score", 0))
+		if sa == sb:
+			return int(a.get("mem", {}).get("t", 0)) > int(b.get("mem", {}).get("t", 0))
+		return sa > sb
+	)
+	var out: Array = []
+	for row in scored:
+		out.append(row.get("mem", {}))
+		if out.size() >= limit_count:
+			break
+	return out
+
+func get_relevant_event_memory_for_npc(npc_name: String, _npc_desc: String = "") -> String:
+	var rows = _get_recent_related_event_memories(currentSiteName, npc_name, 4)
+	if rows.is_empty():
+		return ""
+	var lines: Array = []
+	for m in rows:
+		if m is Dictionary:
+			lines.append("- " + str(m.get("text", "")))
+	return "\n".join(lines)
+
+func _build_identity_attitude_guidance(focus_npc_name: String = "", focus_npc_desc: String = "") -> String:
+	var lines: Array = []
+	var player_role_text = (playerName + " " + world_seed_input).strip_edges()
+	var npc_text = (focus_npc_name + " " + focus_npc_desc).strip_edges()
+	lines.append("- 玩家身份（系统确认，不可质疑）：" + playerName)
+	if _contains_any_keyword(player_role_text, ["国王", "皇帝", "君主", "王", "摄政", "王储"]):
+		lines.append("- 身份关系导向：玩家为高统治权身份，普通NPC默认应更谨慎、敬畏或恭敬，除非有强事件依据才敢明显顶撞。")
+	if _contains_any_keyword(player_role_text, ["奴隶主", "领主", "将军", "军阀", "老板", "主任", "警长"]):
+		lines.append("- 权力导向：玩家具备较高支配权，NPC态度应体现权力差（迎合、畏惧或压抑反感），不要像对待陌生平民。")
+	if _contains_any_keyword(player_role_text, ["囚犯", "逃犯", "通缉", "流浪汉", "乞丐"]):
+		lines.append("- 身份导向：玩家处于弱势或风险身份，NPC更可能戒备、排斥或利用。")
+	if reputation >= 130.0:
+		lines.append("- 声望导向：玩家声望高，NPC更容易尊重、配合。")
+	elif reputation <= 60.0:
+		lines.append("- 声望导向：玩家声望偏低，NPC更容易警惕、厌恶或拒绝。")
+	if focus_npc_name != "":
+		lines.append("- 当前交互NPC：" + focus_npc_name + "（" + focus_npc_desc + "）")
+		if _contains_any_keyword(npc_text, ["护卫", "保安", "警察", "士兵", "侍卫"]):
+			lines.append("- 对方为秩序角色：更强调规则、风险和立场，不会无条件顺从。")
+		if _contains_any_keyword(npc_text, ["平民", "学生", "路人", "店员", "仆人"]):
+			lines.append("- 对方为普通角色：在高权势身份面前通常更保守或顺从。")
+	return "\n".join(lines)
+
+func get_identity_attitude_guidance_for_npc(npc_name: String, npc_desc: String = "") -> String:
+	return _build_identity_attitude_guidance(npc_name, npc_desc)
+
+func _build_related_event_memory_for_action(action_text: String, focus_npc_name: String = "") -> String:
+	var hint = _extract_interaction_signals(action_text)
+	var focus_npc = focus_npc_name.strip_edges()
+	var mentions = _extract_npc_mentions(action_text)
+	if !mentions.is_empty():
+		focus_npc = str(mentions[0])
+	var rows = _get_recent_related_event_memories(currentSiteName, focus_npc, 4, hint)
+	if rows.is_empty():
+		return ""
+	var lines: Array = []
+	for m in rows:
+		if m is Dictionary:
+			lines.append("- " + str(m.get("text", "")))
+	return "\n".join(lines)
 
 func _build_inventory_snapshot(max_items: int = 10) -> String:
 	var parts: Array = []
@@ -1632,7 +1920,7 @@ func _on_request_completed(result, response_code, _header, body):
 					elif !handled_direct:
 						var infer_prompts = [
 							{"role":"system","content": agent_prompt + "\n若输入没有<>标签，也要从语义中尽力提取可执行方法；如果确实没有再回复没有方法被调用。"},
-							{"role":"user","content": action_reply}
+							{"role":"user","content": "玩家行动：" + last_action_input + "\n旁白结果：" + action_reply}
 						]
 						await ask_ai(infer_prompts, aiMode.tools)
 						_auto_handle_action_search(last_action_input, action_reply)
@@ -1693,6 +1981,26 @@ func on_event_decision(event_kind: String, accepted: bool, item_name: String, qu
 	var speaker = "路人"
 	if currentNpc != null:
 		speaker = str(currentNpc.npcName)
+	if event_kind == "action_confirm":
+		var confirm_data: Dictionary = pending_action_confirm
+		var action_actor = str(confirm_data.get("actor", speaker))
+		var action_text = str(confirm_data.get("action", item_name))
+		var action_mode = str(confirm_data.get("mode", "player_execute"))
+		if accepted:
+			await changeTextTo(%speakerNameLabel, action_actor)
+			if action_mode == "force_execute":
+				await changeTextTo(response_label, "你要硬来？行，你试试看。")
+				addLog("<你选择强硬执行：" + action_text + ">")
+			else:
+				await changeTextTo(response_label, "好，那就按你说的做。")
+				addLog("<你接受了" + action_actor + "的行动建议：" + action_text + ">")
+			await _submit_action_input(action_text, true)
+		else:
+			await changeTextTo(%speakerNameLabel, action_actor)
+			await changeTextTo(response_label, "行，那先按你的意思来。")
+			addLog("<你拒绝了" + action_actor + "的行动建议：" + action_text + ">")
+		pending_action_confirm = {}
+		return
 	if accepted:
 		if event_kind == "deal":
 			await changeTextTo(%speakerNameLabel, speaker)
@@ -1854,6 +2162,7 @@ func _auto_initiate_npc_chat(npc_name: String, npc_describe: String) -> void:
 	new_npc.scene = self
 	new_npc.npcDescribe = npc_describe
 	var logs = ""
+	_append_event_memories_to_npc_log(npc_name)
 	for log_entry in npcs[npc_name]["npc_log"]:
 		logs += log_entry
 	new_npc.npcLog = logs
@@ -2371,6 +2680,13 @@ func create_NPC(npc_name: String, location: String, npc_describe: String) -> voi
 	var location_text = "世界某处"
 	if location != "":
 		location_text = location
+	if !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
+		npcs[npc_name] = {"npc_describe": npc_describe, "npc_log": [], "特征": ""}
+	else:
+		if !npcs[npc_name].has("npc_describe") or str(npcs[npc_name].get("npc_describe", "")).strip_edges() == "":
+			npcs[npc_name]["npc_describe"] = npc_describe
+		if !npcs[npc_name].has("npc_log") or !(npcs[npc_name]["npc_log"] is Array):
+			npcs[npc_name]["npc_log"] = []
 	if location != "":
 		if !sites.has(location) or !(sites[location] is Dictionary):
 			sites[location] = {"能前往的地点": [], "npc": {}, "地点名称": location, "地点描述": "", "英文描述": ""}
@@ -2379,15 +2695,237 @@ func create_NPC(npc_name: String, location: String, npc_describe: String) -> voi
 		sites[location]["npc"][npc_name] = npc_describe
 		if location == currentSiteName:
 			site_update()
-	addLog("<你听说" + location_text + "有位" + str(npc_describe) + "：" + str(npc_name) + ">")
+	var heard_text = "你听说" + location_text + "有位" + str(npc_describe) + "：" + str(npc_name)
+	addLog("<" + heard_text + ">")
+	var source_npc = ""
+	if currentNpc != null:
+		source_npc = str(currentNpc.npcName)
+	var memory_text = "<NPC情报>" + heard_text
+	if source_npc != "":
+		memory_text += "（消息来源：" + source_npc + "）"
+	_remember_important_event(memory_text, location, source_npc)
+	var target_log: Array = npcs[npc_name]["npc_log"]
+	var target_note = "系统记录：有人在" + location_text + "提及了你的信息【" + str(npc_describe) + "】。"
+	if !target_log.has(target_note):
+		target_log.append(target_note)
+	npcs[npc_name]["npc_log"] = target_log
 	pass
 
+func prepare_npc_memory_for_chat(npc_name: String) -> void:
+	_append_event_memories_to_npc_log(npc_name)
+
 func _has_trade_keywords(text: String) -> bool:
-	var keywords = ["卖给你", "卖你", "收你", "给你", "送你", "你给我", "买下", "购买", "出售", "成交", "价格"]
-	for k in keywords:
-		if text.find(k) != -1:
+	var sig = _extract_interaction_signals(text)
+	return int(sig.get("trade", 0)) > 0 or int(sig.get("gift", 0)) > 0
+
+func _queue_action_confirm(action_data: Dictionary) -> void:
+	if action_data.is_empty():
+		return
+	var action_text = str(action_data.get("action", "")).strip_edges()
+	if action_text == "":
+		return
+	var actor = str(action_data.get("actor", "")).strip_edges()
+	if actor == "":
+		if currentNpc != null:
+			actor = str(currentNpc.npcName)
+		else:
+			actor = "对方"
+	pending_action_confirm = {
+		"action": action_text,
+		"prompt": str(action_data.get("prompt", "是否执行行动：" + action_text + "？")),
+		"actor": actor,
+		"mode": str(action_data.get("mode", "player_execute"))
+	}
+	_set_event_flow_lock(true)
+	%event.got_action_confirm_event(str(pending_action_confirm.get("action", "")), str(pending_action_confirm.get("prompt", "")))
+
+func _npc_refused_request(reply_text: String) -> bool:
+	var t = process_string(reply_text).strip_edges()
+	if t == "":
+		return false
+	var deny_words = ["不行", "不能", "不可以", "不帮", "拒绝", "没空", "做不到", "不愿", "别想", "不可能"]
+	for w in deny_words:
+		if t.find(w) != -1:
 			return true
 	return false
+
+func _extract_player_directed_request(user_text: String) -> String:
+	var plain = _normalize_single_line_input(user_text)
+	if plain == "":
+		return ""
+	var regex = RegEx.new()
+	if regex.compile("(?:你|请你|麻烦你|帮我|替我|你去)([^。！？?]{1,28})") != OK:
+		return ""
+	var m = regex.search(plain)
+	if m == null:
+		return ""
+	var req = str(m.get_string(1)).strip_edges()
+	if req.length() < 2:
+		return ""
+	return req
+
+func _can_force_request_on_npc(npc_name: String, npc_describe: String, request_text: String) -> bool:
+	var score = 0
+	var player_context = world_seed_input + " " + playerName
+	if _contains_any_keyword(player_context, ["老师", "保安", "警察", "军", "领导", "主任", "老板", "队长"]):
+		score += 2
+	if _contains_any_keyword(npc_describe + " " + npc_name, ["学生", "同学", "路人", "游客"]):
+		score += 1
+	if _contains_any_keyword(npc_describe + " " + npc_name, ["老师", "保安", "警察", "店长", "主任", "领导"]):
+		score -= 3
+	if _contains_any_keyword(request_text, ["打", "抢", "偷", "绑", "闯"]):
+		score -= 2
+	return score >= 1
+
+func _append_event_memories_to_npc_log(npc_name: String) -> void:
+	if !npcs.has(npc_name):
+		return
+	if !npcs[npc_name].has("npc_log") or !(npcs[npc_name]["npc_log"] is Array):
+		npcs[npc_name]["npc_log"] = []
+	var mems = _get_recent_related_event_memories(currentSiteName, npc_name, 3)
+	if mems.is_empty():
+		return
+	var arr: Array = npcs[npc_name]["npc_log"]
+	for m in mems:
+		if !(m is Dictionary):
+			continue
+		var note = "系统记录：与该NPC/地点相关的重要事件【" + str(m.get("text", "")) + "】。"
+		if !arr.has(note):
+			arr.append(note)
+	npcs[npc_name]["npc_log"] = arr
+
+func _contains_any_keyword(text: String, words: Array) -> bool:
+	for w in words:
+		if text.find(str(w)) != -1:
+			return true
+	return false
+
+func _extract_interaction_signals(text: String) -> Dictionary:
+	var t = str(text).strip_edges()
+	if t == "":
+		return {"trade": 0, "gift": 0, "assist": 0, "interaction_score": 0}
+	var trade_keywords = [
+		"买", "购买", "卖", "出售", "交易", "成交", "收购", "收你", "报价", "价格", "多少钱", "单价", "总价", "换"
+	]
+	var gift_keywords = [
+		"送", "赠", "给你", "给我", "递给", "交给", "拿给", "分你", "分享", "补给"
+	]
+	var assist_keywords = [
+		"帮", "帮我", "帮你", "替", "替我", "替你", "代", "代我", "代你", "陪", "带我", "去帮"
+	]
+	var trade_score = 0
+	var gift_score = 0
+	var assist_score = 0
+	for kw in trade_keywords:
+		if t.find(kw) != -1:
+			trade_score += 1
+	for kw in gift_keywords:
+		if t.find(kw) != -1:
+			gift_score += 1
+	for kw in assist_keywords:
+		if t.find(kw) != -1:
+			assist_score += 1
+	if _contains_any_keyword(t, ["个", "件", "瓶", "把", "份", "张", "点", "块", "元"]):
+		trade_score += 1
+		gift_score += 1
+	if _extract_first_number(t) > 0:
+		trade_score += 1
+		gift_score += 1
+	return {
+		"trade": trade_score,
+		"gift": gift_score,
+		"assist": assist_score,
+		"interaction_score": trade_score + gift_score + assist_score
+	}
+
+func _needs_tool_inference_from_context(player_text: String, npc_text: String) -> bool:
+	var player_sig = _extract_interaction_signals(player_text)
+	var npc_sig = _extract_interaction_signals(npc_text)
+	var total_score = int(player_sig.get("interaction_score", 0)) + int(npc_sig.get("interaction_score", 0))
+	if total_score >= 2:
+		return true
+	if _has_trade_keywords(npc_text):
+		return true
+	if _contains_any_keyword(player_text, ["买", "卖", "给", "送", "帮", "替"]) and _npc_reply_accepts_request(npc_text):
+		return true
+	return false
+
+func _npc_reply_accepts_request(reply_text: String) -> bool:
+	var t = process_string(reply_text).strip_edges()
+	if t == "":
+		return false
+	var yes_words = ["可以", "行", "好", "没问题", "当然", "马上", "这就", "给你", "帮你", "替你", "成交", "安排"]
+	for w in yes_words:
+		if t.find(w) != -1:
+			return true
+	return false
+
+func _maybe_offer_intent_confirm_from_dialogue(reply_text: String) -> void:
+	if _has_active_event_panel():
+		return
+	if _npc_reply_accepts_request(reply_text):
+		var inferred_req = _extract_npc_action_request(reply_text)
+		if !inferred_req.is_empty():
+			_queue_action_confirm(inferred_req)
+			return
+	if !_npc_refused_request(reply_text):
+		return
+	var user_req = _extract_player_directed_request(last_dialogue_input)
+	if user_req == "":
+		return
+	var npc_name = "对方"
+	var npc_desc = ""
+	if currentNpc != null:
+		npc_name = str(currentNpc.npcName)
+		npc_desc = str(currentNpc.npcDescribe)
+	if !_can_force_request_on_npc(npc_name, npc_desc, user_req):
+		return
+	_queue_action_confirm({
+		"action": "强行要求" + npc_name + user_req,
+		"prompt": npc_name + "拒绝了你的要求。是否强硬执行：让TA" + user_req + "？",
+		"actor": npc_name,
+		"mode": "force_execute"
+	})
+
+func _extract_npc_action_request(reply_text: String) -> Dictionary:
+	var actor_name = ""
+	if currentNpc != null:
+		actor_name = str(currentNpc.npcName)
+	var tags = _extract_angle_tags(reply_text)
+	for raw_tag in tags:
+		var normalized = str(raw_tag).replace("：", ":").strip_edges()
+		if normalized.begins_with("要求行动:"):
+			var action_from_tag = normalized.trim_prefix("要求行动:").strip_edges()
+			if action_from_tag != "":
+				return {"action": action_from_tag, "prompt": "是否执行行动：" + action_from_tag + "？", "actor": actor_name, "mode": "player_execute"}
+		if normalized.begins_with("行动指示:"):
+			var action_from_hint = normalized.trim_prefix("行动指示:").strip_edges()
+			if action_from_hint != "":
+				return {"action": action_from_hint, "prompt": "是否执行行动：" + action_from_hint + "？", "actor": actor_name, "mode": "player_execute"}
+
+	if _has_trade_keywords(reply_text):
+		return {}
+	var plain = process_string(reply_text).strip_edges()
+	if plain == "":
+		return {}
+	var regex = RegEx.new()
+	if regex.compile("(?:你要不要|你要|要不要|是否|请你|麻烦你)([^。！？?]{1,24})(?:吗|么|吧|呢|？|\\?)") != OK:
+		return {}
+	var m = regex.search(plain)
+	if m == null:
+		return {}
+	var action_text = str(m.get_string(1)).strip_edges()
+	if action_text.length() < 2:
+		return {}
+	var prompt_text = "是否" + action_text + "？"
+	var q_idx = plain.find("？")
+	if q_idx == -1:
+		q_idx = plain.find("?")
+	if q_idx != -1:
+		var question = plain.substr(0, q_idx + 1).strip_edges()
+		if question.length() <= 36:
+			prompt_text = question
+	return {"action": action_text, "prompt": prompt_text, "actor": actor_name, "mode": "player_execute"}
 
 func _auto_handle_action_search(action_input: String, action_reply: String) -> void:
 	var input_text = action_input.strip_edges()
@@ -2672,7 +3210,8 @@ func save_game() -> void:
 		"nowtime": nowtime,
 		"env_dic": envDic,
 		"items": item_list,
-		"logs": log_list
+		"logs": log_list,
+		"important_event_memories": important_event_memories
 	}
 
 	var file = FileAccess.open(SAVE_FILE, FileAccess.WRITE)
@@ -2709,8 +3248,8 @@ func load_game() -> bool:
 	background      = data.get("background", "")
 	sites           = data.get("sites", {})
 	npcs            = data.get("npcs", {})
-	_clear_all_npc_dialogue_memory()
 	rumors          = data.get("rumors", {})
+	important_event_memories = data.get("important_event_memories", [])
 
 	var p = data.get("player", {})
 	playerName  = p.get("name", playerName)
@@ -2790,17 +3329,17 @@ func load_game() -> bool:
 			var scene_prompt = _build_scene_image_prompt(site_name, site_data)
 			_bg_debug("load_game image cache miss for " + site_name + ", prompt_len=" + str(scene_prompt.length()))
 			if scene_prompt != "":
-				site_update(true, false, false)
-				pending_site_update = true
-				_set_site_loading_lock(true)
+				site_update(false, true, false)
+				pending_site_update = false
+				_set_site_loading_lock(false)
 				gen_img(scene_prompt, site_name)
 			else:
 				pending_site_update = false
 				_set_site_loading_lock(false)
-				site_update()
+				site_update(false, true, false)
 		else:
 			pending_site_update = false
-			site_update(true, true, false)
+			site_update(false, true, false)
 	else:
 		_set_site_loading_lock(false)
 		clear_children(%site_buttons)

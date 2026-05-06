@@ -1,67 +1,67 @@
 {
-	"background": "既然你提到了“自家地里”，这很可能是一个现代乡村或田园题材的开端。为了避免偏离，我将严格遵守现代现实风格设定，不添加任何幻想或未来元素。\n\n以下是根据你给出的信息生成的世界观：\n\n**世界概览：**\n这是一个以家庭为最小生产单位的现代乡村社会。土地是财富与尊严的根本，但传统小农经济正面临现代农业技术与市场化浪潮的冲击。每个家庭都在坚守土地情感与追求更大收益之间费力平衡。\n\n**人群状态：**\n大多数普通村民依然以自家责任田或承包地为核心生活，日出而作、日落而息。他们信仰“地不亏人”的朴素道理，坚信只要肯干就能养家糊口。但内心深处普遍恐惧土地流转、征地拆迁、农产品价格暴跌以及子女不愿务农导致土地荒废——这份恐惧常常通过观望与保守体现，既不敢轻易尝试新作物或新技术，又不甘心只种传统作物。\n\n**环境与天气：**\n自然环境以典型的温带或亚热带季风气候下的平原或丘陵耕地为主，村落被农田、水渠、乡道与零星厂房包围。天气呈现鲜明的四季分明的循环，春季常有大风与倒春寒威胁幼苗，夏季时有暴雨洪涝和伏旱，秋季是干燥晴朗的收割季节，冬季则常有冷空气过境与轻度霜冻。气候变化直接决定着每家每户一年的收成与心情——阴雨绵绵时整个村庄都沉默，晴天翻晒时大家边干活边大声谈笑。",
-	"current_site": "村东头代销店",
+	"background": "# 世界观设定：《锈蚀王冠》\n\n## 世界概览\n在最后一任国王病逝后，边境城堡“铁棘堡”成了一座无主的孤城。城中居民在十年孤立中自建秩序，但城堡深处的地下墓穴始终传来低沉的敲击声——有人说那是历代国王的怨魂在铸造自己的铁王冠，也有人说那只是旧矿井的坍塌。如今，只有几座塔楼的灯火还亮着，每一盏灯都代表一个拒绝离开的家族。\n\n## 人群状态\n堡中剩下的三十二户居民多为工匠、铁匠与老兵的遗孤，他们信奉“铁与火”的古老誓约：凡在城堡中出生的人，此生不得离开城墙。大多数人对“敲击声”讳莫如深，恐惧的不是声音本身，而是有人真正打开墓穴之门。年轻人开始秘密搜集地图碎片，暗中讨论“出逃”，但每当有人试图接近城门，第二天就会在钟楼顶发现他们遗落的靴子。\n\n## 环境与天气\n城堡建在荒原中央的火山岩上，常年笼罩在硫磺色的薄雾中。四季不分，只有“锈季”与“灰季”的交替：锈季潮湿多雨，铁器一夜生锈，城墙渗出赤色水渍；灰季干燥无风，灰烬如雪般从废弃的塔楼飘落。城堡主体已被藤蔓与氧化铁包裹成铜绿色，唯有地下墓穴始终保持干燥与恒温，仿佛那不是墓穴，而是一只正在呼吸的巨肺。",
+	"current_site": "我的城堡",
 	"env_dic": {
-		"current_humidity": 55.0,
-		"current_temperature": 22.0,
-		"current_weather": "sunny",
-		"current_wind_speed": 10.0,
+		"current_humidity": 80.0,
+		"current_temperature": 15.0,
+		"current_weather": "overcast",
+		"current_wind_speed": 15.0,
 		"humidity_range": [
-			30.0,
+			40.0,
 			95.0
 		],
 		"temperature_range": [
-			-10.0,
-			35.0
+			5.0,
+			25.0
 		],
 		"weather_duration_base": {
-			"cloudy": 100.0,
-			"overcast": 80.0,
-			"rain": 60.0,
-			"snow": 40.0,
-			"sunny": 150.0,
+			"cloudy": 90.0,
+			"overcast": 120.0,
+			"rain": 180.0,
+			"snow": 20.0,
+			"sunny": 60.0,
 			"thunder": 30.0
 		},
 		"weather_transition_probability": {
 			"cloudy": {
-				"cloudy": 0.4,
+				"cloudy": 0.5,
 				"overcast": 0.2,
-				"rain": 0.08,
+				"rain": 0.05,
 				"snow": 0.0,
-				"sunny": 0.3,
-				"thunder": 0.02
-			},
-			"overcast": {
-				"cloudy": 0.25,
-				"overcast": 0.3,
-				"rain": 0.25,
-				"snow": 0.05,
-				"sunny": 0.1,
+				"sunny": 0.2,
 				"thunder": 0.05
 			},
-			"rain": {
-				"cloudy": 0.15,
-				"overcast": 0.25,
-				"rain": 0.35,
-				"snow": 0.05,
+			"overcast": {
+				"cloudy": 0.2,
+				"overcast": 0.4,
+				"rain": 0.2,
+				"snow": 0.0,
 				"sunny": 0.1,
 				"thunder": 0.1
 			},
+			"rain": {
+				"cloudy": 0.1,
+				"overcast": 0.2,
+				"rain": 0.5,
+				"snow": 0.0,
+				"sunny": 0.05,
+				"thunder": 0.15
+			},
 			"snow": {
-				"cloudy": 0.25,
-				"overcast": 0.3,
-				"rain": 0.05,
-				"snow": 0.25,
-				"sunny": 0.1,
-				"thunder": 0.05
+				"cloudy": 0.0,
+				"overcast": 0.0,
+				"rain": 0.0,
+				"snow": 0.0,
+				"sunny": 0.0,
+				"thunder": 0.0
 			},
 			"sunny": {
-				"cloudy": 0.25,
+				"cloudy": 0.3,
 				"overcast": 0.1,
-				"rain": 0.04,
+				"rain": 0.05,
 				"snow": 0.0,
-				"sunny": 0.6,
-				"thunder": 0.01
+				"sunny": 0.5,
+				"thunder": 0.05
 			},
 			"thunder": {
 				"cloudy": 0.1,
@@ -73,90 +73,55 @@
 			}
 		},
 		"wind_range": [
-			0.0,
-			50.0
+			5.0,
+			60.0
 		]
 	},
-	"items": [
-		{
-			"description": "一颗饱满的菜籽，可用于种植蔬菜，是农场生活的起点。",
-			"effect_type": "none",
-			"effect_value": 0,
-			"name": "菜籽",
-			"num": 4,
-			"rarity": "common",
-			"value": 15
-		}
-	],
-	"logs": [
-		"你抵达了自家地里",
-		"<地图更新：发现了村东头代销店>",
-		"你抵达了村东头代销店",
-		"你开始与王婶交谈",
-		"你购买了菜籽X3，花费105",
-		"你购买了草药X1，花费35",
-		"<你失去了草药X1>",
-		"你购买了菜籽X1，花费35",
-		"【行动】回到田里",
-		"<读档完成>"
-	],
-	"nowtime": 713.000000000045,
+	"important_event_memories": [],
+	"items": [],
+	"logs": [],
+	"nowtime": 519.800000000001,
 	"npcs": {
-		"王婶": {
-			"npc_describe": "五十来岁，烫着卷发，穿着花衬衫，正靠在柜台边嗑瓜子",
-			"npc_log": [],
+		"守灯人埃莉诺": {
+			"npc_describe": "中年妇人，披着褪色斗篷，手持一盏锈铁提灯，面容平静，说话时总不自觉望向通往下层的台阶。",
 			"特征": ""
 		},
-		"王老伯": {
-			"npc_describe": "戴草帽穿蓝布衫的老农，正蹲在自家田埂上抽烟袋，脸被太阳晒成红褐色，手背青筋突起。",
+		"老铁匠奥里克": {
+			"npc_describe": "一个独臂老人，须发灰白，腰间挂着铁锤，右袖空荡，眼神警惕，总用左手摩挲锤柄上的刻痕。",
 			"特征": ""
 		}
 	},
 	"player": {
 		"energy": 100.0,
 		"hp": 100.0,
-		"money": 825,
-		"name": "\n农民",
+		"money": 1000,
+		"name": "奴隶制时期的国王",
 		"reputation": 100.0
 	},
 	"rumors": {
 
 	},
 	"sites": {
-		"村东头代销店": {
+		"我的城堡": {
 			"npc": {
-				"王婶": "五十来岁，烫着卷发，穿着花衬衫，正靠在柜台边嗑瓜子"
-			},
-			"地点名称": "村东头代销店",
-			"地点描述": "一间砖木结构的老屋，门前水泥台阶被磨得发亮。店内光线昏暗，货架上摆着盐、酱油、散装白酒以及几排过期零食，玻璃柜台后面坐着正在打盹的老板娘。墙上挂着泛黄的价目表和一张乡镇挂历。",
-			"能前往的地点": [
-				"自家地里",
-				"村委会大院",
-				"村西水井",
-				"村小学操场",
-				"村口老槐树"
-			],
-			"英文描述": "A rural village convenience store, dimly lit, with wooden shelves holding salt, soy sauce, bulk liquor, and expired snacks. A glass counter, behind which the shopkeeper dozes. Yellowed price lists and a township calendar on the wall."
-		},
-		"自家地里": {
-			"npc": {
-				"王老伯": "戴草帽穿蓝布衫的老农，正蹲在自家田埂上抽烟袋，脸被太阳晒成红褐色，手背青筋突起。"
+				"守灯人埃莉诺": "中年妇人，披着褪色斗篷，手持一盏锈铁提灯，面容平静，说话时总不自觉望向通往下层的台阶。",
+				"老铁匠奥里克": "一个独臂老人，须发灰白，腰间挂着铁锤，右袖空荡，眼神警惕，总用左手摩挲锤柄上的刻痕。"
 			},
 			"别名": [
-				"自家承包田"
+				"铁棘堡主堡大厅"
 			],
-			"地点名称": "自家地里",
-			"地点描述": "一块位于村东平坦地带的普通农田，约三亩。西北角有一棵粗壮的老槐树，树干上留有往年拴牛留下的勒痕。田埂上长满车前草和狗尾草，土质是红黏土，踩上去有些粘脚。附近有一条灌溉水渠，水声很小，渠边有堆积的稻草垛。此刻阳光正烈，田里的玉米苗刚过膝盖，叶片有些打卷，轻风吹过时发出沙沙的声音。远处有辆拖拉机突突突地驶过，扬起一阵黄尘。",
+			"地点名称": "我的城堡",
+			"地点描述": "曾经的议事大厅如今破败不堪，高穹顶上挂满蛛网，铁枝吊灯只剩三根蜡烛摇曳。石墙被锈渍染成暗红，地面铺着褪色的旧毯。大厅中央的铸铁王座已断裂，扶手处长出暗紫色藤蔓。空气中弥漫着铁锈与陈年灰尘的气息，隐约可闻地下传来的低沉敲击声。",
 			"能前往的地点": [
-				"村口大榆树",
-				"张老四家果林",
-				"李屠户家的养猪场",
-				"村东头代销店",
-				"灌溉渠水闸"
+				"西塔楼书房",
+				"铁匠工坊",
+				"地下墓穴入口",
+				"东侧厨房",
+				"城门废墟"
 			],
-			"英文描述": "A small family farm field in a modern Chinese countryside, red clay soil, corn seedlings knee-high, a dry creek nearby, a tall locust tree with old rope marks on its trunk, a straw pile, bright summer noon, slight breeze, distant tractor dust."
+			"英文描述": "A ruined grand hall of a border castle, with a high vaulted ceiling draped in cobwebs, three flickering candles on an iron chandelier. Stone walls stained dark red with rust, faded old carpets on the floor. A broken cast-iron throne at the center, dark purple vines growing from its armrests. Sulfurous mist filters through cracked windows. Eerie low hammering echoes from beneath."
 		}
 	},
 	"version": 1,
-	"world_seed_input": "\n自家地里"
+	"world_seed_input": "我的城堡\n"
 }

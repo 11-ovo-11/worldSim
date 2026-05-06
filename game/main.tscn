@@ -535,30 +535,30 @@ layout_mode = 2
 
 [node name="DialogueTextEdit" type="TextEdit" parent="mainContainer/HBoxContainer/VBoxContainer/DialogueContainer" unique_id=-1294967294]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 40)
+custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "对话内容"
 emoji_menu_enabled = false
-wrap_mode = 1
+wrap_mode = 0
 
 [node name="DialogueButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/DialogueContainer" unique_id=-1294967293]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(80, 40)
+custom_minimum_size = Vector2(80, 32)
 layout_mode = 2
 text = "对话"
 
 [node name="InputTextEdit" type="TextEdit" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=1186997061]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 40)
+custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 placeholder_text = "输入文本"
 emoji_menu_enabled = false
-wrap_mode = 1
+wrap_mode = 0
 
 [node name="SendButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/InputTextEdit" unique_id=1783778180]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(80, 40)
+custom_minimum_size = Vector2(80, 32)
 layout_mode = 1
 anchors_preset = 3
 anchor_left = 1.0
@@ -566,7 +566,7 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -52.0
-offset_top = -40.0
+offset_top = -32.0
 grow_horizontal = 0
 grow_vertical = 0
 text = "行动"

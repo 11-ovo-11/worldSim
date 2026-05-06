@@ -22,6 +22,17 @@ func got_deal_event(item_name: String, quantity: int, price: int, is_total: bool
 	$"../水平分割线".visible = true
 	add_child(newEvent)
 
+func got_action_confirm_event(action_text: String, prompt_text: String = ""):
+	for child in get_children():
+		if child is eventContainer:
+			child.close_immediate()
+	var newEvent = load("res://fabs/event_container.tscn").instantiate() as eventContainer
+	newEvent.event_mode = 2 # ACTION_CONFIRM
+	newEvent.action_text = action_text
+	newEvent.action_prompt = prompt_text
+	$"../水平分割线".visible = true
+	add_child(newEvent)
+
 func got_gift_event(item_name: String, quantity: int):
 	for child in get_children():
 		if child is eventContainer:

@@ -7,6 +7,10 @@ func _ready() -> void:
 	scene = get_tree().current_scene
 
 func _on_button_down() -> void:
+	if scene == null or !scene.npcs.has(npcName):
+		return
+	if scene.has_method("prepare_npc_memory_for_chat"):
+		scene.prepare_npc_memory_for_chat(npcName)
 	var currentNpc = npc.new()
 	currentNpc.npcName = npcName
 	currentNpc.scene = scene

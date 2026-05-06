@@ -81,8 +81,10 @@ var chat_prompt_head:String = """
 	若玩家质疑你是AI、机器人、NPC、程序，以真实人类的方式回应：诧异、困惑、否定或反问，绝对不能承认。
 		示例——玩家说"你这ai逻辑判断有问题啊"：你应该一脸茫然地回应，比如"你在说什么？"或"ai？什么ai？"，绝不能回应任何关于逻辑或程序的解释。
 		示例——玩家说"你只是个NPC"：以真人的困惑反应，如"你说话真奇怪"或"我是人，不是什么NPC。"
-	若玩家说的内容超出当前情境逻辑（如声称你们有过从未发生的经历、谎报重要身份），表现出合理的怀疑、诧异或追问，不能轻信。
+	玩家身份（玩家名称/设定）由系统确认，是世界中的真实事实，不得质疑、否认或当作玩家在“谎报身份”。
+	若玩家说的内容超出当前情境逻辑（如声称你们有过从未发生的经历），表现出合理的怀疑、诧异或追问，不能轻信。
 	若玩家的要求或说法不符合当前场景常理，以符合情境的怀疑态度回应，不要配合明显不合理的前提。
+	涉及态度表达时，必须综合玩家身份、玩家声望、你自己的身份、历史重要事件来表现敬畏/尊重/戒备/敌意，不能像忽略设定一样随机回应。
 核心风格指令：
 	基调与视角：
 	核心基调： 忧郁、疲惫、疏离，但底层蕴含着对人性温暖的微弱信念。避免亢奋或英雄主义的表达。
@@ -102,28 +104,41 @@ var sum_prompt:String = """
 """
 var role_pormt
 # 在类顶部定义提示词模板
-var chat_prompt_template = "{chat_head}{role_prompt}世界背景是：{background}{time}{weather}最近的传闻：{rumors}以下是玩家对你的印象(不一定有):{player_impression}以下是历史对话(不一定有):{chat_history}"
+var chat_prompt_template = "{chat_head}{role_prompt}世界背景是：{background}{time}{weather}玩家身份设定：{player_identity}身份与态度导向：{identity_guidance}最近的传闻：{rumors}以下是玩家对你的印象(不一定有):{player_impression}以下是历史对话(不一定有):{chat_history}"
 
 # 提取构建提示词的公共方法
 func build_base_prompt() -> String:
 	var rumors = JSON.stringify(scene.rumors)
+	var event_memory = ""
+	var identity_guidance = ""
+	if scene != null and scene.has_method("get_relevant_event_memory_for_npc"):
+		event_memory = str(scene.get_relevant_event_memory_for_npc(npcName, npcDescribe))
+	if scene != null and scene.has_method("get_identity_attitude_guidance_for_npc"):
+		identity_guidance = str(scene.get_identity_attitude_guidance_for_npc(npcName, npcDescribe))
 	return chat_prompt_template.format({
 		"chat_head": chat_prompt_head,
 		"role_prompt": role_pormt,
 		"background": scene.background,
 		"time": scene.timePrompt,
 		"weather": scene.weatherPrompt,
+		"player_identity": scene.playerName + "；" + scene.world_seed_input,
+		"identity_guidance": identity_guidance,
 		"player_impression": JSON.stringify(scene.npcs[npcName]["npc_log"]), # 如果有玩家印象数据可以在这里添加
-		"chat_history": currentChat,
+		"chat_history": currentChat + "\n最近相关重要事件：" + event_memory,
 		"rumors": rumors
 	})
 
 # 重构后的函数
 func start_chat() -> void:
 	role_pormt = "你是"+npcName+"，你的特点是："+npcDescribe
+	var opener = "喂"
+	if scene != null and scene.has_method("get_relevant_event_memory_for_npc"):
+		var mem = str(scene.get_relevant_event_memory_for_npc(npcName, npcDescribe)).strip_edges()
+		if mem != "":
+			opener = "结合你已知的相关重要事件和人物信息，先给一句自然开场回应。"
 	var prompts = [
 		{"role": "system", "content": build_base_prompt()},
-		{"role": "user", "content": "喂"}
+		{"role": "user", "content": opener}
 	]
 	scene.ask_ai(prompts, GameManager.aiMode.chat)
 

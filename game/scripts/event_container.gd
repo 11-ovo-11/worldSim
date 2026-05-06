@@ -2,7 +2,7 @@ extends HBoxContainer
 class_name eventContainer
 var settled:bool = true
 enum eventType{deal}
-enum EventMode{DEAL, GIFT}
+enum EventMode{DEAL, GIFT, ACTION_CONFIRM}
 var scene:GameManager
 var event_mode: EventMode = EventMode.DEAL
 func _ready() -> void:
@@ -18,10 +18,14 @@ var itemToAdd
 var itemNum
 var itemPrice
 var is_total_price: bool = false
+var action_text: String = ""
+var action_prompt: String = ""
 func set_event_view():
 	await create_tween().tween_property(self,"custom_minimum_size:y",50,0.2).finished
 	var display_text: String
-	if event_mode == EventMode.GIFT:
+	if event_mode == EventMode.ACTION_CONFIRM:
+		display_text = action_prompt if action_prompt.strip_edges() != "" else ("是否执行行动：" + action_text + "？")
+	elif event_mode == EventMode.GIFT:
 		display_text = "是否接受" + str(itemNum) + "个" + str(itemToAdd) + "？"
 	else:
 		if is_total_price:
@@ -33,6 +37,10 @@ func set_event_view():
 	$yes.visible = true
 	$no.visible = true
 func _on_yes_button_down() -> void:
+	if event_mode == EventMode.ACTION_CONFIRM:
+		await close()
+		await scene.on_event_decision("action_confirm", true, action_text, 1, 0)
+		return
 	if event_mode == EventMode.GIFT:
 		scene.add_item(itemToAdd,itemNum)
 		scene.addLog("你接受了" + itemToAdd + "X" + str(itemNum))
@@ -74,6 +82,10 @@ func close_immediate() -> void:
 		scene.call_deferred("refresh_interaction_locks")
 
 func _on_no_button_down() -> void:
+	if event_mode == EventMode.ACTION_CONFIRM:
+		await close()
+		await scene.on_event_decision("action_confirm", false, action_text, 1, 0)
+		return
 	var total_price = itemPrice if is_total_price else itemPrice * itemNum
 	if event_mode == EventMode.GIFT:
 		await scene.on_event_decision("gift", false, str(itemToAdd), int(itemNum), 0)

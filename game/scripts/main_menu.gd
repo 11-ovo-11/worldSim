@@ -157,14 +157,29 @@ func _on_button_button_down() -> void:
 				$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 			else:
 				pending_character_brief = ""
-				currentState = startState.getLocation
+				currentState = startState.getEra
 				await get_tree().create_timer(1).timeout
 				add_start_log("好...")
 				await get_tree().create_timer(1).timeout
 				add_start_log("...")
 				await get_tree().create_timer(1).timeout
-				add_start_log("那么，你要到哪里去呢？")
+				add_start_log("你所处的时代背景是？（例如：现代、近未来、古代、架空科幻）")
 				$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
+		startState.getEra:
+			var era_input = $HBoxContainer/VBoxContainer/TextEdit.text.strip_edges()
+			$HBoxContainer/VBoxContainer/TextEdit.text = ""
+			$HBoxContainer/VBoxContainer/TextEdit/Button.button_pressed = false
+			$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = true
+			await add_start_log(era_input, true)
+			if era_input == "":
+				add_start_log("时代背景不能为空，请输入如：现代/近未来/古代/架空科幻。")
+				$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
+				return
+			player_era = era_input
+			currentState = startState.getLocation
+			await get_tree().create_timer(0.6).timeout
+			add_start_log("那么，你要到哪里去呢？")
+			$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 		startState.getLocation:
 			playerLocation = $HBoxContainer/VBoxContainer/TextEdit.text
 			$HBoxContainer/VBoxContainer/TextEdit.text = ""
@@ -260,20 +275,33 @@ func _infer_setting_signals(text: String) -> Dictionary:
 		"bridge": _contains_any(t, ["穿越", "异世界", "平行宇宙", "转生", "时空", "多元宇宙"])
 	}
 
-func _local_conflict_guard(char_name: String, location: String) -> String:
+func _local_conflict_guard(char_name: String, location: String, era_text: String = "") -> String:
 	var role_sig = _infer_setting_signals(char_name)
 	var loc_sig = _infer_setting_signals(location)
+	var era_sig = _infer_setting_signals(era_text)
 	var has_bridge = bool(role_sig.get("bridge", false)) or bool(loc_sig.get("bridge", false))
+	has_bridge = has_bridge or bool(era_sig.get("bridge", false))
 
 	var role_modern = bool(role_sig.get("modern_real", false))
 	var role_space = bool(role_sig.get("space", false))
 	var role_scifi = bool(role_sig.get("scifi", false))
 	var role_ancient = bool(role_sig.get("ancient", false))
+	var era_modern = bool(era_sig.get("modern_real", false))
+	var era_space = bool(era_sig.get("space", false))
+	var era_scifi = bool(era_sig.get("scifi", false))
+	var era_ancient = bool(era_sig.get("ancient", false))
 
 	var loc_modern = bool(loc_sig.get("modern_real", false))
 	var loc_space = bool(loc_sig.get("space", false))
 	var loc_fantasy = bool(loc_sig.get("fantasy", false))
 	var loc_ancient = bool(loc_sig.get("ancient", false))
+
+	if era_modern and (role_ancient or loc_ancient) and !has_bridge:
+		return "时代为现代，但角色/地点偏古代；请补充穿越或桥接设定。"
+	if era_ancient and (role_modern or loc_modern or loc_space) and !has_bridge:
+		return "时代为古代，但角色/地点偏现代或太空；请补充桥接设定。"
+	if era_space and !era_scifi and role_modern and !role_scifi and loc_space and !has_bridge:
+		return "时代涉及太空但缺少科幻前提，请补充科技背景。"
 
 	if role_modern and loc_space and !has_bridge and !role_space and !role_scifi:
 		return "现实职业与太空地点冲突；若要成立请补充科幻/未来背景。"
@@ -343,7 +371,7 @@ var conflict_check_prompt = """你是“角色设定一致性审查器”。
 
 func _send_conflict_check(char_name: String, location: String) -> void:
 	var profile = player_role_profile if player_role_profile.strip_edges() != "" else char_name
-	var local_reason = _local_conflict_guard(profile, location)
+	var local_reason = _local_conflict_guard(profile, location, player_era)
 	if local_reason != "":
 		_handle_conflict_check_result(JSON.stringify({"compatible": false, "reason": local_reason}))
 		return
