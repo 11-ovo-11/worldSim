@@ -48,6 +48,9 @@ func _on_yes_button_down() -> void:
 	scene.money -= total_price
 	scene.player_update()
 	scene.add_item(itemToAdd,itemNum)
+	var unit_price = (itemPrice / max(1, itemNum)) if is_total_price else itemPrice
+	if scene.has_method("update_item_trade_price"):
+		scene.update_item_trade_price(str(itemToAdd), unit_price)
 	scene.addLog("你购买了" + itemToAdd + "X" + str(itemNum) + "，花费" + str(total_price))
 	await scene.on_event_decision("deal", true, str(itemToAdd), int(itemNum), total_price)
 	close()

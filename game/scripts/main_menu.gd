@@ -1,10 +1,14 @@
 extends CanvasLayer
-enum startState {chooseMode, getName, getLocation, validateSetup}
+enum startState {chooseMode, getName, getEra, getLocation, validateSetup}
 var currentState = startState.chooseMode
 var scene :GameManager
 var playerName:String
 var playerLocation:String
 var start_mode: String = ""
+var pending_character_brief: String = ""
+var player_role_display: String = ""
+var player_role_profile: String = ""
+var player_era: String = ""
 # 获取场景中的HTTPRequest节点
 @onready var start_http_request: HTTPRequest = $startHTTPRequest
 func _ready() -> void:
@@ -123,6 +127,10 @@ func _on_button_button_down() -> void:
 					$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 			elif normalized == "new":
 				start_mode = "new"
+				pending_character_brief = ""
+				player_role_display = ""
+				player_role_profile = ""
+				player_era = ""
 				currentState = startState.getName
 				add_start_log("已选择：新游戏")
 				await get_tree().create_timer(1).timeout
@@ -132,19 +140,31 @@ func _on_button_button_down() -> void:
 				add_start_log("请输入“新游戏”或“继续游戏”。")
 				$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 		startState.getName:
-			playerName = $HBoxContainer/VBoxContainer/TextEdit.text
+			var role_input = $HBoxContainer/VBoxContainer/TextEdit.text.strip_edges()
 			$HBoxContainer/VBoxContainer/TextEdit.text = ""
-			currentState = startState.getLocation
 			$HBoxContainer/VBoxContainer/TextEdit/Button.button_pressed = false
 			$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = true
-			await add_start_log(playerName,true)
-			await get_tree().create_timer(1).timeout
-			add_start_log("好...")
-			await get_tree().create_timer(1).timeout
-			add_start_log("...")
-			await get_tree().create_timer(1).timeout
-			add_start_log("那么，你要到哪里去呢？")
-			$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
+			await add_start_log(role_input,true)
+			if player_role_display == "":
+				player_role_display = _extract_role_display_name(role_input)
+				playerName = player_role_display
+			player_role_profile = _merge_character_profile(player_role_profile, role_input)
+			pending_character_brief = player_role_profile
+			var followup = _next_role_detail_question(player_role_profile)
+			if followup != "":
+				await get_tree().create_timer(0.4).timeout
+				add_start_log(followup)
+				$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
+			else:
+				pending_character_brief = ""
+				currentState = startState.getLocation
+				await get_tree().create_timer(1).timeout
+				add_start_log("好...")
+				await get_tree().create_timer(1).timeout
+				add_start_log("...")
+				await get_tree().create_timer(1).timeout
+				add_start_log("那么，你要到哪里去呢？")
+				$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 		startState.getLocation:
 			playerLocation = $HBoxContainer/VBoxContainer/TextEdit.text
 			$HBoxContainer/VBoxContainer/TextEdit.text = ""
@@ -157,6 +177,113 @@ func _on_button_button_down() -> void:
 			_send_conflict_check(playerName, playerLocation)
 
 	pass # Replace with function body.
+
+func _contains_any(text: String, words: Array) -> bool:
+	for w in words:
+		if text.find(str(w)) != -1:
+			return true
+	return false
+
+func _merge_character_profile(base_profile: String, new_input: String) -> String:
+	var base = base_profile.strip_edges()
+	var extra = new_input.strip_edges()
+	if base == "":
+		return extra
+	if extra == "":
+		return base
+	if extra.find(base) != -1:
+		return extra
+	if base.find(extra) != -1:
+		return base
+	return base + "；" + extra
+
+func _extract_role_display_name(role_input: String) -> String:
+	var t = role_input.strip_edges()
+	if t == "":
+		return "玩家"
+	var role_keywords = ["老师", "学生", "医生", "警察", "程序员", "工程师", "商人", "记者", "律师", "军人", "研究员", "店员", "农民"]
+	for r in role_keywords:
+		if t.find(r) != -1:
+			return r
+	if t.find("，") != -1:
+		t = t.substr(0, t.find("，"))
+	if t.find(";") != -1:
+		t = t.substr(0, t.find(";"))
+	if t.find("；") != -1:
+		t = t.substr(0, t.find("；"))
+	t = t.strip_edges()
+	if t.length() > 10:
+		t = t.substr(0, 10)
+	return t if t != "" else "玩家"
+
+func _next_role_detail_question(profile_text: String) -> String:
+	var t = profile_text.strip_edges()
+	if t == "":
+		return "请先告诉我你的核心身份（例如：老师、学生、医生、程序员）。"
+	if _contains_any(t, ["老师", "教师", "讲师", "辅导员"]) and !_contains_any(t, ["幼儿园", "小学", "初中", "高中", "大学", "职校", "培训"]):
+		return "你是哪个阶段的老师？例如：小学/初中/高中/大学/职校/培训机构。"
+	if _contains_any(t, ["学生", "学员", "研究生"]) and !_contains_any(t, ["小学", "初中", "高中", "大学", "硕士", "博士", "职校", "培训"]):
+		return "你是哪个阶段的学生？例如：小学/初中/高中/大学/硕士/博士/职校。"
+	if _contains_any(t, ["医生", "医师"]) and !_contains_any(t, ["内科", "外科", "儿科", "急诊", "全科", "口腔", "精神", "护士"]):
+		return "你主要在哪个医疗方向工作？例如：内科/外科/急诊/儿科/全科。"
+	if _contains_any(t, ["警察", "民警", "警官"]) and !_contains_any(t, ["刑警", "交警", "治安", "网安", "巡警", "派出所"]):
+		return "你属于哪类警务岗位？例如：刑警/交警/治安/网安/巡警。"
+	if _contains_any(t, ["程序员", "工程师", "开发"]) and !_contains_any(t, ["前端", "后端", "全栈", "算法", "测试", "运维", "嵌入式"]):
+		return "你的技术方向是？例如：前端/后端/全栈/算法/测试/运维。"
+	return ""
+
+func _is_character_profile_too_brief(profile_text: String) -> bool:
+	var t = profile_text.strip_edges()
+	if t.length() < 4:
+		return true
+	var score = 0
+	if _contains_any(t, ["岁", "老师", "学生", "医生", "警察", "程序员", "工程师", "商人", "工人", "厨师", "记者", "律师", "司机", "研究员", "军人", "店员", "博主", "自由职业"]):
+		score += 1
+	if _contains_any(t, ["性格", "冷静", "冲动", "善良", "谨慎", "开朗", "内向", "外向", "固执", "悲观", "乐观", "严肃", "幽默", "暴躁", "温和"]):
+		score += 1
+	if _contains_any(t, ["来自", "出身", "背景", "经历", "曾经", "以前", "毕业", "离职", "家乡", "家庭", "父母", "童年"]):
+		score += 1
+	if _contains_any(t, ["想", "目标", "打算", "准备", "为了", "希望", "计划", "寻找", "逃离", "复仇", "赚钱", "证明", "完成"]):
+		score += 1
+	if t.length() >= 12:
+		score += 1
+	return score < 2
+
+func _infer_setting_signals(text: String) -> Dictionary:
+	var t = text.strip_edges()
+	return {
+		"modern_real": _contains_any(t, ["老师", "学生", "公司", "上班", "校园", "大学", "中学", "医院", "警局", "地铁", "小区", "办公室", "外卖", "商场"]),
+		"space": _contains_any(t, ["月球", "火星", "太空", "空间站", "轨道", "星舰", "宇宙", "银河", "殖民地"]),
+		"scifi": _contains_any(t, ["科幻", "未来", "赛博", "机器人", "AI", "星际", "机甲", "外星"]),
+		"fantasy": _contains_any(t, ["魔法", "王国", "精灵", "勇者", "神殿", "巨龙", "巫师", "异界"]),
+		"ancient": _contains_any(t, ["古代", "王朝", "皇帝", "朝廷", "江湖", "武林", "修仙", "门派"]),
+		"bridge": _contains_any(t, ["穿越", "异世界", "平行宇宙", "转生", "时空", "多元宇宙"])
+	}
+
+func _local_conflict_guard(char_name: String, location: String) -> String:
+	var role_sig = _infer_setting_signals(char_name)
+	var loc_sig = _infer_setting_signals(location)
+	var has_bridge = bool(role_sig.get("bridge", false)) or bool(loc_sig.get("bridge", false))
+
+	var role_modern = bool(role_sig.get("modern_real", false))
+	var role_space = bool(role_sig.get("space", false))
+	var role_scifi = bool(role_sig.get("scifi", false))
+	var role_ancient = bool(role_sig.get("ancient", false))
+
+	var loc_modern = bool(loc_sig.get("modern_real", false))
+	var loc_space = bool(loc_sig.get("space", false))
+	var loc_fantasy = bool(loc_sig.get("fantasy", false))
+	var loc_ancient = bool(loc_sig.get("ancient", false))
+
+	if role_modern and loc_space and !has_bridge and !role_space and !role_scifi:
+		return "现实职业与太空地点冲突；若要成立请补充科幻/未来背景。"
+	if role_ancient and (loc_modern or loc_space) and !has_bridge:
+		return "古代角色与现代/太空地点冲突；请补充穿越或世界观桥接设定。"
+	if loc_ancient and role_modern and !has_bridge:
+		return "现代角色与古代地点冲突；请补充穿越或世界观桥接设定。"
+	if loc_fantasy and role_modern and !has_bridge and !role_scifi:
+		return "现实职业与奇幻地点存在冲突；请补充该世界如何兼容你的身份。"
+	return ""
 
 func _normalize_start_mode(input_text: String) -> String:
 	var t = input_text.strip_edges().to_lower()
@@ -202,36 +329,73 @@ func _input(event):
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ENTER and not $HBoxContainer/VBoxContainer/TextEdit/Button.disabled:
 			_on_button_button_down()
-var conflict_check_prompt = """你是角色与场景兼容性检测助手。判断以下角色身份与目标场景是否存在明显冲突（时代背景、逻辑矛盾等）。
-规则：若兼容则只回复英文 OK（仅此两字母，无其他内容）；若有冲突，用一句中文说明原因（不超过40字），不输出其他任何内容。"""
+var conflict_check_prompt = """你是“角色设定一致性审查器”。
+任务：判断“角色设定”与“初始地点”在同一世界观下是否自洽。
+审查维度：时代一致性、科技水平一致性、职业与环境可达性、常识物理可行性。
+原则：
+1) 保守判定：若缺少关键前提（如现实职业直接出现在太空地点却无科幻解释），判定不兼容。
+2) 不能脑补合理化，不得擅自补充“未来科技/穿越/魔法”来强行兼容。
+3) 若存在冲突，reason 要指出“缺什么前提”而非只说不行。
+
+严格只输出 JSON：
+{"compatible": true/false, "reason": "不超过40字中文"}
+不要输出任何额外文本。"""
 
 func _send_conflict_check(char_name: String, location: String) -> void:
+	var profile = player_role_profile if player_role_profile.strip_edges() != "" else char_name
+	var local_reason = _local_conflict_guard(profile, location)
+	if local_reason != "":
+		_handle_conflict_check_result(JSON.stringify({"compatible": false, "reason": local_reason}))
+		return
 	var messages = [
 		{"role": "system", "content": conflict_check_prompt},
-		{"role": "user", "content": "角色：" + char_name + "\n场景：" + location}
+		{"role": "user", "content": "角色设定：" + profile + "\n时代背景：" + player_era + "\n初始地点：" + location}
 	]
 	var body_data = JSON.stringify([messages, null, "text"])
-	start_http_request.request(
+	var req_err = start_http_request.request(
 		scene.chat_url,
 		["Content-Type: application/json"],
 		HTTPClient.METHOD_POST,
 		body_data
 	)
+	if req_err != OK:
+		_handle_conflict_check_result(JSON.stringify({"compatible": false, "reason": "兼容性检测请求失败，请重试。"}))
+
+func _parse_conflict_response(reply_text: String) -> Dictionary:
+	var txt = reply_text.strip_edges()
+	if txt == "":
+		return {"compatible": false, "reason": "兼容性检测无返回，请补充设定后重试。"}
+
+	var j = JSON.new()
+	if j.parse(txt) == OK:
+		var parsed = j.get_data()
+		if parsed is Dictionary and parsed.has("compatible"):
+			return {
+				"compatible": bool(parsed.get("compatible", false)),
+				"reason": str(parsed.get("reason", "")).strip_edges()
+			}
+
+	if txt.to_upper() == "OK":
+		return {"compatible": true, "reason": ""}
+
+	return {"compatible": false, "reason": txt}
 
 func _handle_conflict_check_result(reply_text: String) -> void:
-	if reply_text.strip_edges().to_upper() == "OK" or reply_text.strip_edges() == "":
-		if reply_text.strip_edges() == "":
-			add_start_log("兼容性检测未返回结果，继续初始化...")
-		else:
-			add_start_log("设定兼容，好...")
+	var verdict = _parse_conflict_response(reply_text)
+	if bool(verdict.get("compatible", false)):
+		add_start_log("设定兼容，好...")
 		await get_tree().create_timer(0.5).timeout
 		add_start_log("指令接收完成，开始世界初始化...")
 		currentState = startState.getLocation
 		_init_world(playerLocation)
 	else:
-		add_start_log("⚠ 检测到设定冲突：" + reply_text)
+		var reason = str(verdict.get("reason", "")).strip_edges()
+		if reason == "":
+			reason = "设定不兼容，请补充前提后重试。"
+		add_start_log("⚠ 检测到设定冲突：" + reason)
 		await get_tree().create_timer(1).timeout
-		add_start_log("请重新输入你的角色身份：")
+		add_start_log("请重新输入更完整的角色设定：")
+		pending_character_brief = ""
 		currentState = startState.getName
 		$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 
@@ -269,6 +433,8 @@ func _init_world(location:String):
 func if_weather_ok():
 	add_start_log("环境创建完成...")
 	await get_tree().create_timer(1).timeout
+	if player_role_display.strip_edges() != "":
+		playerName = player_role_display
 	add_start_log("欢迎,"+playerName)
 	scene.playerName = playerName
 	scene.goto(playerLocation)
@@ -278,6 +444,14 @@ func if_weather_ok():
 	await create_tween().tween_property($HBoxContainer,"modulate",Color(0.0, 0.0, 0.0, 0.0),0.5).finished
 	visible = false
 	pass
+
+func if_weather_failed(reason: String = ""):
+	var rs = reason.strip_edges()
+	if rs == "":
+		rs = "天气初始化失败，已使用默认天气参数。"
+	add_start_log("⚠ " + rs)
+	await get_tree().create_timer(0.4).timeout
+	await if_weather_ok()
 
 var env_promt = """
 你是气象专家，请根据用户提供的世界观设定，生成适合该世界观的天气系统参数。这些参数将用于一个拟真的天气模拟系统。

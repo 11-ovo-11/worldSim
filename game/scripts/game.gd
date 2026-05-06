@@ -154,6 +154,14 @@ var action_prompt:String = """
 var ai_busy: bool = false
 var _text_update_seq: int = 0
 var _active_text_tweens: Dictionary = {}
+var lock_debug_enabled: bool = true
+
+func _log_lock_state(tag: String) -> void:
+	if !lock_debug_enabled:
+		return
+	var has_event_panel = _has_active_event_panel()
+	var text_busy = !_active_text_tweens.is_empty()
+	print("[LOCK_DEBUG][" + tag + "] state=" + str(currentState) + ", ai_busy=" + str(ai_busy) + ", event_flow_lock=" + str(event_flow_lock) + ", site_loading_lock=" + str(site_loading_lock) + ", has_event_panel=" + str(has_event_panel) + ", text_busy=" + str(text_busy))
 
 # ==================== 生命周期函数 ====================
 func _ready():
@@ -213,6 +221,30 @@ func changeStateInto(stateToChange: worldState):
 	
 	currentState = stateToChange
 	refresh_interaction_locks()
+
+func _force_exit_chat_runtime() -> void:
+	if currentNpc != null and is_instance_valid(currentNpc):
+		currentNpc.queue_free()
+	if newNpc != null and is_instance_valid(newNpc) and newNpc != currentNpc:
+		newNpc.queue_free()
+	currentNpc = null
+	newNpc = null
+	currentState = worldState.explore
+	dialogue_container.visible = false
+	dialogue_input.text = ""
+	last_dialogue_input = ""
+	last_action_input = ""
+	last_crime_event_context = ""
+	clear_children(%event)
+	_set_event_flow_lock(false)
+	refresh_interaction_locks()
+
+func _clear_all_npc_dialogue_memory() -> void:
+	for npc_name in npcs.keys():
+		var npc_data = npcs[npc_name]
+		if npc_data is Dictionary:
+			npc_data["npc_log"] = []
+			npcs[npc_name] = npc_data
 
 # ==================== 地点导航 ====================
 func _get_site_data(site_name: String) -> Dictionary:
@@ -702,6 +734,8 @@ func ask_ai(message: Array, askmode: aiMode):
 		)
 	if err != OK:
 		changeTextTo(response_label, "请求失败: " + str(err))
+		if askmode == aiMode.init_env and has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
+			$mainMenu.if_weather_failed("环境生成请求失败，已使用默认天气。")
 		set_ai_busy(false)
 		return
 	await $HTTPRequest.request_completed
@@ -1217,7 +1251,8 @@ func ensure_item_profile_async(item_name: String) -> void:
 			_save_item_profile_json(item_name, fresh)
 		itemProfiles[item_name]["description"] = cached_desc
 		itemProfiles[item_name]["image_prompt"] = cached_image_prompt
-		itemProfiles[item_name]["value"] = cached_value
+		if !itemProfiles[item_name].get("value_trade_confirmed", false):
+			itemProfiles[item_name]["value"] = cached_value
 		itemProfiles[item_name]["rarity"] = cached_rarity
 		itemProfiles[item_name]["effect_type"] = cached_effect_type
 		itemProfiles[item_name]["effect_value"] = cached_effect_value
@@ -1248,7 +1283,8 @@ func ensure_item_profile_async(item_name: String) -> void:
 
 	itemProfiles[item_name]["description"] = item_description
 	itemProfiles[item_name]["image_prompt"] = image_prompt
-	itemProfiles[item_name]["value"] = item_value
+	if !itemProfiles[item_name].get("value_trade_confirmed", false):
+		itemProfiles[item_name]["value"] = item_value
 	itemProfiles[item_name]["rarity"] = item_rarity
 	itemProfiles[item_name]["effect_type"] = item_effect_type
 	itemProfiles[item_name]["effect_value"] = item_effect_value
@@ -1256,6 +1292,18 @@ func ensure_item_profile_async(item_name: String) -> void:
 	itemProfiles[item_name]["is_generating"] = false
 	itemProfiles[item_name]["is_ready"] = true
 	%itemContainer.update_item_visual(item_name, item_texture, item_description, item_effect_type, item_effect_value)
+
+func update_item_trade_price(item_name: String, per_unit_price: int) -> void:
+	if item_name == "" or per_unit_price <= 0:
+		return
+	var key = str(item_name).strip_edges()
+	if !itemProfiles.has(key):
+		return
+	itemProfiles[key]["value"] = per_unit_price
+	itemProfiles[key]["value_trade_confirmed"] = true
+	var disk_profile = _load_item_profile_json(key)
+	disk_profile["value"] = per_unit_price
+	_save_item_profile_json(key, disk_profile)
 
 # ==================== UI 操作 ====================
 func _on_send_button_pressed():
@@ -1286,7 +1334,7 @@ func _on_dialogue_button_pressed():
 	var leave_words = ["离开", "结束对话", "退出对话", "不聊了", "再见"]
 	if leave_words.has(user_input):
 		dialogue_input.text = ""
-		if event_flow_lock:
+		if _has_active_event_panel():
 			changeTextTo(%speakerNameLabel, "【旁白】")
 			changeTextTo(response_label, "当前情况无法脱离，" + currentNpc.npcName + "不会让你就这么走。")
 			await currentNpc.chatWithNpc("[玩家试图离开]")
@@ -1309,24 +1357,27 @@ func _has_active_event_panel() -> bool:
 func refresh_interaction_locks() -> void:
 	if event_flow_lock and !_has_active_event_panel():
 		event_flow_lock = false
+		_log_lock_state("refresh:auto_unlock_event_flow")
 	_apply_interaction_locks()
 
 func _set_event_flow_lock(v: bool) -> void:
 	event_flow_lock = v
+	_log_lock_state("set_event_flow_lock:" + str(v))
 	_apply_interaction_locks()
 
 func _apply_interaction_locks() -> void:
 	var has_event_panel = _has_active_event_panel()
 	var text_busy = !_active_text_tweens.is_empty()
-	send_button.disabled = ai_busy or currentState == worldState.chat or event_flow_lock or has_event_panel or text_busy
+	send_button.disabled = ai_busy or event_flow_lock or has_event_panel or text_busy
 	dialogue_button.disabled = ai_busy or currentState != worldState.chat or has_event_panel or text_busy
-	var map_lock = ai_busy or site_loading_lock or event_flow_lock or has_event_panel or text_busy or currentState == worldState.chat
+	var map_lock = ai_busy or site_loading_lock or event_flow_lock or has_event_panel or text_busy
 	for btn in %site_buttons.get_children():
 		if btn is BaseButton:
 			btn.disabled = map_lock
 	for btn in %npc_buttons.get_children():
 		if btn is BaseButton:
 			btn.disabled = map_lock
+	_log_lock_state("apply")
 
 func _set_site_loading_lock(v: bool) -> void:
 	site_loading_lock = v
@@ -1334,6 +1385,7 @@ func _set_site_loading_lock(v: bool) -> void:
 
 func set_ai_busy(v: bool) -> void:
 	ai_busy = v
+	_log_lock_state("set_ai_busy:" + str(v))
 	if ai_busy:
 		_apply_interaction_locks()
 	else:
@@ -1363,9 +1415,11 @@ func changeTextTo(nodeToChange: Control, text: String, speed = 30):
 		if old_tween is Tween and old_tween.is_valid():
 			old_tween.kill()
 		_active_text_tweens.erase(key)
+		_log_lock_state("changeTextTo:kill_old_tween")
 
 	if nodeToChange.text == safe_text:
 		nodeToChange.visible_ratio = 1.0
+		_log_lock_state("changeTextTo:same_text_no_tween")
 		return
 
 	_text_update_seq += 1
@@ -1390,6 +1444,7 @@ func changeTextTo(nodeToChange: Control, text: String, speed = 30):
 		return
 	if _active_text_tweens.get(key, null) == tween:
 		_active_text_tweens.erase(key)
+		_log_lock_state("changeTextTo:tween_finished")
 	refresh_interaction_locks()
 
 func clear_children(node: Node):
@@ -1455,11 +1510,15 @@ func _on_request_completed(result, response_code, _header, body):
 				var jsonDic = extract_json_from_text(data["text"])
 				if jsonDic == {}:
 					print("天气初始化失败")
+					if has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
+						$mainMenu.if_weather_failed("天气配置解析失败，已使用默认天气。")
 					return
 				envDic =jsonDic
 				if %envContainer.load_weather_config_from_json(envDic):
 					$mainMenu.if_weather_ok()
-					pass
+				else:
+					if has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
+						$mainMenu.if_weather_failed("天气配置校验失败，已回退默认天气。")
 			aiMode.explore:
 				var jsonDic = extract_json_from_text(data["text"])
 				if jsonDic == {}:
@@ -1563,6 +1622,8 @@ func _on_request_completed(result, response_code, _header, body):
 					var handled_direct = bool(direct_tag_result.get("handled_any", false))
 					var unresolved_tags = str(direct_tag_result.get("unresolved_tags", ""))
 					var nav_target = str(direct_tag_result.get("nav_target", ""))
+					if nav_target == "":
+						nav_target = _extract_nav_target_from_text(action_reply)
 					if unresolved_tags != "":
 						var aprompts = [
 							{"role":"system","content": agent_prompt},
@@ -2018,6 +2079,25 @@ func _apply_direct_action_tool_tags(action_reply: String) -> Dictionary:
 		player_update()
 	return {"handled_any": handled_any, "unresolved_tags": unresolved, "nav_target": nav_target}
 
+func _extract_nav_target_from_text(text: String) -> String:
+	var fail_words = ["无法", "不能", "不行", "失败", "被阻", "没能", "不让", "不允许", "随即返回", "无法前往"]
+	for w in fail_words:
+		if text.find(w) != -1:
+			return ""
+	var travel_words = ["前往", "去了", "来到", "到达了", "抵达", "走向", "回到了", "走进", "进入了", "出发前往", "动身前往", "前去", "赶往"]
+	var has_travel = false
+	for w in travel_words:
+		if text.find(w) != -1:
+			has_travel = true
+			break
+	if !has_travel:
+		return ""
+	for site in sites.keys():
+		var site_str = str(site).strip_edges()
+		if site_str != "" and site_str != currentSiteName and text.find(site_str) != -1:
+			return site_str
+	return ""
+
 func _auto_apply_action_effects(action_input: String, action_reply: String, tool_tags: String) -> void:
 	var source = (action_input + "\n" + action_reply).strip_edges()
 	if source == "":
@@ -2054,7 +2134,7 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 				await _spawn_context_npc("money", {}, action_context)
 			changed = true
 
-	if !has_money_tool and !money_changed:
+	if currentState != worldState.chat and !has_money_tool and !money_changed:
 		var inferred_money_delta = _extract_money_delta_from_text(source)
 		if inferred_money_delta != 0:
 			var before_money = money
@@ -2137,14 +2217,15 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 		var penalty = randi_range(8, 20)
 		reputation = max(0.0, reputation - penalty)
 		addLog("<违规行为被记录（" + last_crime_event_context + "），声誉-" + str(penalty) + ">")
-		var crime_npc = _pick_crime_npc_from_action(action_input)
-		if !crime_npc.is_empty():
-			await _spawn_context_npc("crime", crime_npc, last_crime_event_context)
-		else:
-			await _spawn_context_npc("crime", {}, last_crime_event_context)
+		if currentState != worldState.chat:
+			var crime_npc = _pick_crime_npc_from_action(action_input)
+			if !crime_npc.is_empty():
+				await _spawn_context_npc("crime", crime_npc, last_crime_event_context)
+			else:
+				await _spawn_context_npc("crime", {}, last_crime_event_context)
 		changed = true
 
-	if !has_crime_tag:
+	if !has_crime_tag and currentState != worldState.chat:
 		await _trigger_time_pass_npc_event(passed_hours, action_context)
 
 	if changed:
@@ -2610,6 +2691,7 @@ func load_game() -> bool:
 	if !has_save_file():
 		addLog("<没有存档文件>")
 		return false
+	_force_exit_chat_runtime()
 	_restore_session_resources_from_save()
 	var file = FileAccess.open(SAVE_FILE, FileAccess.READ)
 	if !file:
@@ -2627,6 +2709,7 @@ func load_game() -> bool:
 	background      = data.get("background", "")
 	sites           = data.get("sites", {})
 	npcs            = data.get("npcs", {})
+	_clear_all_npc_dialogue_memory()
 	rumors          = data.get("rumors", {})
 
 	var p = data.get("player", {})
@@ -2693,6 +2776,8 @@ func load_game() -> bool:
 		site_name = str(sites.keys()[0])
 	if site_name != "" and sites.has(site_name):
 		currentSiteName = site_name
+		changeTextTo(%speakerNameLabel, playerName)
+		_set_event_flow_lock(false)
 		var has_bg := false
 		var cached = _load_image_png(SCENE_IMG_DIR, site_name)
 		if cached != null:
@@ -2705,7 +2790,7 @@ func load_game() -> bool:
 			var scene_prompt = _build_scene_image_prompt(site_name, site_data)
 			_bg_debug("load_game image cache miss for " + site_name + ", prompt_len=" + str(scene_prompt.length()))
 			if scene_prompt != "":
-				site_update(false, false, false)
+				site_update(true, false, false)
 				pending_site_update = true
 				_set_site_loading_lock(true)
 				gen_img(scene_prompt, site_name)
