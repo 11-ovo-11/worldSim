@@ -41,29 +41,23 @@ const BASE_PROMPT_MAX_CHARS := 2600
 # 在类顶部定义提示词模板
 var chat_prompt_template = "{chat_head}\n角色:{role_prompt}\n背景:{background}\n时天气:{time}{weather}\n玩家:{player_identity}\n态度:{identity_guidance}\n传闻:{rumors}\n印象:{player_impression}\n对话:{chat_history}"
 
-func _clip_text(text: String, max_chars: int) -> String:
+func _clip_text(text: String, _max_chars: int) -> String:
 	var src = str(text).strip_edges()
-	if max_chars <= 0:
-		return ""
-	if src.length() <= max_chars:
-		return src
-	var keep = max(8, max_chars - 3)
-	return src.substr(0, keep).strip_edges() + "..."
+	return src
 
-func _tail_lines(text: String, max_lines: int, max_chars: int) -> String:
+func _tail_lines(text: String, _max_lines: int, _max_chars: int) -> String:
 	var src = str(text).strip_edges()
 	if src == "":
 		return ""
 	var rows = src.split("\n", false)
-	var start_idx = max(0, rows.size() - max_lines)
 	var picked: Array = []
-	for i in range(start_idx, rows.size()):
+	for i in range(rows.size()):
 		var row = str(rows[i]).strip_edges()
 		if row != "":
-			picked.append(_clip_text(row, 110))
+			picked.append(row)
 	if picked.is_empty():
 		return ""
-	return _clip_text("\n".join(picked), max_chars)
+	return "\n".join(picked)
 
 func _compact_rumors() -> String:
 	if scene == null:

@@ -57,9 +57,6 @@ var has_saved_in_session: bool = false
 var dead_npc_names: Array = []
 var dialogue_min_chars: int = 90
 var action_narration_min_chars: int = 90
-var prompt_session_memory_max_lines: int = 24
-var prompt_session_memory_max_chars: int = 1800
-var prompt_action_context_max_chars: int = 2200
 var output_mode_debug_enabled: bool = false
 var output_length_button: Button
 var min_chars_dialog: AcceptDialog
@@ -157,7 +154,6 @@ var action_prompt:String = """
 玩家身份由系统确认，视为世界事实，不得质疑/否认/重置。
 涉及NPC态度时，必须结合玩家身份、声望、NPC身份、历史重要事件（敬畏/尊重/戒备/敌意等）。
 若不成立（钱不够/缺物品/地点不合理/场景不可执行等），只输出失败，不得伪造成功，不得添加交易或物品变更指令。
-若成功并创建了地点或NPC，叙述中要明确“找到了该地点或NPC”；失败时不得添加地点创建指令。
 若成立且有可执行变化，在叙述末追加一个或多个<>指令：
 1) 交易出售：<以50的价格卖1把剑> 或 <以总价100卖3瓶药水>
 2) 获得物品：<送1瓶治疗药水>
@@ -368,8 +364,6 @@ func _record_current_chat_session(kind: String, speaker: String, text: String) -
 	if !current_chat_session_records.is_empty() and str(current_chat_session_records[current_chat_session_records.size() - 1]) == rec:
 		return
 	current_chat_session_records.append(rec)
-	if current_chat_session_records.size() > chat_session_record_limit:
-		current_chat_session_records = current_chat_session_records.slice(current_chat_session_records.size() - chat_session_record_limit, current_chat_session_records.size())
 
 func get_current_chat_session_memory(npc_name: String = "") -> String:
 	var target_name = npc_name.strip_edges()
@@ -378,25 +372,19 @@ func get_current_chat_session_memory(npc_name: String = "") -> String:
 	if current_chat_session_records.is_empty():
 		return ""
 	var lines: Array = []
-	var start_idx = max(0, current_chat_session_records.size() - prompt_session_memory_max_lines)
-	for i in range(start_idx, current_chat_session_records.size()):
+	for i in range(current_chat_session_records.size()):
 		var row_text = str(current_chat_session_records[i]).strip_edges()
 		if row_text == "":
 			continue
-		lines.append("- " + _clip_prompt_text(row_text, 150))
+		lines.append("- " + row_text)
 	if lines.is_empty():
 		return ""
 	var joined = "以下是当前会话中刚发生且必须延续影响的内容：\n" + "\n".join(lines)
-	return _clip_prompt_text(joined, prompt_session_memory_max_chars)
+	return joined
 
-func _clip_prompt_text(text: String, max_chars: int) -> String:
+func _clip_prompt_text(text: String, _max_chars: int) -> String:
 	var src = str(text).strip_edges()
-	if max_chars <= 0:
-		return ""
-	if src.length() <= max_chars:
-		return src
-	var keep = max(8, max_chars - 3)
-	return src.substr(0, keep).strip_edges() + "..."
+	return src
 
 func _clear_all_npc_dialogue_memory() -> void:
 	for npc_name in npcs.keys():
@@ -2010,7 +1998,7 @@ func _submit_action_input(raw_input: String, bypass_lock_check: bool = false) ->
 		action_context += "\n事件记忆：\n" + related_events
 	if focus_npc_name != "":
 		_record_current_chat_session("行动输入", playerName, user_input)
-	action_context = _clip_prompt_text(action_context, prompt_action_context_max_chars)
+	action_context = _clip_prompt_text(action_context, 0)
 	var aprompts = [
 		{"role":"system","content": action_prompt + "\n" + action_context},
 		{"role":"user","content": user_input}]
@@ -2498,153 +2486,6 @@ func _build_npc_personal_event_summary(plain_text: String, npc_name: String, foc
 		return "我记住了一件会直接影响我对玩家态度的事：" + _clip_prompt_text(source, 56)
 	return "有一件与我相关的事会影响我之后对玩家的判断：" + _clip_prompt_text(source, 56)
 
-func _classify_npc_attitude_change(plain_text: String, npc_name: String, focus_npc: String, sig: Dictionary) -> Dictionary:
-	var source = str(plain_text).strip_edges()
-	var out = {
-		"attitude": "我还会继续观察玩家，再决定该怎么对他。",
-		"bond_delta": 0,
-		"trust_delta": 0,
-		"fear_delta": 0,
-		"summary": ""
-	}
-	if source == "":
-		return out
-	var outcome_flags = _extract_npc_result_outcome_flags(source, sig)
-	if source.begins_with("传闻："):
-		out["summary"] = ("我得知一条与玩家有关的传闻，会据此调整看法。" if npc_name == focus_npc else "我听到与玩家有关的传闻，会影响后续判断。")
-		return out
-	if source.find("声望值+") != -1:
-		out["attitude"] = "玩家最近名声在变好，我会更愿意高看他一眼。"
-		out["bond_delta"] = 2
-		out["trust_delta"] = 2
-		out["summary"] = "玩家名声变好，我对其更尊重，也更愿意相信。"
-		return out
-	if source.find("声望值-") != -1:
-		out["attitude"] = "玩家最近名声不太好，我会先留个心眼再接触。"
-		out["bond_delta"] = -1
-		out["trust_delta"] = -2
-		out["fear_delta"] = 2
-		out["summary"] = "玩家名声变差，我会更警惕，也更难轻信。"
-		return out
-	if bool(outcome_flags.get("warned", false)):
-		out["attitude"] = "这次已经闹到警报和盘查，我会把玩家当成麻烦源主动提防。"
-		out["bond_delta"] = -3
-		out["trust_delta"] = -3
-		out["fear_delta"] = 2
-		out["summary"] = "这次结果直接发展成警报、盘查或违规处置，我会把玩家视为高风险对象。"
-		return out
-	if int(sig.get("coercion", 0)) > 0:
-		out["attitude"] = "玩家这次是在逼我做事，我表面会应付，心里会一直防着他。"
-		out["bond_delta"] = -3
-		out["trust_delta"] = -2
-		out["fear_delta"] = 3
-		out["summary"] = "这次结果里玩家对我施压、命令或威逼，我会明显紧张、防备，表面顺从也未必真心。"
-		return out
-	if bool(outcome_flags.get("harmed", false)):
-		out["attitude"] = "玩家这次实打实地伤到我了，我会排斥他，也不想再给他好脸色。"
-		out["bond_delta"] = -3
-		out["trust_delta"] = -2
-		out["fear_delta"] = 1
-		out["summary"] = "这次结果里玩家对我造成了伤害、羞辱、欺骗或强夺，我会更容易拒绝、顶撞或疏远。"
-		return out
-	if bool(outcome_flags.get("breached", false)):
-		out["attitude"] = "玩家这次没有守约，我会觉得他靠不住，之后很难再轻信。"
-		out["bond_delta"] = -2
-		out["trust_delta"] = -3
-		out["summary"] = "这次结果显示玩家失约、赖账或反悔，我会把他视为不可靠的人。"
-		return out
-	if bool(outcome_flags.get("rejected", false)):
-		out["attitude"] = "这次我和玩家没谈拢，我会先和他拉开距离。"
-		out["bond_delta"] = -2
-		out["trust_delta"] = -1
-		out["summary"] = "这次结果以拒绝、阻拦或驱离收场，我之后会继续与玩家保持距离。"
-		return out
-	if bool(outcome_flags.get("protected", false)):
-		out["attitude"] = "玩家这次确实护住了我，我会把这份人情记住，也更愿意信他。"
-		out["bond_delta"] = 3
-		out["trust_delta"] = 3
-		out["summary"] = "这次结果里玩家实际保护、救助或照应了我，我会明显更信任也更愿意回报。"
-		return out
-	if bool(outcome_flags.get("cooperated", false)):
-		out["attitude"] = "这次合作是成了的，我会把玩家当成还能继续打交道的人。"
-		out["bond_delta"] = 2
-		out["trust_delta"] = 2
-		out["summary"] = "这次结果显示玩家确实与我合作、帮忙或配合，我会更愿意继续往来。"
-		return out
-	if int(sig.get("gift", 0)) > 0:
-		if bool(outcome_flags.get("accepted", false)):
-			out["attitude"] = "我收下了玩家给的东西，心里自然会对他软一些。"
-			out["bond_delta"] = 3
-			out["trust_delta"] = 2
-			out["summary"] = "这次结果里我收下了玩家给出的物品，我对其更亲近，也更容易给出善意回应。"
-		else:
-			out["attitude"] = "这次有了实在的物品往来，我对玩家的态度会先缓下来一点。"
-			out["bond_delta"] = 2
-			out["trust_delta"] = 1
-			out["summary"] = "这次结果里双方有明确物品往来，彼此关系有所缓和。"
-		return out
-	if int(sig.get("trade", 0)) > 0:
-		out["attitude"] = "交易已经发生了，我会按玩家这次办事是否靠谱来继续看他。"
-		out["bond_delta"] = 1
-		out["trust_delta"] = 2
-		out["summary"] = "这次结果里交易已实际发生，我会更快根据对方是否守规矩、讲信用来调整后续态度。"
-		return out
-	if int(sig.get("assist", 0)) > 0:
-		out["attitude"] = "玩家这次帮上了忙，我会觉得他至少在这件事上是能靠一下的。"
-		out["bond_delta"] = 2
-		out["trust_delta"] = 3
-		out["summary"] = "这次结果里我与玩家有协作或帮助往来，因此更愿意信任和配合。"
-		return out
-	if bool(outcome_flags.get("accepted", false)):
-		out["attitude"] = "这次我接受了玩家的要求，短时间内不会再对他那么绷着。"
-		out["bond_delta"] = 1
-		out["trust_delta"] = 1
-		out["summary"] = "这次结果是接受、同意或放行，我对玩家会暂时放下些戒心。"
-		return out
-	if bool(outcome_flags.get("softened", false)):
-		out["attitude"] = "这次结果里有赔礼、道歉或感谢，我对玩家的火气会先消一点。"
-		out["bond_delta"] = 1
-		out["trust_delta"] = 1
-		out["summary"] = "这次结果里出现感谢、道歉、赔偿或归还等明确表示，我对玩家的态度会有所松动。"
-		return out
-	if _contains_any_keyword(source, ["拒绝", "敌意", "警报", "违规", "冲突", "威胁", "偷", "抢", "犯罪"]):
-		out["attitude"] = "这次结果不太对劲，我会把玩家当成需要提防的人。"
-		out["bond_delta"] = -3
-		out["trust_delta"] = -3
-		out["fear_delta"] = 2
-		out["summary"] = "这次结果里出现了明显风险或冲突后果，我会更戒备，也更不愿配合。"
-		return out
-	if _contains_any_keyword(source, ["感谢", "帮助", "道歉", "救", "照顾", "安慰", "保护", "体谅", "信任"]):
-	if npc_name == "" or !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
-		return ""
-	if !npcs[npc_name].has("important_events") or !(npcs[npc_name]["important_events"] is Array):
-		return ""
-	var bucket: Array = npcs[npc_name]["important_events"]
-	if bucket.is_empty():
-		return ""
-	var latest_attitude = ""
-	var recent_causes: Array = []
-	for i in range(bucket.size() - 1, -1, -1):
-		var row = bucket[i]
-		if !(row is Dictionary):
-			continue
-		var row_attitude = str(row.get("attitude", "")).strip_edges()
-		if latest_attitude == "" and row_attitude != "":
-			latest_attitude = _clip_prompt_text(row_attitude, 90)
-		var row_view = str(row.get("npc_view", "")).strip_edges()
-		if row_view != "":
-			recent_causes.append(_clip_prompt_text(row_view, 48))
-		if latest_attitude != "" and recent_causes.size() >= 2:
-			break
-	recent_causes.reverse()
-	if latest_attitude == "" and recent_causes.is_empty():
-		return ""
-	if latest_attitude == "":
-		latest_attitude = "我会继续根据最近和玩家之间发生的结果来判断他。"
-	var lines: Array = ["- 当前态度：" + latest_attitude]
-	if !recent_causes.is_empty():
-		lines.append("- 态度来源：" + "；".join(recent_causes))
-	return "\n".join(lines)
 
 func _append_event_to_npc_memory(npc_name: String, record: Dictionary, focus_npc: String) -> void:
 	if npc_name == "":
@@ -2665,22 +2506,13 @@ func _append_event_to_npc_memory(npc_name: String, record: Dictionary, focus_npc
 	var npc_view = _build_npc_personal_event_summary(plain, npc_name, focus_npc, sig)
 	if npc_view == "":
 		return
-	var attitude_row = _classify_npc_attitude_change(plain, npc_name, focus_npc, sig)
-	var attitude = str(attitude_row.get("attitude", "我还会继续观察玩家，再决定该怎么对他。")).strip_edges()
-	var attitude_summary = str(attitude_row.get("summary", "")).strip_edges()
-	if attitude_summary != "":
-		npc_view = attitude_summary
 	var npc_bucket: Array = npcs[npc_name].get("important_events", [])
 	for old in npc_bucket:
-		if old is Dictionary and str(old.get("npc_view", "")) == npc_view and str(old.get("attitude", "")) == attitude:
+		if old is Dictionary and str(old.get("npc_view", "")) == npc_view :
 			return
 	npc_bucket.append({
 		"text": _clip_prompt_text(plain, 90),
 		"npc_view": _clip_prompt_text(npc_view, 90),
-		"attitude": attitude,
-		"bond_delta": int(attitude_row.get("bond_delta", 0)),
-		"trust_delta": int(attitude_row.get("trust_delta", 0)),
-		"fear_delta": int(attitude_row.get("fear_delta", 0)),
 		"t": int(record.get("t", Time.get_unix_time_from_system()))
 	})
 	if npc_bucket.size() > 40:
@@ -2744,12 +2576,10 @@ func _get_recent_related_event_memories(site_name: String, npc_name: String = ""
 	return out
 
 func get_relevant_event_memory_for_npc(npc_name: String, _npc_desc: String = "") -> String:
-	var attitude_state = _build_npc_attitude_state_text(npc_name)
 	var personal_rows = _get_recent_npc_personal_events(npc_name, 4)
-	if !personal_rows.is_empty() or attitude_state != "":
+	if !personal_rows.is_empty():
 		var personal_lines: Array = []
-		if attitude_state != "":
-			personal_lines.append(attitude_state)
+
 		for line in personal_rows:
 			personal_lines.append("- " + str(line))
 		return _clip_prompt_text("\n".join(personal_lines), 320)
@@ -2795,12 +2625,9 @@ func _build_related_event_memory_for_action(action_text: String, focus_npc_name:
 	if !mentions.is_empty():
 		focus_npc = str(mentions[0])
 	if focus_npc != "":
-		var attitude_state = _build_npc_attitude_state_text(focus_npc)
 		var personal_rows = _get_recent_npc_personal_events(focus_npc, 4)
-		if !personal_rows.is_empty() or attitude_state != "":
+		if !personal_rows.is_empty() :
 			var personal_lines: Array = []
-			if attitude_state != "":
-				personal_lines.append(attitude_state)
 			for line in personal_rows:
 				personal_lines.append("- " + str(line))
 			return _clip_prompt_text("\n".join(personal_lines), 320)
