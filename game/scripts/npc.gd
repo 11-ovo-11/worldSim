@@ -6,10 +6,10 @@ var npcLog:String = ""
 var currentChat:String = ""
 var scene:GameManager
 var chat_prompt_head:String = """
-你在扮演真实人类，不知道AI/游戏/NPC设定，不得承认自己是程序。
- 回复要口语、自然、符合角色，当次回复尽量不少于90字；避免文艺腔；不要主动提问或提议。
- 玩家请求买卖/赠送/接收物品、打听地点或传闻、更新时间等，你可同意或拒绝。
- 只有明确同意才加工具标签；拒绝不加标签。
+你在扮演真实人类角色，不知道AI/游戏/NPC设定，不得承认自己是程序。
+回复要求：口语化、简短、自然，避免文艺腔；不要主动提问或主动提议。
+若玩家请求买卖/赠送/接收物品、打听地点或传闻、更新时间等，可同意或拒绝。
+只有明确同意时才添加工具标签，拒绝则不要加标签。
 可用标签：
 - <以X的价格卖N件物品> 或 <以总价X卖N件物品>
 - <送N件物品名>
@@ -18,20 +18,20 @@ var chat_prompt_head:String = """
 - <名字在地点，是一个描述>
 - <传闻:主题-内容>
 - <声望值+N> / <声望值-N>
- - <设置时间:HH:MM>
- - <离开>
- 态度必须结合：玩家身份、声望、你的身份、近期重要事件、当前会话里刚发生的对话与行动结果；前面刚发生的内容不能降权失效，必须持续影响你后续回应与决定；不要用固定套话收尾来凑字数。
+- <设置时间:HH:MM>
+- <离开>
+态度必须结合：玩家身份、声望、你的身份、近期重要事件。
 """
 
 var sum_prompt:String = """
-系统：以玩家视角总结与npc对话，输出一句话；不得添加虚假信息；不要有“npc：”“他说：”等开头。
+系统：你擅长会议纪要，以玩家的视角总结与npc的对话，总结成一句话并输出，不要添加虚假的信息,不要有任何的开头如“npc：”、“他说：”等等。
 输出举例：
 他在这里很久了，熟悉这个地方，也有一些东西可以卖。
 """
 var role_pormt
 const CHAT_HISTORY_MAX_LINES := 12
 const CHAT_HISTORY_MAX_CHARS := 700
-const SESSION_MEMORY_MAX_CHARS := 760
+const SESSION_MEMORY_MAX_CHARS := 420
 const EVENT_MEMORY_MAX_CHARS := 240
 const IDENTITY_GUIDANCE_MAX_CHARS := 280
 const RUMORS_MAX_CHARS := 320
@@ -39,7 +39,7 @@ const NPC_LOG_MAX_CHARS := 420
 const PLAYER_IDENTITY_MAX_CHARS := 120
 const BASE_PROMPT_MAX_CHARS := 2600
 # 在类顶部定义提示词模板
-var chat_prompt_template = "{chat_head}\n角色:{role_prompt}\n背景:{background}\n时天气:{time}{weather}\n玩家:{player_identity}\n态度:{identity_guidance}\n传闻:{rumors}\n印象:{player_impression}\n对话:{chat_history}"
+var chat_prompt_template = "{chat_head}\n角色：{role_prompt}\n背景：{background}\n时间天气：{time}{weather}\n玩家身份：{player_identity}\n态度导向：{identity_guidance}\n近期传闻：{rumors}\n玩家印象：{player_impression}\n近期对话：{chat_history}"
 
 func _clip_text(text: String, max_chars: int) -> String:
 	var src = str(text).strip_edges()
@@ -107,15 +107,12 @@ func build_base_prompt() -> String:
 		session_memory = _clip_text(str(scene.get_current_chat_session_memory(npcName)), SESSION_MEMORY_MAX_CHARS)
 	var history = _tail_lines(currentChat, CHAT_HISTORY_MAX_LINES, CHAT_HISTORY_MAX_CHARS)
 	var chat_context = history
-	var min_chars = 90
-	if scene != null:
-		min_chars = max(40, int(scene.dialogue_min_chars))
 	if session_memory != "":
-		chat_context += "\n会话:\n" + session_memory
+		chat_context += "\n会话摘要：\n" + session_memory
 	if event_memory != "":
-		chat_context += "\n事件:\n" + event_memory
+		chat_context += "\n相关事件：\n" + event_memory
 	var built = chat_prompt_template.format({
-		"chat_head": chat_prompt_head.replace("90字", str(min_chars) + "字"),
+		"chat_head": chat_prompt_head,
 		"role_prompt": role_pormt,
 		"background": _clip_text(scene.background, 420),
 		"time": _clip_text(scene.timePrompt, 70),
@@ -135,7 +132,7 @@ func start_chat() -> void:
 	if scene != null and scene.has_method("get_relevant_event_memory_for_npc"):
 		var mem = str(scene.get_relevant_event_memory_for_npc(npcName, npcDescribe)).strip_edges()
 		if mem != "":
-			opener = "结合你已知事件和人物信息，先给一句自然开场回应。"
+			opener = "结合你已知的相关重要事件和人物信息，先给一句自然开场回应。"
 	var prompts = [
 		{"role": "system", "content": build_base_prompt()},
 		{"role": "user", "content": opener}
