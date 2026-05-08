@@ -1,8 +1,0 @@
-{
-	"description": "一位身穿红色马甲的少女，象征虔诚与追随，能恢复少量体力。",
-	"effect_type": "hp_restore",
-	"effect_value": 10,
-	"image_prompt": "A young girl with short hair, wearing a red vest, standing in a simple setting, pure background, no text, chibi style, single item icon, clean lines",
-	"rarity": "uncommon",
-	"value": 150
-}

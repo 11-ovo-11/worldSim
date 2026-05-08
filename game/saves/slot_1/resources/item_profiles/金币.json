@@ -1,8 +1,0 @@
-{
-	"description": "一枚闪闪发光的金币，可在商店兑换各种物品。",
-	"effect_type": "none",
-	"effect_value": 0,
-	"image_prompt": "gold coin, shiny, isolated on white background, simple, no text",
-	"rarity": "uncommon",
-	"value": 100
-}

@@ -45,7 +45,6 @@ var last_crime_event_context: String = ""
 var last_action_input: String = ""
 var last_dialogue_input: String = ""
 var preferred_input_focus: String = "action"
-var chat_session_record_limit: int = 120
 var pending_action_confirm: Dictionary = {}
 var important_event_memories: Array = []
 var current_chat_session_npc: String = ""
@@ -2452,36 +2451,6 @@ func _build_npc_personal_event_summary(plain_text: String, npc_name: String, foc
 		if npc_name == focus_npc:
 			return "我获知传闻：" + _clip_prompt_text(rumor_text, 62)
 		return "相关传闻：" + _clip_prompt_text(rumor_text, 62)
-	if source.find("声望值+") != -1:
-		return "玩家声望上升，我对其态度更积极。"
-	if source.find("声望值-") != -1:
-		return "玩家声望下降，我对其更警惕。"
-	if bool(outcome_flags.get("warned", false)):
-		return "这次结果直接触发了警报、盘查或违规处置，我会把玩家当作高风险对象。"
-	if bool(outcome_flags.get("harmed", false)):
-		return "这次结果里我遭到威逼、欺骗、羞辱或实际伤害，我会记仇并明显提高戒备。"
-	if bool(outcome_flags.get("breached", false)):
-		return "这次结果显示玩家失约、赖账或反悔，我会把他视为不可靠的人。"
-	if bool(outcome_flags.get("rejected", false)):
-		return "这次结果以拒绝、阻拦或驱离收场，我会继续与玩家保持距离。"
-	if bool(outcome_flags.get("protected", false)):
-		return "这次结果里玩家实际保护、救助或照应了我，我会把这件事记得很深。"
-	if bool(outcome_flags.get("cooperated", false)):
-		return "这次结果显示玩家确实与我合作、帮忙或配合，我会更愿意继续往来。"
-	if int(sig.get("trade", 0)) > 0:
-		if bool(outcome_flags.get("accepted", false)):
-			return "这次结果里交易真的谈成了，我会按对方是否守信、是否讲价有度来记住他。"
-		if npc_name == focus_npc:
-			return "我与玩家出现交易往来，我会根据最终成没成交、是否守规矩来重新判断。"
-		return "我相关的交易结果已经发生，我会按照实际得失与风险重新判断玩家。"
-	if int(sig.get("gift", 0)) > 0:
-		if bool(outcome_flags.get("accepted", false)):
-			return "这次结果里我收下了玩家给出的物品，这会明显拉近我对他的看法。"
-		return "我向玩家提供了物品，若对方识趣守分，我会更愿意缓和相处。"
-	if int(sig.get("assist", 0)) > 0:
-		return "我与玩家有实际协作结果，这会明显影响我之后是否继续信任和配合。"
-	if bool(outcome_flags.get("softened", false)):
-		return "这次结果里出现感谢、道歉、赔偿或归还等明确表示，我对玩家的态度会有所松动。"
 	if npc_name == focus_npc:
 		return "我记住了一件会直接影响我对玩家态度的事：" + _clip_prompt_text(source, 56)
 	return "有一件与我相关的事会影响我之后对玩家的判断：" + _clip_prompt_text(source, 56)
@@ -4370,8 +4339,6 @@ func load_game() -> bool:
 			var rec = str(row).strip_edges()
 			if rec != "":
 				current_chat_session_records.append(rec)
-	if current_chat_session_records.size() > chat_session_record_limit:
-		current_chat_session_records = current_chat_session_records.slice(current_chat_session_records.size() - chat_session_record_limit, current_chat_session_records.size())
 	if current_chat_session_npc == "" or !npcs.has(current_chat_session_npc):
 		current_chat_session_npc = ""
 		current_chat_session_records = []
