@@ -2615,20 +2615,6 @@ func _classify_npc_attitude_change(plain_text: String, npc_name: String, focus_n
 		out["summary"] = "这次结果里出现了明显风险或冲突后果，我会更戒备，也更不愿配合。"
 		return out
 	if _contains_any_keyword(source, ["感谢", "帮助", "道歉", "救", "照顾", "安慰", "保护", "体谅", "信任"]):
-		out["attitude"] = "玩家这次待我不差，我会更愿意给他一点善意回应。"
-		out["bond_delta"] = 3
-		out["trust_delta"] = 2
-		out["summary"] = "这次结果里玩家确实帮到、照顾到或安抚了我，我对其好感上升，也更愿意配合。"
-		return out
-	if npc_name == focus_npc:
-		out["attitude"] = "我记住了这次和玩家之间发生的结果，接下来会按这件事来对他。"
-		out["summary"] = "我记下了一件和玩家有关的事，它会影响我之后的态度与说法。"
-	else:
-		out["attitude"] = "我知道最近和玩家有关的一件事，之后会据此调整说话和反应。"
-		out["summary"] = "我知道一件和玩家有关的事，之后会据此判断其态度。"
-	return out
-
-func _build_npc_attitude_state_text(npc_name: String) -> String:
 	if npc_name == "" or !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
 		return ""
 	if !npcs[npc_name].has("important_events") or !(npcs[npc_name]["important_events"] is Array):

@@ -1,8 +1,0 @@
-{
-	"description": "一张写有医生笔迹的处方笺，可用于兑换特定药品。",
-	"effect_type": "none",
-	"effect_value": 0,
-	"image_prompt": "A single piece of medical prescription paper with handwritten notes, isolated on white background, minimal style, no text.",
-	"rarity": "common",
-	"value": 10
-}
