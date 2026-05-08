@@ -1,0 +1,8 @@
+{
+	"description": "一位虔诚追随者的象征物品，蕴含坚定的信仰之力，能抚慰心灵。",
+	"effect_type": "hp_restore",
+	"effect_value": 10,
+	"image_prompt": "A glowing pendant with a cross symbol, surrounded by soft light, in a simple and pure style, no text",
+	"rarity": "uncommon",
+	"value": 50
+}

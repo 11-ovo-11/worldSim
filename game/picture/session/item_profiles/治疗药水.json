@@ -1,0 +1,8 @@
+{
+	"description": "一瓶淡红色药水，能恢复少量生命值。",
+	"effect_type": "hp_restore",
+	"effect_value": 15,
+	"image_prompt": "A small glass bottle filled with red liquid, glowing slightly, isolated on white background, no text, game icon style.",
+	"rarity": "common",
+	"value": 20
+}

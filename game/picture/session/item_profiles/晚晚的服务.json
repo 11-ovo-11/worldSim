@@ -1,0 +1,8 @@
+{
+	"description": "一位名为晚晚的虚拟角色提供的贴心服务，能为您恢复精力与健康。",
+	"effect_type": "both_restore",
+	"effect_value": 15,
+	"image_prompt": "A glowing digital interface showing a warm, abstract female silhouette with healing energy particles, clean dark background, no text",
+	"rarity": "uncommon",
+	"value": 150
+}

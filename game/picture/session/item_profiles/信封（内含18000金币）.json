@@ -1,0 +1,8 @@
+{
+	"description": "一个普通的信封，里面装着大量金币，总价值18000。",
+	"effect_type": "none",
+	"effect_value": 0,
+	"image_prompt": "An envelope with gold coins spilling out, clean background, icon style, no text",
+	"rarity": "rare",
+	"value": 900
+}
