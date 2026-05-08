@@ -9,6 +9,9 @@ func _ready() -> void:
 func _on_button_down() -> void:
 	if scene == null or !scene.npcs.has(npcName):
 		return
+	if scene.has_method("request_npc_switch"):
+		scene.request_npc_switch(npcName)
+		return
 	if scene.has_method("prepare_npc_memory_for_chat"):
 		scene.prepare_npc_memory_for_chat(npcName)
 	var currentNpc = npc.new()

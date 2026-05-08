@@ -3,6 +3,7 @@ extends RichTextLabel
 var expanded: bool = false
 var can_expand: bool = false
 var speed = 30.0
+
 func _ready() -> void:
 	visible_ratio = 0
 	# 检查是否是第一个节点
@@ -10,17 +11,37 @@ func _ready() -> void:
 	if my_index == 0:
 		# 第一个节点可以直接开始展开
 		can_expand = true
+		set_process(true)
 	else:
-		# 其他节点需要等待上一个节点完成
-		can_expand = false
+		# 其他节点延迟检查上一条是否已经完成，避免每帧常驻轮询
+		call_deferred("_deferred_start_check")
+		set_process(false)
+
+func _deferred_start_check() -> void:
+	if expanded:
+		return
+	var prev_node = get_previous_node()
+	if prev_node == null:
+		can_expand = true
+		set_process(true)
+		return
+	if prev_node.visible_ratio >= 1.0:
+		can_expand = true
+		set_process(true)
+		return
+	if prev_node != null:
+		prev_node.connect("tree_exited", Callable(self, "_deferred_start_check"), CONNECT_ONE_SHOT)
+	get_tree().create_timer(0.06).timeout.connect(_deferred_start_check, CONNECT_ONE_SHOT)
 
 func _process(_delta: float) -> void:
 	if expanded:
+		set_process(false)
 		return
 
 	if can_expand:
 		expand()
 		expanded = true
+		set_process(false)
 	else:
 		# 检查上一个节点是否完全展开
 		var prev_node = get_previous_node()
@@ -39,6 +60,10 @@ func get_previous_node() -> Node:
 func expand() -> void:
 	var tween = create_tween()
 	tween.tween_property(self, "visible_ratio", 1.0, float(text.length()) / speed)
+	tween.finished.connect(func():
+		expanded = true
+		set_process(false)
+	)
 
 # 可选：提供一个外部调用的方法来手动触发展开
 func start_expand() -> void:

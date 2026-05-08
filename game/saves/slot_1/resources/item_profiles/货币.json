@@ -1,0 +1,8 @@
+{
+	"description": "一种通用的交换媒介，可在交易中使用以获取商品和服务。轻便易携带。",
+	"effect_type": "none",
+	"effect_value": 0,
+	"image_prompt": "A single golden coin with intricate engravings, shiny metallic surface, isolated on white background, minimalist, no text",
+	"rarity": "common",
+	"value": 10
+}

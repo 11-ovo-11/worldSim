@@ -444,10 +444,17 @@ text = "背包"
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 
-[node name="itemContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/VBoxContainer" unique_id=1792829088]
+[node name="BackpackScroll" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="itemContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer3/ScrollContainer3/HBoxContainer/VBoxContainer/BackpackScroll" unique_id=1792829088]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/separation = 4
 script = ExtResource("7_efxa6")
 
@@ -533,14 +540,13 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
-[node name="DialogueTextEdit" type="TextEdit" parent="mainContainer/HBoxContainer/VBoxContainer/DialogueContainer" unique_id=-1294967294]
+[node name="DialogueTextEdit" type="LineEdit" parent="mainContainer/HBoxContainer/VBoxContainer/DialogueContainer" unique_id=-1294967294]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "对话内容"
-emoji_menu_enabled = false
-wrap_mode = 0
+clear_button_enabled = false
 
 [node name="DialogueButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/DialogueContainer" unique_id=-1294967293]
 unique_name_in_owner = true
@@ -548,13 +554,12 @@ custom_minimum_size = Vector2(80, 32)
 layout_mode = 2
 text = "对话"
 
-[node name="InputTextEdit" type="TextEdit" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=1186997061]
+[node name="InputTextEdit" type="LineEdit" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=1186997061]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 placeholder_text = "输入文本"
-emoji_menu_enabled = false
-wrap_mode = 0
+clear_button_enabled = false
 
 [node name="SendButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/InputTextEdit" unique_id=1783778180]
 unique_name_in_owner = true

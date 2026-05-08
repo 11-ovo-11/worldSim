@@ -8,5 +8,10 @@ func _ready() -> void:
 	if !scene.sites.has(siteName)||!scene.sites[siteName].has("地点描述"):
 		text = text+"\n(未探索)"
 func _on_button_down() -> void:
-	scene.goto(siteName)
+	if scene == null:
+		return
+	if scene.has_method("request_site_switch"):
+		scene.request_site_switch(siteName)
+	else:
+		scene.goto(siteName)
 	pass # Replace with function body.

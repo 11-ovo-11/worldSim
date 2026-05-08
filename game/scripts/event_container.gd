@@ -44,14 +44,14 @@ func _on_yes_button_down() -> void:
 	if event_mode == EventMode.GIFT:
 		scene.add_item(itemToAdd,itemNum)
 		scene.addLog("你接受了" + itemToAdd + "X" + str(itemNum))
+		await close()
 		await scene.on_event_decision("gift", true, str(itemToAdd), int(itemNum), 0)
-		close()
 		return
 	var total_price = itemPrice if is_total_price else itemPrice * itemNum
 	if scene.money < total_price:
 		scene.addLog("<金币不足，无法购买" + itemToAdd + "X" + str(itemNum) + ">")
+		await close()
 		await scene.on_event_decision("deal", false, str(itemToAdd), int(itemNum), total_price)
-		close()
 		return
 	scene.money -= total_price
 	scene.player_update()
@@ -60,8 +60,8 @@ func _on_yes_button_down() -> void:
 	if scene.has_method("update_item_trade_price"):
 		scene.update_item_trade_price(str(itemToAdd), unit_price)
 	scene.addLog("你购买了" + itemToAdd + "X" + str(itemNum) + "，花费" + str(total_price))
+	await close()
 	await scene.on_event_decision("deal", true, str(itemToAdd), int(itemNum), total_price)
-	close()
 	pass # Replace with function body.
 func close():
 	await scene.changeTextTo($Label,"")
@@ -87,9 +87,9 @@ func _on_no_button_down() -> void:
 		await scene.on_event_decision("action_confirm", false, action_text, 1, 0)
 		return
 	var total_price = itemPrice if is_total_price else itemPrice * itemNum
+	await close()
 	if event_mode == EventMode.GIFT:
 		await scene.on_event_decision("gift", false, str(itemToAdd), int(itemNum), 0)
 	else:
 		await scene.on_event_decision("deal", false, str(itemToAdd), int(itemNum), total_price)
-	close()
 	pass # Replace with function body.

@@ -9,6 +9,7 @@ from threading import Lock
 import os 
 import openai
 from openai import OpenAI
+import gc
 from key import key
 from image_key import image_key
 IMAGE_MODE = "cloud"  # 可选 "local" 或 "cloud"
@@ -36,6 +37,9 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL_NAME = "deepseek-v2:16b"
 AGENT_MODEL_NAME = "qwen3:8b"
 chat_mode = "openai"
+CHAT_RESTART_THRESHOLD = int(os.getenv("CHAT_RESTART_THRESHOLD", "300"))
+CHAT_REQUEST_COUNT = 0
+LAST_RUNTIME_RECYCLE_AT = 0.0
 
 # ComfyUI 配置
 #COMFYUI_URL = "https://your-comfyui-api.com"
@@ -45,6 +49,26 @@ chat_mode = "openai"
 # 全局变量，用于缓存工作流和客户端
 workflow_cache = {}
 workflow_lock = Lock()
+
+def _rebuild_openai_client():
+    global clientOpenAI
+    clientOpenAI = OpenAI(
+        api_key=DEEP_SEEK_KEY,
+        base_url="https://api.deepseek.com"
+    )
+
+def _maybe_recycle_runtime(force: bool = False, reason: str = ""):
+    global CHAT_REQUEST_COUNT, LAST_RUNTIME_RECYCLE_AT, workflow_cache
+    if not force and CHAT_REQUEST_COUNT < CHAT_RESTART_THRESHOLD:
+        return False
+    with workflow_lock:
+        workflow_cache.clear()
+    _rebuild_openai_client()
+    gc.collect()
+    LAST_RUNTIME_RECYCLE_AT = time.time()
+    CHAT_REQUEST_COUNT = 0
+    print(f"[RUNTIME_RECYCLE] done reason={reason}, ts={LAST_RUNTIME_RECYCLE_AT}")
+    return True
 
 # 基础工作流模板 - 只定义一次
 BASE_WORKFLOW = {
@@ -124,6 +148,9 @@ def get_cached_workflow():
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    global CHAT_REQUEST_COUNT
+    CHAT_REQUEST_COUNT += 1
+    _maybe_recycle_runtime(False, "chat_threshold")
     user_msg = request.get_json()[0]
     tools = request.get_json()[1]
     output_format = request.get_json()[2]
@@ -468,7 +495,12 @@ def service_status():
         "image_service": image_data,
         "chat_service": chat_data,
         "timestamp": time.time(),
-        "chat_mode": chat_mode
+        "chat_mode": chat_mode,
+        "runtime": {
+            "chat_request_count": CHAT_REQUEST_COUNT,
+            "chat_restart_threshold": CHAT_RESTART_THRESHOLD,
+            "last_runtime_recycle_at": LAST_RUNTIME_RECYCLE_AT
+        }
     })
 
 if __name__ == "__main__":

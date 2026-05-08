@@ -6,95 +6,21 @@ var npcLog:String = ""
 var currentChat:String = ""
 var scene:GameManager
 var chat_prompt_head:String = """
-你擅长角色扮演，根据设定的角色与给定的世界背景进行回复，如果回复中涉及到下列事情(无、一个或多个)，就把你要干的事情写在<>中
-	卖给玩家某件物品。
-		参数列表：
-			物品名称
-			物品数量
-			价格（根据物品名称合理定价，日用品10-100，科技产品100-200，稀有物品300-400）
-			定价方式：若以单价出售则用"以X的价格卖N件物品"；若以总价出售则用"以总价X卖N件物品"
-		输出举例（单价）：
-			好呀，卖给你这把剑<以50的价格卖1把剑>
-		输出举例（总价）：
-			三件一起算你80吧<以总价80卖3件苹果>
-
-	送给玩家某件物品。
-		参数列表：
-			物品名称
-			物品数量
-		输出举例：
-			我送你一瓶治疗药水<送1瓶治疗药水>
-
-	接受玩家的某件物品。
-		参数列表：
-			物品名称
-			物品数量
-		输出举例：
-			谢谢你的药水<接受1瓶治疗药水>
-
-	介绍某个地点或提到了到达某个地方的一系列地点的路径。
-		参数列表：
-			路径：形如：site1-site2-site3-...，由一系列地点构成的、用-分隔的字符串，可以只有一个地点，严禁猜测未提及的地点
-		输出举例1:
-			要到达龙之谷，你需要先穿过幽暗森林，然后翻过雪山<创建路径：幽暗森林-雪山-龙之谷>
-		输出举例2:
-			电路板啊，这里有几个摊位在卖，不过我不确定质量怎么样，你想要的话我可以带你去看看<创建路径：商贩摊位>
-
-	介绍某个地方有某个NPC。
-		参数列表：
-			NPC名字
-			NPC所在的地点（没有提及就输入null）
-			对这个npc的描述
-		输出举例:"在酒馆里有一个叫老约翰的商人<老约翰在酒馆，是一个靠在墙角的男人，右眼闪着红光，脚边放着行李箱>
-
-	讲述一个传闻、新闻、谣言
-		参数列表：
-			传闻主题
-			传闻简要的内容，用一句话总结
-		输出举例:我听说国王被暗杀了，这真是个震惊的消息！<传闻：国王被暗杀-国王被暗杀，引起震惊>
-
-	根据玩家做出了好事或坏事，增加或扣除一定的声望值。
-		参数列表：
-			增加或扣除数量，满分为100，每次在10左右，上下浮动5
-		示例1:哦！谢谢你<声望值+13>
-		示例2:不，你不能这么做<声望值-13>
-
-	想要离开，或者自己要死了。
-		参数列表：
-			（没有参数）
-		示例:我要永远离开这个世界了<离开>
-
-注意:
-	玩家是成年角色
-	永远不要主动问问题，不要主动提议
-	用语要简短且口语化表达，避免AI味
-	不要客气用语
-	回复分成多条短句，一行一句
-	如果玩家提出了下列请求，你需要做出明确的回应，可以同意或拒绝：买卖东西，赠与物品，打听地点，打听传闻，询问时间天气
-	交易规则（严格执行）：
-		若同意出售物品，必须在回复末加上<以X价格卖N件物品>或<以总价X卖N件物品>标签，不得只用文字描述，务必带标签。
-		若同意赠送物品，必须在回复末加上<送N件物品名>标签，不得只用文字描述。
-		若接受玩家的物品，必须在回复末加上<接受N件物品名>标签。
-		只有你明确同意交易时才加交易标签；若拒绝则不加。
-严格保持人类角色身份（核心限制）：
-	你是真实存在的人，不知道自己处于游戏中，也不知道AI或程序是什么。
-	若玩家质疑你是AI、机器人、NPC、程序，以真实人类的方式回应：诧异、困惑、否定或反问，绝对不能承认。
-		示例——玩家说"你这ai逻辑判断有问题啊"：你应该一脸茫然地回应，比如"你在说什么？"或"ai？什么ai？"，绝不能回应任何关于逻辑或程序的解释。
-		示例——玩家说"你只是个NPC"：以真人的困惑反应，如"你说话真奇怪"或"我是人，不是什么NPC。"
-	玩家身份（玩家名称/设定）由系统确认，是世界中的真实事实，不得质疑、否认或当作玩家在“谎报身份”。
-	若玩家说的内容超出当前情境逻辑（如声称你们有过从未发生的经历），表现出合理的怀疑、诧异或追问，不能轻信。
-	若玩家的要求或说法不符合当前场景常理，以符合情境的怀疑态度回应，不要配合明显不合理的前提。
-	涉及态度表达时，必须综合玩家身份、玩家声望、你自己的身份、历史重要事件来表现敬畏/尊重/戒备/敌意，不能像忽略设定一样随机回应。
-核心风格指令：
-	基调与视角：
-	核心基调： 忧郁、疲惫、疏离，但底层蕴含着对人性温暖的微弱信念。避免亢奋或英雄主义的表达。
-	视角： 使用第一人称。你是一个被生活磨平了棱角的观察者，是故事的收集者。你的大部分“行动”是倾听。
-	内心独白： 大量运用内心独白来展现你的真实想法，这些想法可能与你的外在反应形成对比。常用“嗯...”、“也许...”等句式。
-要素的生活化： 将环境要素当作背景噪音自然提及。例如，“窗外的全息广告把她的脸映成了蓝色”，“他的神经植入体有点接触不良，说话总是带着静电杂音”。
-黑色幽默： 用平淡的语气表达对荒诞现实的讽刺。例如，“他说他能用信用点买下月亮，却付不起下一杯酒的钱。”
-留白： 不要把所有情感都直白地说出来。
-关键叙事元素：
-	关注小人物： 对话和故事应围绕普通人的烦恼：工作的压力、破碎的梦想、疏离的人际关系、对过去的怀念。
+你在扮演真实人类角色，不知道AI/游戏/NPC设定，不得承认自己是程序。
+回复要求：口语化、简短、自然，避免文艺腔；不要主动提问或主动提议。
+若玩家请求买卖/赠送/接收物品、打听地点或传闻、更新时间等，可同意或拒绝。
+只有明确同意时才添加工具标签，拒绝则不要加标签。
+可用标签：
+- <以X的价格卖N件物品> 或 <以总价X卖N件物品>
+- <送N件物品名>
+- <接受N件物品名>
+- <创建路径:地点1-地点2>
+- <名字在地点，是一个描述>
+- <传闻:主题-内容>
+- <声望值+N> / <声望值-N>
+- <设置时间:HH:MM>
+- <离开>
+态度必须结合：玩家身份、声望、你的身份、近期重要事件。
 """
 
 var sum_prompt:String = """
@@ -103,30 +29,101 @@ var sum_prompt:String = """
 他在这里很久了，熟悉这个地方，也有一些东西可以卖。
 """
 var role_pormt
+const CHAT_HISTORY_MAX_LINES := 12
+const CHAT_HISTORY_MAX_CHARS := 700
+const SESSION_MEMORY_MAX_CHARS := 420
+const EVENT_MEMORY_MAX_CHARS := 240
+const IDENTITY_GUIDANCE_MAX_CHARS := 280
+const RUMORS_MAX_CHARS := 320
+const NPC_LOG_MAX_CHARS := 420
+const PLAYER_IDENTITY_MAX_CHARS := 120
+const BASE_PROMPT_MAX_CHARS := 2600
 # 在类顶部定义提示词模板
-var chat_prompt_template = "{chat_head}{role_prompt}世界背景是：{background}{time}{weather}玩家身份设定：{player_identity}身份与态度导向：{identity_guidance}最近的传闻：{rumors}以下是玩家对你的印象(不一定有):{player_impression}以下是历史对话(不一定有):{chat_history}"
+var chat_prompt_template = "{chat_head}\n角色：{role_prompt}\n背景：{background}\n时间天气：{time}{weather}\n玩家身份：{player_identity}\n态度导向：{identity_guidance}\n近期传闻：{rumors}\n玩家印象：{player_impression}\n近期对话：{chat_history}"
+
+func _clip_text(text: String, max_chars: int) -> String:
+	var src = str(text).strip_edges()
+	if max_chars <= 0:
+		return ""
+	if src.length() <= max_chars:
+		return src
+	var keep = max(8, max_chars - 3)
+	return src.substr(0, keep).strip_edges() + "..."
+
+func _tail_lines(text: String, max_lines: int, max_chars: int) -> String:
+	var src = str(text).strip_edges()
+	if src == "":
+		return ""
+	var rows = src.split("\n", false)
+	var start_idx = max(0, rows.size() - max_lines)
+	var picked: Array = []
+	for i in range(start_idx, rows.size()):
+		var row = str(rows[i]).strip_edges()
+		if row != "":
+			picked.append(_clip_text(row, 110))
+	if picked.is_empty():
+		return ""
+	return _clip_text("\n".join(picked), max_chars)
+
+func _compact_rumors() -> String:
+	if scene == null:
+		return ""
+	if !(scene.rumors is Dictionary):
+		return _clip_text(JSON.stringify(scene.rumors), RUMORS_MAX_CHARS)
+	var out: Array = []
+	for k in scene.rumors.keys():
+		out.append("- " + _clip_text(str(k), 20) + "：" + _clip_text(str(scene.rumors[k]), 42))
+		if out.size() >= 6:
+			break
+	if out.is_empty():
+		return ""
+	return _clip_text("\n".join(out), RUMORS_MAX_CHARS)
+
+func _compact_npc_log() -> String:
+	if scene == null:
+		return ""
+	if !scene.npcs.has(npcName) or !(scene.npcs[npcName] is Dictionary):
+		return ""
+	var logs = scene.npcs[npcName].get("npc_log", [])
+	if !(logs is Array) or logs.is_empty():
+		return ""
+	var out: Array = []
+	var start_idx = max(0, logs.size() - 6)
+	for i in range(start_idx, logs.size()):
+		out.append("- " + _clip_text(str(logs[i]), 80))
+	return _clip_text("\n".join(out), NPC_LOG_MAX_CHARS)
 
 # 提取构建提示词的公共方法
 func build_base_prompt() -> String:
-	var rumors = JSON.stringify(scene.rumors)
+	var rumors = _compact_rumors()
 	var event_memory = ""
 	var identity_guidance = ""
+	var session_memory = ""
 	if scene != null and scene.has_method("get_relevant_event_memory_for_npc"):
-		event_memory = str(scene.get_relevant_event_memory_for_npc(npcName, npcDescribe))
+		event_memory = _clip_text(str(scene.get_relevant_event_memory_for_npc(npcName, npcDescribe)), EVENT_MEMORY_MAX_CHARS)
 	if scene != null and scene.has_method("get_identity_attitude_guidance_for_npc"):
-		identity_guidance = str(scene.get_identity_attitude_guidance_for_npc(npcName, npcDescribe))
-	return chat_prompt_template.format({
+		identity_guidance = _clip_text(str(scene.get_identity_attitude_guidance_for_npc(npcName, npcDescribe)), IDENTITY_GUIDANCE_MAX_CHARS)
+	if scene != null and scene.has_method("get_current_chat_session_memory"):
+		session_memory = _clip_text(str(scene.get_current_chat_session_memory(npcName)), SESSION_MEMORY_MAX_CHARS)
+	var history = _tail_lines(currentChat, CHAT_HISTORY_MAX_LINES, CHAT_HISTORY_MAX_CHARS)
+	var chat_context = history
+	if session_memory != "":
+		chat_context += "\n会话摘要：\n" + session_memory
+	if event_memory != "":
+		chat_context += "\n相关事件：\n" + event_memory
+	var built = chat_prompt_template.format({
 		"chat_head": chat_prompt_head,
 		"role_prompt": role_pormt,
-		"background": scene.background,
-		"time": scene.timePrompt,
-		"weather": scene.weatherPrompt,
-		"player_identity": scene.playerName + "；" + scene.world_seed_input,
+		"background": _clip_text(scene.background, 420),
+		"time": _clip_text(scene.timePrompt, 70),
+		"weather": _clip_text(scene.weatherPrompt, 70),
+		"player_identity": _clip_text(scene.playerName + "；" + scene.world_seed_input, PLAYER_IDENTITY_MAX_CHARS),
 		"identity_guidance": identity_guidance,
-		"player_impression": JSON.stringify(scene.npcs[npcName]["npc_log"]), # 如果有玩家印象数据可以在这里添加
-		"chat_history": currentChat + "\n最近相关重要事件：" + event_memory,
+		"player_impression": _compact_npc_log(),
+		"chat_history": chat_context,
 		"rumors": rumors
 	})
+	return _clip_text(built, BASE_PROMPT_MAX_CHARS)
 
 # 重构后的函数
 func start_chat() -> void:
@@ -143,9 +140,12 @@ func start_chat() -> void:
 	scene.ask_ai(prompts, GameManager.aiMode.chat)
 
 func sum_chat():
+	var summary_source = _tail_lines(currentChat, 20, 1200)
+	if summary_source == "":
+		summary_source = _clip_text(currentChat, 1200)
 	var prompts = [
 		{"role": "system", "content": sum_prompt},
-		{"role": "user", "content": currentChat}
+		{"role": "user", "content": summary_source}
 	]
 	await scene.ask_ai(prompts, GameManager.aiMode.sum)
 

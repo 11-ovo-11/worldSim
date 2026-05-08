@@ -44,12 +44,30 @@ var event_flow_lock: bool = false
 var last_crime_event_context: String = ""
 var last_action_input: String = ""
 var last_dialogue_input: String = ""
+var preferred_input_focus: String = "action"
+var chat_session_record_limit: int = 80
 var pending_action_confirm: Dictionary = {}
 var important_event_memories: Array = []
+var current_chat_session_npc: String = ""
+var current_chat_session_records: Array = []
 var pending_explore_target: String = ""
 var explore_route_retry_count: int = 0
 var bg_debug_enabled: bool = true
 var has_saved_in_session: bool = false
+var dead_npc_names: Array = []
+var output_mode: String = "performance"
+var efficient_mode_min_chars: int = 100
+var action_narration_min_chars: int = 60
+var prompt_session_memory_max_lines: int = 16
+var prompt_session_memory_max_chars: int = 1200
+var prompt_action_context_max_chars: int = 2200
+var output_mode_debug_enabled: bool = false
+var efficient_mode_button: Button
+var performance_mode_button: Button
+var output_mode_group := ButtonGroup.new()
+var min_chars_dialog: AcceptDialog
+var min_chars_spin: SpinBox
+var img_watchdog_seq: int = 0
 
 # 游戏数据
 var sites: Dictionary
@@ -89,6 +107,8 @@ var role_prompt = """
 1) 不得默认使用赛博朋克、机器人、义体、飞船、未来军武等元素。
 2) 只有当用户设定或世界观明确提及这些元素时，才允许出现。
 3) 若用户设定偏现代日常（如大学校园、城市、普通职业），场景与NPC必须保持对应的现代现实风格（大学设定要有大学生氛围和面貌，而不是中学）。
+4) 若时代设定明确（如古代、近现代、科幻、奇幻），地点命名、建筑细节、职业称谓、NPC外观必须优先匹配该时代；除非明确有“穿越/多世界桥接”，不得混入其他时代元素。
+5) 若设定出现“奴隶制/封建/王朝”等社会结构，要在地点与NPC信息里体现等级关系与社会分工，不能弱化成中性模板。
 
 根据用户想去的地点，严格输出有效 JSON，包含：
 1. 地点名称
@@ -132,7 +152,10 @@ var validation_feedback_prompt:String = """
 """
 
 var action_prompt:String = """
-你是文字游戏的世界叙述者。玩家进行了一个行动，请根据世界背景与当前玩家数据，用一句简短中文（15~50字）叙述自然结果。
+你是文字游戏的世界叙述者。玩家进行了一个行动，请根据世界背景与当前玩家数据，输出细节充分、自然连贯的中文叙述。
+叙述尽量精炼，通常1~3句，建议45~90字（确实应简短的失败反馈可更短）。
+表达风格要求：尽量直接、清楚、口语化，少用抒情环境描写；除非必要，不要写大段人物台词。
+重点写清“做了什么、是否成功、造成了什么变化（资产/物品/地点/NPC态度）”。
 你必须先判断是否符合常理与数据（资产、背包、数量、地点关系、角色身份与当前场景）。
 玩家身份（玩家名称/设定）由系统确认，为当前世界中的真实事实，不得质疑、否认或重置为普通人设。
 涉及NPC反应时，必须综合玩家身份、玩家声望、当前NPC身份、历史重要事件来给出态度（敬畏/尊重/戒备/敌意等），不能与设定脱节。
@@ -152,13 +175,17 @@ var action_prompt:String = """
 10) 违规行为：<犯罪：偷窃>
 11) 前往地点（行动是去某处且判断可成功到达时）：<前往:地点名>
 
-仅输出一句叙述文本，工具指令以<>附加在句末，不要解释。
+工具指令以<>附加在句末，不要解释。
 """
 
 var ai_busy: bool = false
 var _text_update_seq: int = 0
 var _active_text_tweens: Dictionary = {}
-var lock_debug_enabled: bool = true
+var lock_debug_enabled: bool = false
+const LOG_LABEL_SCENE := preload("res://fabs/log_rich_text_label.tscn")
+var max_visible_logs: int = 180
+var _process_strip_regex := RegEx.new()
+var _process_newline_regex := RegEx.new()
 
 func _log_lock_state(tag: String) -> void:
 	if !lock_debug_enabled:
@@ -169,11 +196,13 @@ func _log_lock_state(tag: String) -> void:
 
 # ==================== 生命周期函数 ====================
 func _ready():
+	_ensure_process_regex_ready()
 	send_button.connect("pressed", _on_send_button_pressed)
 	dialogue_button.connect("pressed", _on_dialogue_button_pressed)
 	save_button.connect("pressed", save_game)
 	load_button.connect("pressed", load_game)
 	if %npcIcon is Control:
+		%npcIcon.custom_minimum_size.x = 0
 		(%npcIcon as Control).mouse_filter = Control.MOUSE_FILTER_STOP
 		(%npcIcon as Control).gui_input.connect(_on_npc_icon_gui_input)
 	_prepare_session_resource_dir()
@@ -187,6 +216,73 @@ func _ready():
 	changeTextTo(%siteName, "未定位")
 	player_update()
 	_apply_interaction_locks()
+	call_deferred("_focus_active_input")
+
+func _setup_output_mode_controls() -> void:
+	if response_label == null:
+		return
+	var parent_node = response_label.get_parent()
+	if parent_node == null:
+		return
+	var mode_row = HBoxContainer.new()
+	mode_row.name = "OutputModeRow"
+	mode_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mode_row.alignment = BoxContainer.ALIGNMENT_END
+	performance_mode_button = Button.new()
+	performance_mode_button.text = "性能模式"
+	performance_mode_button.toggle_mode = true
+	performance_mode_button.button_group = output_mode_group
+	performance_mode_button.button_pressed = true
+	performance_mode_button.pressed.connect(func(): _set_output_mode("performance"))
+	efficient_mode_button = Button.new()
+	efficient_mode_button.text = "高效模式"
+	efficient_mode_button.toggle_mode = true
+	efficient_mode_button.button_group = output_mode_group
+	efficient_mode_button.pressed.connect(func(): _set_output_mode("efficient"))
+	efficient_mode_button.gui_input.connect(_on_efficient_mode_button_gui_input)
+	mode_row.add_child(performance_mode_button)
+	mode_row.add_child(efficient_mode_button)
+	parent_node.add_child(mode_row)
+	parent_node.move_child(mode_row, response_label.get_index())
+	min_chars_dialog = AcceptDialog.new()
+	min_chars_dialog.title = "设置高效模式最小字数"
+	var box = VBoxContainer.new()
+	var tip = Label.new()
+	tip.text = "最小输出字数"
+	min_chars_spin = SpinBox.new()
+	min_chars_spin.min_value = 40
+	min_chars_spin.max_value = 2000
+	min_chars_spin.step = 10
+	min_chars_spin.value = efficient_mode_min_chars
+	box.add_child(tip)
+	box.add_child(min_chars_spin)
+	min_chars_dialog.add_child(box)
+	add_child(min_chars_dialog)
+	min_chars_dialog.confirmed.connect(_on_min_chars_dialog_confirmed)
+
+func _set_output_mode(mode_name: String) -> void:
+	if mode_name != "efficient":
+		output_mode = "performance"
+		if performance_mode_button != null:
+			performance_mode_button.button_pressed = true
+		return
+	output_mode = "efficient"
+	if efficient_mode_button != null:
+		efficient_mode_button.button_pressed = true
+
+func _on_efficient_mode_button_gui_input(event: InputEvent) -> void:
+	if !(event is InputEventMouseButton):
+		return
+	var mb = event as InputEventMouseButton
+	if mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed and min_chars_dialog != null:
+		if min_chars_spin != null:
+			min_chars_spin.value = efficient_mode_min_chars
+		min_chars_dialog.popup_centered(Vector2i(320, 120))
+
+func _on_min_chars_dialog_confirmed() -> void:
+	if min_chars_spin == null:
+		return
+	efficient_mode_min_chars = clamp(int(min_chars_spin.value), 40, 2000)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
@@ -205,8 +301,11 @@ func _input(event):
 # ==================== 游戏状态管理 ====================
 func changeStateInto(stateToChange: worldState):
 	if currentState == worldState.chat:
+		var switching_npc = stateToChange == worldState.chat and currentNpc != null and newNpc != null and str(currentNpc.npcName) != str(newNpc.npcName)
 		changeTextTo(response_label, "你结束了与" + currentNpc.npcName + "的对话。", 100)
 		await currentNpc.sum_chat()
+		if stateToChange != worldState.chat or switching_npc:
+			_end_chat_session()
 
 	match stateToChange:
 		worldState.chat:
@@ -214,6 +313,7 @@ func changeStateInto(stateToChange: worldState):
 			if currentNpc != null:
 				currentNpc.queue_free()
 			currentNpc = newNpc
+			_start_chat_session(str(currentNpc.npcName))
 			currentNpc.start_chat()
 			changeTextTo(response_label, "你走近了" + currentNpc.npcName, 100)
 			changeTextTo(%speakerNameLabel, playerName, 100)
@@ -228,6 +328,7 @@ func changeStateInto(stateToChange: worldState):
 	
 	currentState = stateToChange
 	refresh_interaction_locks()
+	call_deferred("_focus_active_input")
 
 func _force_exit_chat_runtime() -> void:
 	if currentNpc != null and is_instance_valid(currentNpc):
@@ -242,9 +343,70 @@ func _force_exit_chat_runtime() -> void:
 	last_dialogue_input = ""
 	last_action_input = ""
 	last_crime_event_context = ""
+	_end_chat_session()
 	clear_children(%event)
 	_set_event_flow_lock(false)
 	refresh_interaction_locks()
+
+func _start_chat_session(npc_name: String) -> void:
+	var n = npc_name.strip_edges()
+	if n == "":
+		current_chat_session_npc = ""
+		current_chat_session_records = []
+		return
+	if current_chat_session_npc != n:
+		current_chat_session_npc = n
+		current_chat_session_records = []
+
+func _end_chat_session() -> void:
+	current_chat_session_npc = ""
+	current_chat_session_records = []
+
+func _record_current_chat_session(kind: String, speaker: String, text: String) -> void:
+	if currentState != worldState.chat or currentNpc == null:
+		return
+	var current_name = str(currentNpc.npcName).strip_edges()
+	if current_name == "":
+		return
+	if current_chat_session_npc == "":
+		_start_chat_session(current_name)
+	if current_chat_session_npc != current_name:
+		return
+	var plain = process_string(str(text)).strip_edges()
+	if plain == "":
+		return
+	var rec = "[" + kind + "]" + speaker + "：" + plain
+	if !current_chat_session_records.is_empty() and str(current_chat_session_records[current_chat_session_records.size() - 1]) == rec:
+		return
+	current_chat_session_records.append(rec)
+	if current_chat_session_records.size() > chat_session_record_limit:
+		current_chat_session_records = current_chat_session_records.slice(current_chat_session_records.size() - chat_session_record_limit, current_chat_session_records.size())
+
+func get_current_chat_session_memory(npc_name: String = "") -> String:
+	var target_name = npc_name.strip_edges()
+	if target_name != "" and target_name != current_chat_session_npc:
+		return ""
+	if current_chat_session_records.is_empty():
+		return ""
+	var lines: Array = []
+	var start_idx = max(0, current_chat_session_records.size() - prompt_session_memory_max_lines)
+	for i in range(start_idx, current_chat_session_records.size()):
+		var row_text = str(current_chat_session_records[i]).strip_edges()
+		if row_text == "":
+			continue
+		lines.append("- " + _clip_prompt_text(row_text, 110))
+	if lines.is_empty():
+		return ""
+	return _clip_prompt_text("\n".join(lines), prompt_session_memory_max_chars)
+
+func _clip_prompt_text(text: String, max_chars: int) -> String:
+	var src = str(text).strip_edges()
+	if max_chars <= 0:
+		return ""
+	if src.length() <= max_chars:
+		return src
+	var keep = max(8, max_chars - 3)
+	return src.substr(0, keep).strip_edges() + "..."
 
 func _clear_all_npc_dialogue_memory() -> void:
 	for npc_name in npcs.keys():
@@ -270,14 +432,18 @@ func _build_scene_image_prompt(site_name: String, site_data: Dictionary) -> Stri
 	var english_prompt = str(site_data.get("英文描述", "")).strip_edges()
 	var cn_desc = str(site_data.get("地点描述", "")).strip_edges()
 	var world_hint = background.strip_edges()
+	var style_sig = _detect_setting_style_signals()
+	var style_guard = _build_setting_consistency_guard_text(style_sig)
 	var location_hint = _build_location_visual_hint(site_name, cn_desc)
 	var desc_anchor = _build_cn_desc_visual_anchor(cn_desc)
 	var prompt_parts: Array = [
-		"cinematic realistic campus environment",
+		"cinematic environment faithful to world setting",
 		"daylight natural color",
 		"no text, no watermark",
 		"location:" + site_name
 	]
+	if style_guard != "":
+		prompt_parts.append("style guard: " + style_guard)
 	if world_hint != "":
 		prompt_parts.append("world context: " + world_hint.left(120))
 	if location_hint != "":
@@ -297,29 +463,34 @@ func _build_scene_image_prompt(site_name: String, site_data: Dictionary) -> Stri
 	if site_data.has("npc") and site_data["npc"] is Dictionary:
 		var npc_keys = (site_data["npc"] as Dictionary).keys()
 		if !npc_keys.is_empty():
-			prompt_parts.append("people style: modern Chinese university students and staff")
+			if bool(style_sig.get("ancient", false)) and !bool(style_sig.get("bridge", false)):
+				prompt_parts.append("people style: pre-modern attire and social hierarchy")
+			elif bool(style_sig.get("scifi", false)) or bool(style_sig.get("cyber", false)):
+				prompt_parts.append("people style: futuristic inhabitants consistent with lore")
+			else:
+				prompt_parts.append("people style: inhabitants fitting current world setting")
 	if cn_desc != "":
 		prompt_parts.append("keep architecture, facilities and props strictly aligned with narrative anchor")
-	prompt_parts.append("strictly match this location, do not depict other campus areas")
+	prompt_parts.append("strictly match this location and world era, avoid cross-era contamination")
 	return ", ".join(prompt_parts)
 
 func _build_location_visual_hint(site_name: String, cn_desc: String) -> String:
 	var merged = (site_name + " " + cn_desc).strip_edges()
 	if merged.find("食堂") != -1:
-		return "indoor university cafeteria, serving counters, trays, dining tables, students eating and chatting"
+		return "communal dining hall, food counters, tables, era-consistent props"
 	if merged.find("图书馆") != -1:
-		return "university library interior, bookshelves, reading desks, study lamps, quiet atmosphere"
+		return "library interior, bookshelves, reading area, quiet atmosphere"
 	if merged.find("宿舍") != -1:
-		return "student dormitory area, corridor doors, parcel boxes, daily-life details"
+		return "residential quarters, corridor doors, daily-life details matching era"
 	if merged.find("操场") != -1 or merged.find("体育") != -1:
-		return "campus playground and running track, sports field, students training outdoors"
+		return "training ground or sports field, open area with active movement"
 	if merged.find("教室") != -1 or merged.find("教学楼") != -1:
-		return "teaching building interior, classroom desks, blackboard, corridor perspective"
+		return "learning hall interior, teaching space, era-appropriate furniture"
 	if merged.find("超市") != -1 or merged.find("小卖部") != -1:
-		return "campus convenience store, shelves full of goods, checkout counter"
+		return "general goods shop or market stall, goods display aligned with era"
 	if merged.find("校门") != -1:
-		return "university main gate, campus sign, pedestrians entering and leaving"
-	return "modern Chinese university campus architecture consistent with the location"
+		return "main gate area, checkpoints and passers-by matching setting"
+	return "architecture and props consistent with current world setting and era"
 
 func _build_cn_desc_visual_anchor(cn_desc: String) -> String:
 	var desc = cn_desc.strip_edges()
@@ -340,7 +511,16 @@ func _build_cn_desc_visual_anchor(cn_desc: String) -> String:
 		"教学楼": "teaching building corridor",
 		"教室": "classroom interior",
 		"超市": "convenience store shelves",
-		"小卖部": "small campus store"
+		"小卖部": "small general goods shop",
+		"王宫": "royal palace complex",
+		"宫殿": "palace interior and court symbols",
+		"城墙": "city wall and gate defense",
+		"铁匠": "blacksmith forge and anvils",
+		"集市": "open market stalls",
+		"奴隶": "servitude marks and social hierarchy",
+		"庄园": "manor estate structure",
+		"神殿": "temple architecture",
+		"蒸汽": "steam machinery pipes and brass structure"
 	}
 	var anchors: Array = []
 	for key in keyword_map.keys():
@@ -355,20 +535,46 @@ func _build_location_fallback_description(location_name: String, from_site_name:
 	if n == "":
 		return "你来到了一处新的地点。"
 	if n.find("食堂") != -1:
-		return "你来到" + n + "。窗口前排着学生，空气里混着热饭和汤面的香气，桌椅间人声不断。"
+		return "你来到" + n + "。热气和饭香交织，来往的人声让这里显得忙碌而真实。"
 	if n.find("图书馆") != -1:
-		return "你来到" + n + "。高书架与自习区被柔和灯光照亮，四周安静，只能听见翻页和敲键盘声。"
+		return "你来到" + n + "。高书架与阅读区安静有序，空气里只有轻微翻页声。"
 	if n.find("宿舍") != -1:
-		return "你来到" + n + "。走廊里偶尔有人经过，门口堆着快递箱，生活气息很浓。"
+		return "你来到" + n + "。居住区的走廊延伸开来，生活痕迹随处可见。"
 	if n.find("操场") != -1 or n.find("体育") != -1:
-		return "你来到" + n + "。跑道和球场上有人训练，风里带着草地和塑胶跑道的味道。"
+		return "你来到" + n + "。开阔场地上有人训练，风里带着土石与草木气息。"
 	if n.find("教室") != -1 or n.find("教学楼") != -1:
-		return "你来到" + n + "。教室里散着粉笔和纸张气味，走廊尽头传来断续的讨论声。"
+		return "你来到" + n + "。讲学与讨论的痕迹还留在空气里，四周带着秩序感。"
 	if n.find("超市") != -1 or n.find("小卖部") != -1:
-		return "你来到" + n + "。货架摆得很满，收银台前有人结账，灯光明亮而紧凑。"
+		return "你来到" + n + "。铺面里货物陈列紧凑，交易声此起彼伏。"
 	if from_site_name.strip_edges() != "":
 		return "你来到" + n + "。这里与" + from_site_name + "相连，环境细节逐渐清晰起来。"
-	return "你来到" + n + "。周围的布局和气氛有了明显变化，这里看起来是校园中可进一步探索的区域。"
+	return "你来到" + n + "。周围布局和气氛有了明显变化，这里看起来是可继续探索的区域。"
+
+func _detect_setting_style_signals() -> Dictionary:
+	var t = (world_seed_input + " " + background).strip_edges()
+	return {
+		"ancient": _contains_any_keyword(t, ["古代", "王朝", "朝廷", "封建", "奴隶制", "王国", "帝国", "城邦"]),
+		"modern": _contains_any_keyword(t, ["现代", "当代", "校园", "大学", "城市", "公司", "地铁", "工业化"]),
+		"scifi": _contains_any_keyword(t, ["科幻", "未来", "太空", "星际", "机甲", "机器人", "空间站"]),
+		"cyber": _contains_any_keyword(t, ["赛博", "义体", "霓虹", "黑客", "芯片植入"]),
+		"fantasy": _contains_any_keyword(t, ["魔法", "精灵", "神殿", "巫师", "异界", "巨龙"]),
+		"slavery": _contains_any_keyword(t, ["奴隶制", "奴隶主", "奴隶", "庄园主"]),
+		"bridge": _contains_any_keyword(t, ["穿越", "平行宇宙", "时空", "多元宇宙", "异世界桥接"])
+	}
+
+func _build_setting_consistency_guard_text(sig: Dictionary) -> String:
+	var lines: Array = []
+	if bool(sig.get("ancient", false)) and !bool(sig.get("bridge", false)):
+		lines.append("ancient pre-industrial era only; forbid modern campus, cyberpunk neon, futuristic tech")
+	if bool(sig.get("slavery", false)):
+		lines.append("highlight hierarchical social structure and slave-based roles")
+	if bool(sig.get("modern", false)) and !bool(sig.get("bridge", false)) and !bool(sig.get("scifi", false)):
+		lines.append("modern realistic style; avoid ancient court language and sci-fi facilities")
+	if bool(sig.get("scifi", false)) or bool(sig.get("cyber", false)):
+		lines.append("futuristic sci-fi style allowed only when stated in world setting")
+	if bool(sig.get("fantasy", false)) and !bool(sig.get("bridge", false)):
+		lines.append("fantasy motif only; avoid modern institutional style")
+	return "; ".join(lines)
 
 func _extract_route_candidates_from_site_json(json_dic: Dictionary) -> Array:
 	var route_keys = ["能前往的地点", "可前往地点", "可前往的地点", "前往地点", "可去地点", "可到达地点", "邻近地点", "连接地点"]
@@ -555,9 +761,14 @@ func site_update(show_description: bool = true, unlock_after: bool = true, add_a
 		%site_buttons.add_child(new_site_button)
 
 	for i in site_data.get("npc", {}):
+		if dead_npc_names.has(i):
+			continue
 		if i not in npcs:
-			npcs[i] = {}
-			npcs[i]["特征"] = ""
+			npcs[i] = {"npc_log": [], "特征": "", "important_events": []}
+		if !npcs[i].has("npc_log") or !(npcs[i]["npc_log"] is Array):
+			npcs[i]["npc_log"] = []
+		if !npcs[i].has("important_events") or !(npcs[i]["important_events"] is Array):
+			npcs[i]["important_events"] = []
 		npcs[i]["npc_describe"] = site_data.get("npc", {}).get(i, "")
 		var new_npc_button = load("res://fabs/npc_button.tscn").instantiate() as npcButton
 		new_npc_button.npcName = i
@@ -714,12 +925,13 @@ var tools = [
 func ask_ai(message: Array, askmode: aiMode):
 	currentMode = askmode
 	set_ai_busy(true)
-	var body = [message,null,"text"]
+	var outbound_messages = _decorate_messages_for_output_mode(message, askmode)
+	var body = [outbound_messages,null,"text"]
 	match askmode:
 		aiMode.tools:
-			body = [message,tools,"text"]
+			body = [outbound_messages,tools,"text"]
 		aiMode.explore:
-			body = [message,null,"json_object"]
+			body = [outbound_messages,null,"json_object"]
 	var url = chat_url
 	var json_string = JSON.stringify(body)
 	if http_request.get_http_client_status() == HTTPClient.STATUS_REQUESTING:
@@ -746,6 +958,188 @@ func ask_ai(message: Array, askmode: aiMode):
 		set_ai_busy(false)
 		return
 	await $HTTPRequest.request_completed
+
+func _decorate_messages_for_output_mode(message: Array, askmode: aiMode) -> Array:
+	if output_mode != "efficient":
+		return message
+	if askmode != aiMode.chat and askmode != aiMode.action:
+		return message
+	var copied = message.duplicate(true)
+	var constraint = "输出要求：本次回复最少" + str(efficient_mode_min_chars) + "字，信息完整、自然，不要省略关键细节。"
+	copied.push_front({"role":"system", "content": constraint})
+	return copied
+
+func _output_mode_debug(msg: String) -> void:
+	if !output_mode_debug_enabled:
+		return
+	print("[OUTPUT_MODE_DEBUG] " + msg)
+
+func _tail_preview(text: String, max_chars: int = 48) -> String:
+	var src = str(text)
+	if src.length() <= max_chars:
+		return src
+	return src.substr(src.length() - max_chars, max_chars)
+
+func _build_mode_consistent_extensions(base_text: String, askmode: aiMode) -> Array:
+	var plain = _strip_angle_tags(base_text).strip_edges()
+	if plain == "":
+		return []
+	var has_first_person = plain.find("我") != -1
+	var has_second_person = plain.find("你") != -1
+	var has_dialogue_tone = plain.find("“") != -1 or plain.find("”") != -1 or plain.find("：") != -1
+	if askmode == aiMode.action:
+		return [
+			"结果已经生效，你可以继续下一步行动。",
+			"相关状态已按这次行动更新，后续可继续推进。",
+			"这一步已经处理完成，新的变化会体现在后续选择里。"
+		]
+	if askmode == aiMode.chat:
+		if has_first_person:
+			return [
+				"我又补了一句：这事牵连的人不少，得一层层说清楚才不至于误会。",
+				"我缓了口气，把刚才没讲完的细节接着往下说，前后因果也顺了一遍。",
+				"我把关键处再讲得更明白些，免得你只听到一半就下判断。"
+			]
+		if has_dialogue_tone:
+			return [
+				"对方压低声音又补了几句，把前后的来龙去脉交代得更完整。",
+				"话音刚落，对方又顺着线索往下讲，细节一层层展开。",
+				"短暂沉默后，对方把遗漏的部分补上，语气里仍带着谨慎。"
+			]
+		return [
+			"气氛并没有就此平息，周围人的反应和后续变化还在继续发酵。",
+			"眼前这段经历还远没结束，新的信息正随着交流一点点浮现。",
+			"场面看似暂时安静下来，但真正关键的后续还在慢慢显形。"
+		]
+	if has_second_person:
+		return [
+			"你能感觉到局势仍在推进，接下来每一步都会牵动周围人的态度。",
+			"你眼前的变化只是开端，更多结果会在后续行动里逐步显现。",
+			"你还来得及调整选择，因为这件事的余波正在继续扩散。"
+		]
+	return [
+		"局势仍在变化，后续线索和人物动向会在接下来的推进中逐步清晰。",
+		"眼前的信息只是当前截面，新的细节会随着时间和行动不断显现。",
+		"这段进展尚未收束，接下来还会有更多可观察到的反馈与变化。"
+	]
+
+func _strip_angle_tags(text: String) -> String:
+	var src = str(text)
+	var regex = RegEx.new()
+	if regex.compile("<[^>]*>") != OK:
+		return src
+	return regex.sub(src, "", true)
+
+func _expand_text_to_min_chars(text: String, min_chars: int, askmode: aiMode) -> String:
+	var src = str(text).strip_edges()
+	if src == "":
+		return src
+	_output_mode_debug("expand:start mode=" + str(askmode) + ", src_len=" + str(src.length()) + ", min=" + str(min_chars))
+	var tags = ""
+	var plain = src
+	var regex = RegEx.new()
+	if regex.compile("<[^>]*>") == OK:
+		for m in regex.search_all(src):
+			tags += str(m.get_string())
+		plain = regex.sub(src, "", true).strip_edges()
+	var cur_len = plain.length()
+	if cur_len >= min_chars:
+		_output_mode_debug("expand:skip already enough, plain_len=" + str(cur_len))
+		return src
+	var extensions = _build_mode_consistent_extensions(plain, askmode)
+	if extensions.is_empty():
+		extensions = ["眼前这段发展还在继续，后续变化会逐步显现。"]
+	var joiner = "\n" if src.find("\n") != -1 else " "
+	var loop_count = 0
+	var used_extensions: Array = []
+	while plain.length() < min_chars:
+		var ext = str(extensions[loop_count % extensions.size()]).strip_edges()
+		if ext == "":
+			break
+		plain += joiner + ext
+		used_extensions.append(ext)
+		loop_count += 1
+		if loop_count > 12:
+			break
+	_output_mode_debug("expand:done loops=" + str(loop_count) + ", final_len=" + str(plain.length()) + ", used=" + " | ".join(used_extensions))
+	if tags != "":
+		return plain + tags
+	return plain
+
+func _enforce_output_min_length(text: String, askmode: aiMode) -> String:
+	if output_mode != "efficient":
+		return text
+	if askmode != aiMode.chat and askmode != aiMode.action:
+		return text
+	var plain = _strip_angle_tags(text).strip_edges()
+	var plain_len = plain.length()
+	_output_mode_debug("enforce:mode=" + str(askmode) + ", plain_len=" + str(plain_len) + ", min=" + str(efficient_mode_min_chars) + ", tail=" + _tail_preview(plain, 36))
+	if plain_len >= efficient_mode_min_chars:
+		return text
+	var expanded = _expand_text_to_min_chars(text, efficient_mode_min_chars, askmode)
+	var expanded_plain = _strip_angle_tags(expanded).strip_edges()
+	_output_mode_debug("enforce:expanded_len=" + str(expanded_plain.length()) + ", expanded_tail=" + _tail_preview(expanded_plain, 48))
+	return expanded
+
+func _enforce_action_narration_richness(text: String) -> String:
+	var plain = _strip_angle_tags(text).strip_edges()
+	if plain.length() >= action_narration_min_chars:
+		return text
+	return _expand_text_to_min_chars(text, action_narration_min_chars, aiMode.action)
+
+func _looks_like_action_or_dialogue_phrase(text: String) -> bool:
+	var t = _normalize_single_line_input(text)
+	if t == "":
+		return true
+	if t.length() > 18:
+		return true
+	var invalid_tokens = ["请", "帮", "告诉", "一下", "怎么", "哪里", "为什么", "是否", "能不能", "可以吗", "然后", "如果", "因为", "所以", "行动", "对话", "回复", "输出"]
+	for token in invalid_tokens:
+		if t.find(token) != -1:
+			return true
+	return false
+
+func _extract_compact_entity_candidate(raw_text: String, max_len: int = 14) -> String:
+	var t = _normalize_single_line_input(raw_text)
+	t = t.replace("：", " ").replace(":", " ").replace("。", " ").replace("，", " ").replace("？", " ").replace("!", " ")
+	var regex = RegEx.new()
+	if regex.compile("([\\u4e00-\\u9fa5A-Za-z·]{2,24})") != OK:
+		return ""
+	var m = regex.search(t)
+	if m == null:
+		return ""
+	var candidate = str(m.get_string(1)).strip_edges()
+	if candidate.length() > max_len:
+		candidate = candidate.substr(0, max_len)
+	return candidate
+
+func _is_valid_generated_location_name(raw_name: String) -> bool:
+	var n = _cleanup_location_candidate(raw_name)
+	if n == "":
+		return false
+	if n.length() < 2 or n.length() > 16:
+		return false
+	if _looks_like_person_reference(n):
+		return false
+	if _looks_like_action_or_dialogue_phrase(n):
+		return false
+	var regex = RegEx.new()
+	if regex.compile("^[\\u4e00-\\u9fa5A-Za-z0-9·]+$") != OK:
+		return false
+	return regex.search(n) != null
+
+func _is_valid_generated_npc_name(raw_name: String) -> bool:
+	var n = _sanitize_generated_npc_name(raw_name)
+	if _is_bad_generated_npc_name(n):
+		return false
+	if n.length() > 12:
+		return false
+	if _looks_like_action_or_dialogue_phrase(n):
+		return false
+	var regex = RegEx.new()
+	if regex.compile("^[\\u4e00-\\u9fa5A-Za-z·]+$") != OK:
+		return false
+	return regex.search(n) != null
 
 func _extract_angle_tags(input_string: String) -> Array:
 	var tags: Array = []
@@ -786,6 +1180,8 @@ func _is_location_query_dialogue(input_text: String) -> bool:
 	var t = _normalize_single_line_input(input_text)
 	if t == "":
 		return false
+	if _is_relation_npc_query(t):
+		return false
 	var query_words = ["在哪", "在哪里", "在哪儿", "怎么去", "怎么走", "怎么到", "去哪", "去哪里", "路线", "路怎么走", "哪条路"]
 	for w in query_words:
 		if t.find(w) != -1:
@@ -820,7 +1216,9 @@ func _looks_like_person_reference(target: String) -> bool:
 		return false
 	if npcs.has(target):
 		return true
-	var person_words = ["同学", "老师", "阿姨", "大叔", "叔叔", "阿姨", "学长", "学姐", "室友", "店员", "保安", "路人"]
+	var person_words = ["同学", "老师", "阿姨", "大叔", "叔叔", "学长", "学姐", "室友", "店员", "保安", "路人", "女儿", "儿子", "父亲", "母亲", "爸爸", "妈妈", "兄弟", "姐妹", "同事", "上司", "下属"]
+	if target.begins_with("你的") or target.begins_with("我的") or target.begins_with("他的") or target.begins_with("她的") or target.begins_with("自己的"):
+		return true
 	for w in person_words:
 		if target.find(w) != -1:
 			return true
@@ -879,27 +1277,227 @@ func _try_create_location_from_dialogue(reply: String) -> bool:
 	if !_is_location_query_dialogue(last_dialogue_input):
 		return false
 	var fail_words = ["不知道", "不清楚", "没听说", "找不到", "不在这", "不确定", "没去过", "不认识路", "不晓得"]
+	var has_location_clue = _reply_has_location_clue(reply)
 	for w in fail_words:
-		if reply.find(w) != -1:
+		if reply.find(w) != -1 and !has_location_clue:
 			return false
 	var target = _extract_location_target_from_dialogue(last_dialogue_input)
 	if target == "":
 		return false
+	target = _extract_compact_entity_candidate(target, 16)
+	if !_is_valid_generated_location_name(target):
+		return false
 	if _resolve_site_alias(target) == currentSiteName:
 		return false
-	if !_reply_has_location_clue(reply):
+	if !has_location_clue:
 		return false
 	create_location(currentSiteName + "-" + target)
 	return true
 
+func _sanitize_generated_npc_name(raw_name: String) -> String:
+	var n = _normalize_single_line_input(raw_name)
+	n = n.replace("。", "").replace("，", "").replace("？", "").replace("?", "").replace("！", "").replace("!", "")
+	var prefixes = ["你的", "我的", "他的", "她的", "自己的", "这个", "那个", "一位", "有个", "有位"]
+	for p in prefixes:
+		if n.begins_with(p):
+			n = n.trim_prefix(p).strip_edges()
+	return n
+
+func _is_bad_generated_npc_name(npc_label: String) -> bool:
+	var n = npc_label.strip_edges()
+	if n == "":
+		return true
+	if n.length() < 2:
+		return true
+	var bad_words = ["女儿", "儿子", "父母", "父亲", "母亲", "爸爸", "妈妈", "兄弟", "姐妹", "同事", "上司", "下属", "家人", "亲戚", "熟人", "自己", "你的", "我的", "他的", "她的", "某人", "路人"]
+	if bad_words.has(n):
+		return true
+	if n.begins_with("你的") or n.begins_with("我的") or n.begins_with("他的") or n.begins_with("她的"):
+		return true
+	return false
+
+func _fallback_relation_npc_name(query_text: String) -> String:
+	var t = _normalize_single_line_input(query_text)
+	if _contains_any_keyword(t, ["女儿"]):
+		return ["阿莲", "小霜", "露娜", "清禾"][randi_range(0, 3)]
+	if _contains_any_keyword(t, ["儿子"]):
+		return ["阿成", "小川", "远山", "泽安"][randi_range(0, 3)]
+	if _contains_any_keyword(t, ["父亲", "爸爸"]):
+		return ["老周", "韩叔", "陈伯", "沈叔"][randi_range(0, 3)]
+	if _contains_any_keyword(t, ["母亲", "妈妈"]):
+		return ["周婶", "林姨", "方姨", "柳婶"][randi_range(0, 3)]
+	if _contains_any_keyword(t, ["兄弟", "姐妹"]):
+		return ["阿岳", "小宁", "云青", "子岚"][randi_range(0, 3)]
+	return ["阿远", "小禾", "程木", "林渡"][randi_range(0, 3)]
+
+func _extract_location_name_from_reply(reply_text: String) -> String:
+	var plain = process_string(reply_text).strip_edges()
+	if plain == "":
+		return ""
+	for site_key in sites.keys():
+		var site_name = str(site_key).strip_edges()
+		if site_name != "" and plain.find(site_name) != -1:
+			return site_name
+	var regex = RegEx.new()
+	if regex.compile("(?:在|位于|住在)([\\u4e00-\\u9fa5A-Za-z·]{2,16})") != OK:
+		return ""
+	var m = regex.search(plain)
+	if m == null:
+		return ""
+	var loc = _extract_compact_entity_candidate(_cleanup_location_candidate(str(m.get_string(1))), 16)
+	if !_is_valid_generated_location_name(loc):
+		return ""
+	return loc
+
+func _extract_unknown_npc_target_from_query(query_text: String) -> String:
+	var t = _normalize_single_line_input(query_text)
+	if t == "":
+		return ""
+	var regex = RegEx.new()
+	var patterns = [
+		"([\\u4e00-\\u9fa5A-Za-z·]{2,12})(?:在哪|在哪里|在哪儿|是谁|什么人|在吗|的信息|的消息)",
+		"(?:找|寻找|打听|问|关于)([\\u4e00-\\u9fa5A-Za-z·]{2,12})"
+	]
+	for p in patterns:
+		if regex.compile(p) != OK:
+			continue
+		var m = regex.search(t)
+		if m == null:
+			continue
+		var candidate = _sanitize_generated_npc_name(str(m.get_string(1)))
+		candidate = _extract_compact_entity_candidate(candidate, 12)
+		if !_is_valid_generated_npc_name(candidate) and _is_relation_npc_query(t):
+			candidate = _fallback_relation_npc_name(t)
+		if _is_valid_generated_npc_name(candidate):
+			return candidate
+	return ""
+
+func _is_relation_npc_query(input_text: String) -> bool:
+	var t = _normalize_single_line_input(input_text)
+	if t == "":
+		return false
+	var relation_words = ["兄弟", "姐妹", "父母", "爸爸", "妈妈", "儿子", "女儿", "同事", "上司", "下属", "学徒", "师父", "朋友", "家人", "亲戚"]
+	for w in relation_words:
+		if t.find(w) != -1:
+			return true
+	return false
+
+func _guess_related_npc_desc(query_text: String, source_npc_name: String) -> String:
+	var t = _normalize_single_line_input(query_text)
+	var relation = "熟人"
+	if _contains_any_keyword(t, ["兄弟", "姐妹"]):
+		relation = "兄弟姐妹"
+	elif _contains_any_keyword(t, ["父母", "爸爸", "妈妈"]):
+		relation = "亲属长辈"
+	elif _contains_any_keyword(t, ["同事", "上司", "下属"]):
+		relation = "工作关系人"
+	elif _contains_any_keyword(t, ["学徒", "师父"]):
+		relation = "师门关系人"
+	elif _contains_any_keyword(t, ["朋友", "熟人", "家人", "亲戚"]):
+		relation = "生活关系人"
+	var source_name = source_npc_name.strip_edges()
+	if source_name == "":
+		source_name = "当前人物"
+	return "与" + source_name + "相关的" + relation
+
+func _extract_named_people_from_dialogue(reply_text: String) -> Array:
+	var plain = process_string(reply_text).strip_edges()
+	if plain == "":
+		return []
+	var names: Array = []
+	var regex = RegEx.new()
+	var patterns = [
+		"(?:叫|名叫|名字是|是)([\\u4e00-\\u9fa5A-Za-z·]{2,12})",
+		"(?:有个|有位)([\\u4e00-\\u9fa5A-Za-z·]{2,12})",
+		"([\\u4e00-\\u9fa5A-Za-z·]{2,12})(?:是我的|跟我|在)",
+		"(?:他叫|她叫|我哥叫|我姐叫|我爸叫|我妈叫)([\\u4e00-\\u9fa5A-Za-z·]{2,12})"
+	]
+	var reject_words = ["这里", "那里", "这个", "那个", "我们", "他们", "她们", "没有", "不知道", "不清楚", "路人"]
+	for p in patterns:
+		if regex.compile(p) != OK:
+			continue
+		for m in regex.search_all(plain):
+			var n = _sanitize_generated_npc_name(str(m.get_string(1)))
+			if n == "":
+				continue
+			if n == str(currentNpc.npcName):
+				continue
+			if reject_words.has(n):
+				continue
+			if _is_bad_generated_npc_name(n):
+				continue
+			if !names.has(n):
+				names.append(n)
+	return names
+
+func _maybe_create_related_npc_from_dialogue(reply: String) -> void:
+	if currentNpc == null:
+		return
+	if last_dialogue_input == "" or !_is_relation_npc_query(last_dialogue_input):
+		return
+	var fail_words = ["没有", "不知道", "不清楚", "记不清", "不认识", "没听说", "不方便说"]
+	for w in fail_words:
+		if reply.find(w) != -1:
+			return
+	var names = _extract_named_people_from_dialogue(reply)
+	if names.is_empty():
+		var fallback_name = _fallback_relation_npc_name(last_dialogue_input)
+		if !_is_bad_generated_npc_name(fallback_name):
+			names.append(fallback_name)
+	if names.is_empty():
+		return
+	var guessed_desc = _guess_related_npc_desc(last_dialogue_input, str(currentNpc.npcName))
+	var loc = _extract_location_name_from_reply(reply)
+	if loc == "":
+		loc = currentSiteName
+	var created = 0
+	for raw_name in names:
+		var npc_name = _sanitize_generated_npc_name(str(raw_name))
+		npc_name = _extract_compact_entity_candidate(npc_name, 12)
+		if !_is_valid_generated_npc_name(npc_name) and _is_relation_npc_query(last_dialogue_input):
+			npc_name = _fallback_relation_npc_name(last_dialogue_input)
+		if !_is_valid_generated_npc_name(npc_name):
+			continue
+		if npc_name == "" or npcs.has(npc_name) or dead_npc_names.has(npc_name):
+			continue
+		if loc != "" and _is_valid_generated_location_name(loc) and !sites.has(loc):
+			create_location(currentSiteName + "-" + loc)
+		create_NPC(npc_name, loc, guessed_desc)
+		created += 1
+		if created >= 2:
+			break
+
+func _maybe_create_unknown_npc_from_dialogue(reply: String) -> void:
+	if last_dialogue_input == "":
+		return
+	var target_name = _extract_unknown_npc_target_from_query(last_dialogue_input)
+	if target_name == "":
+		return
+	if npcs.has(target_name) or dead_npc_names.has(target_name):
+		return
+	var fail_words = ["不知道", "不清楚", "没听说", "没有这个人", "不认识", "没见过"]
+	for w in fail_words:
+		if reply.find(w) != -1:
+			return
+	var loc = _extract_location_name_from_reply(reply)
+	if loc == "":
+		loc = currentSiteName
+	if loc != "" and _is_valid_generated_location_name(loc) and !sites.has(loc):
+		create_location(currentSiteName + "-" + loc)
+	var desc = "在" + loc + "活动，与你打听的人物相关"
+	create_NPC(target_name, loc, desc)
+
 func npc_reply(reply: String):
 	changeTextTo(%speakerNameLabel, currentNpc.npcName)
 	changeTextTo(response_label, process_string(reply))
+	_record_current_chat_session("对话回复", str(currentNpc.npcName), reply)
 	currentNpc.currentChat +=  currentNpc.npcName +":"+ reply + "\n"
 	_remember_important_event("<对话>" + currentNpc.npcName + "：" + process_string(reply), currentSiteName, currentNpc.npcName)
 	var direct_location_only = _apply_direct_npc_tool_tags(reply)
 	if !direct_location_only:
 		_try_create_location_from_dialogue(reply)
+	_maybe_create_related_npc_from_dialogue(reply)
+	_maybe_create_unknown_npc_from_dialogue(reply)
 	var toolsTexts = get_content_in_angle_brackets(reply)
 	print("提取出的工具信息：",toolsTexts)
 	if toolsTexts!="" and !direct_location_only:
@@ -921,16 +1519,26 @@ func npc_reply(reply: String):
 			_maybe_offer_intent_confirm_from_dialogue(reply)
 
 func process_string(input: String) -> String:
-	# 移除所有<...>标签
-	var regex = RegEx.new()
-	regex.compile("<[^>]*>")
-	var result = regex.sub(input, "",true)
-
-	# 将连续两个回车替换为一个
-	regex.compile("\n\n+")
-	result = regex.sub(result, "\n")
-
+	_ensure_process_regex_ready()
+	var src = str(input)
+	var result = src
+	if _process_strip_regex != null and _process_strip_regex.is_valid():
+		result = _process_strip_regex.sub(result, "", true)
+	if _process_newline_regex != null and _process_newline_regex.is_valid():
+		result = _process_newline_regex.sub(result, "\n", true)
 	return result.strip_edges()
+
+func _ensure_process_regex_ready() -> void:
+	if _process_strip_regex == null:
+		_process_strip_regex = RegEx.new()
+	if !_process_strip_regex.is_valid():
+		if _process_strip_regex.compile("<[^>]*>") != OK:
+			push_warning("process_string strip regex compile failed")
+	if _process_newline_regex == null:
+		_process_newline_regex = RegEx.new()
+	if !_process_newline_regex.is_valid():
+		if _process_newline_regex.compile("\n\n+") != OK:
+			push_warning("process_string newline regex compile failed")
 func get_content_in_angle_brackets(input_string: String)->String:
 	var results = ""
 	var normalized_input = str(input_string)
@@ -977,6 +1585,19 @@ func gen_img(prompt: String, site_name: String = ""):
 		inflight_img_site = ""
 		return
 	inflight_img_site = target_site
+	if pending_site_update:
+		_start_img_watchdog(target_site)
+
+func _start_img_watchdog(target_site: String) -> void:
+	img_watchdog_seq += 1
+	var seq = img_watchdog_seq
+	await get_tree().create_timer(10.0).timeout
+	if seq != img_watchdog_seq:
+		return
+	if pending_site_update and inflight_img_site == target_site:
+		_bg_debug("img watchdog timeout fallback, site=" + target_site)
+		pending_site_update = false
+		site_update(true, true, false)
 
 func _sanitize_filename(file_name: String) -> String:
 	return file_name.replace("/", "_").replace("\\", "_").replace(":", "_").replace("*", "_").replace("?", "_").replace("\"", "_").replace("<", "_").replace(">", "_").replace("|", "_")
@@ -1303,6 +1924,9 @@ func _build_explore_system_prompt() -> String:
 	var guards = "用户初始设定：" + world_seed_input + "\n"
 	guards += "当前世界观：" + background + "\n"
 	guards += "请确保地点、NPC、英文生图提示词与上述设定完全一致。"
+	var style_guard = _build_setting_consistency_guard_text(_detect_setting_style_signals())
+	if style_guard != "":
+		guards += "\n设定一致性约束：" + style_guard
 	guards += "\n硬性要求：输出JSON中的“能前往的地点”必须是3~6个可直达、互不重复、且不包含当前地点本身的地点名，不能为空。"
 	return role_prompt + "\n" + guards
 
@@ -1425,6 +2049,8 @@ func _submit_action_input(raw_input: String, bypass_lock_check: bool = false) ->
 		return
 	if !bypass_lock_check and (event_flow_lock or _has_active_event_panel()):
 		return
+	preferred_input_focus = "action"
+	call_deferred("_recover_focus_after_submit", "action")
 	input_text_edit.text = ""
 	last_action_input = user_input
 	addLog("【行动】" + user_input)
@@ -1444,12 +2070,18 @@ func _submit_action_input(raw_input: String, bypass_lock_check: bool = false) ->
 		action_context += "\n当前对话对象：" + focus_npc_name
 		action_context += "\n对方身份描述：" + focus_npc_desc
 		action_context += "\n行动理解规则：当行动没有明确对象时，优先视为对当前对话对象发起。"
-	var identity_guidance = _build_identity_attitude_guidance(focus_npc_name, focus_npc_desc)
+	var identity_guidance = _clip_prompt_text(_build_identity_attitude_guidance(focus_npc_name, focus_npc_desc), 520)
 	if identity_guidance != "":
 		action_context += "\n身份与态度导向：\n" + identity_guidance
-	var related_events = _build_related_event_memory_for_action(user_input, focus_npc_name)
+	var chat_session_mem = _clip_prompt_text(get_current_chat_session_memory(focus_npc_name), 520)
+	if chat_session_mem != "":
+		action_context += "\n本次对话会话内上下文（仅本轮有效）：\n" + chat_session_mem
+	var related_events = _clip_prompt_text(_build_related_event_memory_for_action(user_input, focus_npc_name), 480)
 	if related_events != "":
 		action_context += "\n相关重要事件记忆：\n" + related_events
+	if focus_npc_name != "":
+		_record_current_chat_session("行动输入", playerName, user_input)
+	action_context = _clip_prompt_text(action_context, prompt_action_context_max_chars)
 	var aprompts = [
 		{"role":"system","content": action_prompt + "\n" + action_context},
 		{"role":"user","content": user_input}]
@@ -1461,6 +2093,8 @@ func _on_dialogue_button_pressed():
 	var user_input = _normalize_single_line_input(dialogue_input.text)
 	if user_input == "":
 		return
+	preferred_input_focus = "dialogue"
+	call_deferred("_recover_focus_after_submit", "dialogue")
 	var leave_words = ["离开", "结束对话", "退出对话", "不聊了", "再见"]
 	if leave_words.has(user_input):
 		dialogue_input.text = ""
@@ -1469,12 +2103,13 @@ func _on_dialogue_button_pressed():
 			changeTextTo(response_label, "当前情况无法脱离，" + currentNpc.npcName + "不会让你就这么走。")
 			await currentNpc.chatWithNpc("[玩家试图离开]")
 			return
-		await changeStateInto(GameManager.worldState.explore)
+		_request_leave_chat_confirm()
 		return
 	last_dialogue_input = user_input
 	dialogue_input.text = ""
 	changeTextTo(%speakerNameLabel, playerName)
 	changeTextTo(response_label, user_input)
+	_record_current_chat_session("对话输入", playerName, user_input)
 	await currentNpc.chatWithNpc(user_input)
 	currentNpc.currentChat += "玩家：" + user_input + "\n"
 
@@ -1503,6 +2138,88 @@ func _show_current_npc_profile() -> void:
 	changeTextTo(response_label, panel_text, 80)
 	addLog("<查看了" + npc_name + "的人物档案>")
 
+func _request_leave_chat_confirm() -> void:
+	if currentState != worldState.chat or currentNpc == null:
+		return
+	var npc_name = str(currentNpc.npcName).strip_edges()
+	pending_action_confirm = {
+		"action": "离开与" + npc_name + "的对话",
+		"prompt": "是否结束与" + npc_name + "的对话并回到探索？",
+		"actor": npc_name,
+		"mode": "leave_chat"
+	}
+	_set_event_flow_lock(true)
+	%event.got_action_confirm_event(str(pending_action_confirm.get("action", "")), str(pending_action_confirm.get("prompt", "")))
+
+func request_site_switch(site_name: String) -> void:
+	var target = _resolve_site_alias(str(site_name).strip_edges())
+	if target == "":
+		return
+	if currentState == worldState.chat and currentNpc != null:
+		var npc_name = str(currentNpc.npcName).strip_edges()
+		pending_action_confirm = {
+			"action": "前往" + target,
+			"prompt": "是否结束与" + npc_name + "的对话并前往" + target + "？",
+			"actor": npc_name,
+			"mode": "switch_site",
+			"target_site": target
+		}
+		_set_event_flow_lock(true)
+		%event.got_action_confirm_event(str(pending_action_confirm.get("action", "")), str(pending_action_confirm.get("prompt", "")))
+		return
+	await goto(target)
+
+func _start_chat_with_existing_npc(npc_name: String) -> void:
+	if !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
+		return
+	prepare_npc_memory_for_chat(npc_name)
+	var new_npc = npc.new()
+	new_npc.npcName = npc_name
+	new_npc.scene = self
+	new_npc.npcDescribe = str(npcs[npc_name].get("npc_describe", ""))
+	if !npcs[npc_name].has("npc_log") or !(npcs[npc_name]["npc_log"] is Array):
+		npcs[npc_name]["npc_log"] = []
+	var logs = ""
+	for log_entry in npcs[npc_name]["npc_log"]:
+		logs += str(log_entry)
+	new_npc.npcLog = logs
+	newNpc = new_npc
+	await changeStateInto(GameManager.worldState.chat)
+
+func request_npc_switch(npc_name: String) -> void:
+	var target_npc = str(npc_name).strip_edges()
+	if target_npc == "":
+		return
+	if !npcs.has(target_npc):
+		return
+	if currentState == worldState.chat and currentNpc != null and str(currentNpc.npcName) != target_npc:
+		var from_npc = str(currentNpc.npcName).strip_edges()
+		pending_action_confirm = {
+			"action": "切换对话对象到" + target_npc,
+			"prompt": "是否结束与" + from_npc + "的对话并切换到" + target_npc + "？",
+			"actor": from_npc,
+			"mode": "switch_npc",
+			"target_npc": target_npc
+		}
+		_set_event_flow_lock(true)
+		%event.got_action_confirm_event(str(pending_action_confirm.get("action", "")), str(pending_action_confirm.get("prompt", "")))
+		return
+	await _start_chat_with_existing_npc(target_npc)
+
+func _request_npc_leave_confirm(npc_name: String) -> void:
+	var target_npc = str(npc_name).strip_edges()
+	if target_npc == "":
+		return
+	pending_action_confirm = {
+		"action": "允许" + target_npc + "离开",
+		"prompt": target_npc + "想要离开，你要挽留吗？",
+		"actor": target_npc,
+		"mode": "npc_leave",
+		"target_npc": target_npc
+	}
+	_set_event_flow_lock(true)
+	%event.got_action_confirm_event(str(pending_action_confirm.get("action", "")), str(pending_action_confirm.get("prompt", "")))
+
 func _has_active_event_panel() -> bool:
 	for child in %event.get_children():
 		if child is eventContainer:
@@ -1519,6 +2236,38 @@ func _set_event_flow_lock(v: bool) -> void:
 	event_flow_lock = v
 	_log_lock_state("set_event_flow_lock:" + str(v))
 	_apply_interaction_locks()
+	if !event_flow_lock:
+		call_deferred("_focus_active_input")
+
+func _focus_active_input() -> void:
+	if ai_busy or event_flow_lock or _has_active_event_panel():
+		return
+	if preferred_input_focus == "dialogue" and currentState == worldState.chat and dialogue_container.visible and currentNpc != null and dialogue_input != null:
+		dialogue_input.grab_focus()
+		return
+	if preferred_input_focus == "action" and input_text_edit != null:
+		input_text_edit.grab_focus()
+		return
+	if currentState == worldState.chat and dialogue_container.visible and currentNpc != null and dialogue_input != null:
+		dialogue_input.grab_focus()
+		return
+	if input_text_edit != null:
+		input_text_edit.grab_focus()
+
+func _recover_focus_after_submit(target_focus: String) -> void:
+	var target = str(target_focus).strip_edges()
+	if target != "dialogue":
+		target = "action"
+	var retry = 0
+	while retry < 180:
+		await get_tree().process_frame
+		if ai_busy or event_flow_lock or _has_active_event_panel():
+			retry += 1
+			continue
+		preferred_input_focus = target
+		_focus_active_input()
+		return
+		
 
 func _apply_interaction_locks() -> void:
 	var has_event_panel = _has_active_event_panel()
@@ -1545,6 +2294,7 @@ func set_ai_busy(v: bool) -> void:
 		_apply_interaction_locks()
 	else:
 		refresh_interaction_locks()
+		call_deferred("_focus_active_input")
 
 func _sanitize_response_text(raw_text: String) -> String:
 	var t = str(raw_text)
@@ -1556,7 +2306,7 @@ func _sanitize_response_text(raw_text: String) -> String:
 	t = "\n".join(lines)
 	return t.strip_edges(false, true)
 
-func changeTextTo(nodeToChange: Control, text: String, speed = 30):
+func changeTextTo(nodeToChange: Control, text: String, speed = 30, max_tween_duration: float = 1.6):
 	if nodeToChange == null:
 		return
 	var safe_text = text
@@ -1585,7 +2335,10 @@ func changeTextTo(nodeToChange: Control, text: String, speed = 30):
 
 	var char_count = max(1, safe_text.length())
 	var safe_speed = max(1.0, float(speed))
-	var duration = clamp(float(char_count) / safe_speed, 0.08, 1.6)
+	var max_duration = max(0.1, max_tween_duration)
+	if nodeToChange == response_label:
+		max_duration = max(max_duration, 4.5)
+	var duration = clamp(float(char_count) / safe_speed, 0.08, max_duration)
 	var tween = create_tween()
 	_active_text_tweens[key] = tween
 	_apply_interaction_locks()
@@ -1609,11 +2362,17 @@ func clear_children(node: Node):
 		i.queue_free()
 
 func addLog(logText: String, instant: bool = false):
-	var newLog = load("res://fabs/log_rich_text_label.tscn").instantiate()
+	var newLog = LOG_LABEL_SCENE.instantiate()
 	newLog.text = logText
 	if instant and newLog is RichTextLabel:
 		newLog.visible_ratio = 1.0
 	%logContainer.add_child(newLog)
+	if %logContainer.get_child_count() > max_visible_logs:
+		var overflow = %logContainer.get_child_count() - max_visible_logs
+		for i in range(overflow):
+			var old_log = %logContainer.get_child(i)
+			%logContainer.remove_child(old_log)
+			old_log.queue_free()
 	if _is_important_log(logText):
 		var focus_npc = ""
 		if currentNpc != null:
@@ -1673,6 +2432,123 @@ func _remember_important_event(raw_text: String, site_name: String = "", focus_n
 	important_event_memories.append(record)
 	if important_event_memories.size() > 200:
 		important_event_memories = important_event_memories.slice(max(0, important_event_memories.size() - 200), important_event_memories.size())
+	var focus_name = focus_npc.strip_edges()
+	for n in npc_names:
+		_append_event_to_npc_memory(str(n), record, focus_name)
+
+func _ensure_npc_event_bucket(npc_name: String) -> void:
+	if npc_name == "":
+		return
+	if !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
+		npcs[npc_name] = {"npc_describe": "", "npc_log": [], "特征": "", "important_events": []}
+	if !npcs[npc_name].has("npc_log") or !(npcs[npc_name]["npc_log"] is Array):
+		npcs[npc_name]["npc_log"] = []
+	if !npcs[npc_name].has("important_events") or !(npcs[npc_name]["important_events"] is Array):
+		npcs[npc_name]["important_events"] = []
+
+func _build_npc_perspective_event_text(event_text: String, npc_name: String, focus_npc: String) -> String:
+	var plain = process_string(event_text).strip_edges()
+	if plain == "":
+		return ""
+	if npc_name == focus_npc:
+		if plain.begins_with("传闻："):
+			return "我听到一条传闻：" + plain.trim_prefix("传闻：").strip_edges()
+		return "我亲历了：" + plain
+	if plain.begins_with("传闻："):
+		return "和我有关的一条传闻：" + plain.trim_prefix("传闻：").strip_edges()
+	return "和我相关的重要事件：" + plain
+
+func _should_store_npc_personal_event(plain_text: String, sig: Dictionary) -> bool:
+	var t = str(plain_text).strip_edges()
+	if t == "":
+		return false
+	if t.begins_with("【行动】"):
+		return false
+	if t.find("你抵达了") != -1 or t.find("地图更新") != -1:
+		return false
+	if int(sig.get("trade", 0)) > 0 or int(sig.get("gift", 0)) > 0 or int(sig.get("assist", 0)) > 0:
+		return true
+	var keep_keywords = [
+		"传闻", "声望", "违规", "警报", "离开", "拒绝", "同意", "成交", "感谢", "敌意", "戒备", "尊重", "敬畏", "帮", "救", "冲突", "道歉"
+	]
+	for kw in keep_keywords:
+		if t.find(kw) != -1:
+			return true
+	return false
+
+func _build_npc_personal_event_summary(plain_text: String, npc_name: String, focus_npc: String, sig: Dictionary) -> String:
+	var t = str(plain_text).strip_edges()
+	if !_should_store_npc_personal_event(t, sig):
+		return ""
+	var source = _clip_prompt_text(t, 90)
+	if source.begins_with("传闻："):
+		var rumor_text = source.trim_prefix("传闻：").strip_edges()
+		if npc_name == focus_npc:
+			return "我获知传闻：" + _clip_prompt_text(rumor_text, 62)
+		return "相关传闻：" + _clip_prompt_text(rumor_text, 62)
+	if source.find("声望值+") != -1:
+		return "玩家声望上升，我对其态度更积极。"
+	if source.find("声望值-") != -1:
+		return "玩家声望下降，我对其更警惕。"
+	if int(sig.get("trade", 0)) > 0:
+		if npc_name == focus_npc:
+			return "我与玩家发生交易，后续会按结果调整态度。"
+		return "我相关的交易事件发生，需按结果调整态度。"
+	if int(sig.get("gift", 0)) > 0:
+		if source.find("接受") != -1:
+			return "我收到了玩家物品，对其态度偏正向。"
+		return "我向玩家提供了物品，对其态度偏缓和。"
+	if int(sig.get("assist", 0)) > 0:
+		return "我与玩家有协作行为，会影响后续配合意愿。"
+	if _contains_any_keyword(source, ["拒绝", "敌意", "警报", "违规", "冲突"]):
+		return "我与玩家存在负面事件，对其更戒备。"
+	if _contains_any_keyword(source, ["感谢", "帮助", "道歉", "尊重", "敬畏"]):
+		return "我与玩家有正向互动，对其更愿意配合。"
+	if npc_name == focus_npc:
+		return "我经历了关键事件：" + _clip_prompt_text(source, 58)
+	return "与我相关关键事件：" + _clip_prompt_text(source, 58)
+
+func _append_event_to_npc_memory(npc_name: String, record: Dictionary, focus_npc: String) -> void:
+	if npc_name == "":
+		return
+	_ensure_npc_event_bucket(npc_name)
+	var plain = process_string(str(record.get("text", ""))).strip_edges()
+	if plain == "":
+		return
+	var sig = {
+		"trade": int(record.get("trade", 0)),
+		"gift": int(record.get("gift", 0)),
+		"assist": int(record.get("assist", 0))
+	}
+	var npc_view = _build_npc_personal_event_summary(plain, npc_name, focus_npc, sig)
+	if npc_view == "":
+		return
+	var bucket: Array = npcs[npc_name].get("important_events", [])
+	for old in bucket:
+		if old is Dictionary and str(old.get("npc_view", "")) == npc_view:
+			return
+	bucket.append({"text": _clip_prompt_text(plain, 90), "npc_view": _clip_prompt_text(npc_view, 80), "t": int(record.get("t", Time.get_unix_time_from_system()))})
+	if bucket.size() > 40:
+		bucket = bucket.slice(bucket.size() - 40, bucket.size())
+	npcs[npc_name]["important_events"] = bucket
+
+func _get_recent_npc_personal_events(npc_name: String, limit_count: int = 3) -> Array:
+	var out: Array = []
+	if npc_name == "" or !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
+		return out
+	if !npcs[npc_name].has("important_events") or !(npcs[npc_name]["important_events"] is Array):
+		return out
+	var bucket: Array = npcs[npc_name]["important_events"]
+	var start_idx = max(0, bucket.size() - limit_count)
+	for i in range(start_idx, bucket.size()):
+		var row = bucket[i]
+		if !(row is Dictionary):
+			continue
+		var view_text = str(row.get("npc_view", "")).strip_edges()
+		if view_text == "":
+			continue
+		out.append(_clip_prompt_text(view_text, 80))
+	return out
 
 func _score_event_relevance(mem: Dictionary, site_name: String, npc_name: String, intent_hint: Dictionary = {}) -> int:
 	var score = 0
@@ -1713,14 +2589,20 @@ func _get_recent_related_event_memories(site_name: String, npc_name: String = ""
 	return out
 
 func get_relevant_event_memory_for_npc(npc_name: String, _npc_desc: String = "") -> String:
-	var rows = _get_recent_related_event_memories(currentSiteName, npc_name, 4)
+	var personal_rows = _get_recent_npc_personal_events(npc_name, 3)
+	if !personal_rows.is_empty():
+		var personal_lines: Array = []
+		for line in personal_rows:
+			personal_lines.append("- " + str(line))
+		return _clip_prompt_text("\n".join(personal_lines), 260)
+	var rows = _get_recent_related_event_memories(currentSiteName, npc_name, 2)
 	if rows.is_empty():
 		return ""
 	var lines: Array = []
 	for m in rows:
 		if m is Dictionary:
-			lines.append("- " + str(m.get("text", "")))
-	return "\n".join(lines)
+			lines.append("- " + _clip_prompt_text(str(m.get("text", "")), 90))
+	return _clip_prompt_text("\n".join(lines), 260)
 
 func _build_identity_attitude_guidance(focus_npc_name: String = "", focus_npc_desc: String = "") -> String:
 	var lines: Array = []
@@ -1754,16 +2636,23 @@ func _build_related_event_memory_for_action(action_text: String, focus_npc_name:
 	var mentions = _extract_npc_mentions(action_text)
 	if !mentions.is_empty():
 		focus_npc = str(mentions[0])
-	var rows = _get_recent_related_event_memories(currentSiteName, focus_npc, 4, hint)
+	if focus_npc != "":
+		var personal_rows = _get_recent_npc_personal_events(focus_npc, 3)
+		if !personal_rows.is_empty():
+			var personal_lines: Array = []
+			for line in personal_rows:
+				personal_lines.append("- " + str(line))
+			return _clip_prompt_text("\n".join(personal_lines), 260)
+	var rows = _get_recent_related_event_memories(currentSiteName, focus_npc, 2, hint)
 	if rows.is_empty():
 		return ""
 	var lines: Array = []
 	for m in rows:
 		if m is Dictionary:
-			lines.append("- " + str(m.get("text", "")))
-	return "\n".join(lines)
+			lines.append("- " + _clip_prompt_text(str(m.get("text", "")), 90))
+	return _clip_prompt_text("\n".join(lines), 260)
 
-func _build_inventory_snapshot(max_items: int = 10) -> String:
+func _build_inventory_snapshot(max_items: int = 6) -> String:
 	var parts: Array = []
 	for child in %itemContainer.get_children():
 		if child is item:
@@ -1898,9 +2787,11 @@ func _on_request_completed(result, response_code, _header, body):
 				pending_site_update = false
 			aiMode.chat:
 				#print("开始聊天")
-				npc_reply(data["text"])
+				var chat_text = _enforce_output_min_length(str(data.get("text", "")), aiMode.chat)
+				npc_reply(chat_text)
 			aiMode.action:
-				var action_reply = data.get("text", "")
+				var action_reply = _enforce_output_min_length(str(data.get("text", "")), aiMode.action)
+				action_reply = _enforce_action_narration_richness(action_reply)
 				if action_reply is String and action_reply.strip_edges() != "":
 					_set_event_flow_lock(true)
 					changeTextTo(%speakerNameLabel, "【旁白】")
@@ -1924,6 +2815,8 @@ func _on_request_completed(result, response_code, _header, body):
 						]
 						await ask_ai(infer_prompts, aiMode.tools)
 						_auto_handle_action_search(last_action_input, action_reply)
+					if currentState == worldState.chat and currentNpc != null:
+						_record_current_chat_session("行动结果", "旁白", action_reply)
 					await _auto_apply_action_effects(last_action_input, action_reply, tool_tags)
 					if nav_target != "" and currentState != worldState.chat:
 						advance_time_minutes(float(randi_range(15, 60)), true)
@@ -1933,8 +2826,15 @@ func _on_request_completed(result, response_code, _header, body):
 				else:
 					_set_event_flow_lock(false)
 			aiMode.sum:
-				npcs[currentNpc.npcName]["npc_log"].append(data["text"])
-				addLog("你结束了与" + currentNpc.npcName + "的对话。" + data["text"])
+				if currentNpc != null:
+					var sum_npc_name = str(currentNpc.npcName).strip_edges()
+					if sum_npc_name != "":
+						if !npcs.has(sum_npc_name) or !(npcs[sum_npc_name] is Dictionary):
+							npcs[sum_npc_name] = {"npc_describe": "", "npc_log": [], "特征": "", "important_events": []}
+						if !npcs[sum_npc_name].has("npc_log") or !(npcs[sum_npc_name]["npc_log"] is Array):
+							npcs[sum_npc_name]["npc_log"] = []
+						npcs[sum_npc_name]["npc_log"].append(str(data.get("text", "")))
+						addLog("你结束了与" + sum_npc_name + "的对话。" + str(data.get("text", "")))
 			aiMode.tools:
 				if data["text"] is Array:
 					await handle_npc_instruction(data["text"])
@@ -1986,6 +2886,56 @@ func on_event_decision(event_kind: String, accepted: bool, item_name: String, qu
 		var action_actor = str(confirm_data.get("actor", speaker))
 		var action_text = str(confirm_data.get("action", item_name))
 		var action_mode = str(confirm_data.get("mode", "player_execute"))
+		if action_mode == "npc_leave":
+			var target_npc = str(confirm_data.get("target_npc", action_actor)).strip_edges()
+			if accepted:
+				await changeTextTo(%speakerNameLabel, target_npc)
+				await changeTextTo(response_label, "……那我先不走。")
+				addLog("<你拦下了" + target_npc + "，对方暂时没有离开>")
+			else:
+				await changeTextTo(%speakerNameLabel, target_npc)
+				await changeTextTo(response_label, "好，那我就先离开了。")
+				await destroy_yourself(target_npc)
+			pending_action_confirm = {}
+			call_deferred("_focus_active_input")
+			return
+		if action_mode == "leave_chat":
+			if accepted:
+				await changeTextTo(%speakerNameLabel, action_actor)
+				await changeTextTo(response_label, "好，先到这里。")
+				await changeStateInto(GameManager.worldState.explore)
+			else:
+				await changeTextTo(%speakerNameLabel, action_actor)
+				await changeTextTo(response_label, "那就继续聊。")
+				addLog("<你选择继续与" + action_actor + "对话>")
+			pending_action_confirm = {}
+			call_deferred("_focus_active_input")
+			return
+		if action_mode == "switch_site":
+			var target_site = _resolve_site_alias(str(confirm_data.get("target_site", "")).strip_edges())
+			if accepted and target_site != "":
+				await changeTextTo(%speakerNameLabel, action_actor)
+				await changeTextTo(response_label, "行，你先去吧。")
+				await goto(target_site)
+			else:
+				await changeTextTo(%speakerNameLabel, action_actor)
+				await changeTextTo(response_label, "那就先别走。")
+				addLog("<你取消了前往" + target_site + ">")
+			pending_action_confirm = {}
+			call_deferred("_focus_active_input")
+			return
+		if action_mode == "switch_npc":
+			var target_npc = str(confirm_data.get("target_npc", "")).strip_edges()
+			if accepted and target_npc != "":
+				await _start_chat_with_existing_npc(target_npc)
+			else:
+				await changeTextTo(%speakerNameLabel, action_actor)
+				await changeTextTo(response_label, "那就先不换人。")
+				if target_npc != "":
+					addLog("<你取消了切换到" + target_npc + "的对话>")
+			pending_action_confirm = {}
+			call_deferred("_focus_active_input")
+			return
 		if accepted:
 			await changeTextTo(%speakerNameLabel, action_actor)
 			if action_mode == "force_execute":
@@ -2000,6 +2950,7 @@ func on_event_decision(event_kind: String, accepted: bool, item_name: String, qu
 			await changeTextTo(response_label, "行，那先按你的意思来。")
 			addLog("<你拒绝了" + action_actor + "的行动建议：" + action_text + ">")
 		pending_action_confirm = {}
+		call_deferred("_focus_active_input")
 		return
 	if accepted:
 		if event_kind == "deal":
@@ -2031,6 +2982,7 @@ func _drain_pending_img() -> void:
 		gen_img(queued, queued_site)
 
 func _on_img_http_request_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	img_watchdog_seq += 1
 	var callback_site = inflight_img_site
 	inflight_img_site = ""
 	if callback_site == "":
@@ -2186,50 +3138,109 @@ func _pick_crime_npc_from_action(action_input: String) -> Dictionary:
 		return {"name": "宿管阿姨", "describe": "拿着登记本、神情警惕地走了过来"}
 	if currentSiteName.find("学校") != -1 or currentSiteName.find("教学") != -1:
 		return {"name": "值班老师", "describe": "皱着眉、快步走来的值班老师"}
+	var sig = _detect_setting_style_signals()
+	if bool(sig.get("ancient", false)) and !bool(sig.get("bridge", false)):
+		return {"name": "巡城卫兵", "describe": "披甲执戟、神情严厉地拦下了你"}
+	if bool(sig.get("scifi", false)) or bool(sig.get("cyber", false)):
+		return {"name": "安保巡查员", "describe": "佩戴识别终端、语气冷硬地要求你停下"}
 	return {}
+
+func _build_proactive_npc_pool(reason: String) -> Array:
+	var sig = _detect_setting_style_signals()
+	var pool_map: Dictionary = {}
+	if bool(sig.get("ancient", false)) and !bool(sig.get("bridge", false)):
+		pool_map = {
+			"money": [
+				{"name": "集市掌柜", "describe": "拨着算盘、目光精明的掌柜"},
+				{"name": "巡街差役", "describe": "腰挎短刀、神情警觉的差役"},
+				{"name": "庄园管事", "describe": "衣着整肃、语气克制的管事"}
+			],
+			"exercise": [
+				{"name": "武馆教头", "describe": "身形稳健、目光锐利的教头"},
+				{"name": "营中老兵", "describe": "披着旧甲、说话干练的老兵"},
+				{"name": "猎场向导", "describe": "背弓挎囊、步伐利落的向导"}
+			],
+			"time_pass": [
+				{"name": "过路行商", "describe": "牵着驮兽、一路吆喝的行商"},
+				{"name": "驿站信使", "describe": "披尘快步、神色匆匆的信使"},
+				{"name": "城门小吏", "describe": "手持簿册、谨慎打量来人的小吏"}
+			],
+			"crime": [
+				{"name": "巡城卫兵", "describe": "披甲执戟、面色不善的卫兵"},
+				{"name": "庄园监工", "describe": "手持皮鞭、语气严厉的监工"},
+				{"name": "目击商贩", "describe": "抱紧货箱、神色惊惧的商贩"}
+			]
+		}
+	elif bool(sig.get("scifi", false)) or bool(sig.get("cyber", false)):
+		pool_map = {
+			"money": [
+				{"name": "交易站文员", "describe": "佩戴终端、谨慎核验账目的文员"},
+				{"name": "站区安保", "describe": "穿着防护装、目光冷静的安保"},
+				{"name": "通道巡检员", "describe": "提着检测仪、步伐稳健的巡检员"}
+			],
+			"exercise": [
+				{"name": "训练官", "describe": "佩戴护甲、下令简洁的训练官"},
+				{"name": "机修技师", "describe": "手上沾着油污、动作麻利的技师"},
+				{"name": "外勤队员", "describe": "背着装备包、目光冷静的队员"}
+			],
+			"time_pass": [
+				{"name": "引导员", "describe": "手持投影地图、态度专业的引导员"},
+				{"name": "远行乘客", "describe": "拖着箱包、神情疲惫的乘客"},
+				{"name": "后勤调度员", "describe": "不断核对清单、语速很快的调度员"}
+			],
+			"crime": [
+				{"name": "安保巡查员", "describe": "佩戴识别终端、语气冷硬的巡查员"},
+				{"name": "目击维修工", "describe": "握着扳手、神情紧张的维修工"},
+				{"name": "封控执行员", "describe": "启动警戒程序、要求你停下的执行员"}
+			]
+		}
+	else:
+		pool_map = {
+			"money": [
+				{"name": "路过行人", "describe": "步伐匆匆、却忍不住多看你一眼的行人"},
+				{"name": "值守人员", "describe": "神情警觉、习惯观察周围的值守人员"},
+				{"name": "小摊商贩", "describe": "守着摊位、眼神精明的商贩"}
+			],
+			"exercise": [
+				{"name": "训练者", "describe": "动作利落、状态很好的训练者"},
+				{"name": "晨练路人", "describe": "呼吸平稳、步伐轻快的路人"},
+				{"name": "教习", "describe": "目光专注、语气沉稳的教习"}
+			],
+			"time_pass": [
+				{"name": "热心路人", "describe": "愿意搭话、对周围很熟悉的路人"},
+				{"name": "陌生访客", "describe": "拿着地图、看起来有些迷路的人"},
+				{"name": "本地向导", "describe": "语气友好、对地形很熟的向导"}
+			],
+			"crime": [
+				{"name": "巡逻人员", "describe": "脚步急促、神情严肃地靠近你的人"},
+				{"name": "目击者", "describe": "突然出现在旁边、一脸惊讶的目击者"},
+				{"name": "工作人员", "describe": "眼神警惕、快步走来的工作人员"}
+			]
+		}
+	if pool_map.has(reason):
+		return pool_map[reason]
+	return []
 
 func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}, context_text: String = "") -> void:
 	if currentSiteName == "":
 		return
 	_set_event_flow_lock(true)
-	var npcs_by_reason = {
-		"money": [
-			{"name": "路过的清洁阿姨", "describe": "一位戴着手套、动作麻利的阿姨"},
-			{"name": "值班保安", "describe": "穿着制服、目光警觉的保安"},
-			{"name": "路人同学", "describe": "背着双肩包、神情好奇的学生"}
-		],
-		"exercise": [
-			{"name": "运动社学长", "describe": "穿着运动外套、状态很好的学长"},
-			{"name": "晨跑女生", "describe": "戴着耳机、步伐轻快的女生"},
-			{"name": "体育老师", "describe": "吹着口哨、语气爽朗的老师"}
-		],
-		"time_pass": [
-			{"name": "热心同学", "describe": "抱着教材、主动搭话的同学"},
-			{"name": "陌生访客", "describe": "拿着地图、看起来有些迷路的人"},
-			{"name": "校园志愿者", "describe": "佩戴袖章、语气友好的志愿者"}
-		],
-		"crime": [
-			{"name": "保安大叔", "describe": "腰挂对讲机、神情严肃走来的保安"},
-			{"name": "目击室友", "describe": "突然出现在旁边、一脸惊讶的室友"},
-			{"name": "店员", "describe": "眼神警惕、快步走来的工作人员"}
-		]
-	}
 	var npc_name = ""
 	var npc_describe = ""
 	if !forced_npc.is_empty():
 		npc_name = str(forced_npc.get("name", "")).strip_edges()
 		npc_describe = str(forced_npc.get("describe", "正在此地活动"))
 	else:
-		if !npcs_by_reason.has(reason):
-			_set_event_flow_lock(false)
-			return
-		var pool: Array = npcs_by_reason[reason]
+		var pool: Array = _build_proactive_npc_pool(reason)
 		if pool.is_empty():
 			_set_event_flow_lock(false)
 			return
 		var pick = pool[randi_range(0, pool.size() - 1)]
 		npc_name = str(pick.get("name", "路人"))
 		npc_describe = str(pick.get("describe", "正在此地活动"))
+	if dead_npc_names.has(npc_name):
+		_set_event_flow_lock(false)
+		return
 
 	if npc_name == "":
 		_set_event_flow_lock(false)
@@ -2630,7 +3641,8 @@ func create_location(path: String) -> void:
 	var new_sites: Array = []
 	for site_name in raw_sites:
 		var cleaned = _resolve_site_alias(str(site_name).strip_edges())
-		if cleaned != "" and !new_sites.has(cleaned):
+		cleaned = _extract_compact_entity_candidate(cleaned, 16)
+		if cleaned != "" and _is_valid_generated_location_name(cleaned) and !new_sites.has(cleaned):
 			new_sites.append(cleaned)
 
 	if new_sites.is_empty():
@@ -2677,16 +3689,30 @@ func create_location(path: String) -> void:
 
 # 创建NPC：NPC说某个地方有某个NPC
 func create_NPC(npc_name: String, location: String, npc_describe: String) -> void:
+	npc_name = _sanitize_generated_npc_name(npc_name)
+	npc_name = _extract_compact_entity_candidate(npc_name, 12)
+	if !_is_valid_generated_npc_name(npc_name) and _is_relation_npc_query(last_dialogue_input):
+		npc_name = _fallback_relation_npc_name(last_dialogue_input)
+	npc_name = _extract_compact_entity_candidate(npc_name, 12)
+	if !_is_valid_generated_npc_name(npc_name):
+		return
+	if npc_name == "" or dead_npc_names.has(npc_name):
+		return
 	var location_text = "世界某处"
 	if location != "":
+		location = _extract_compact_entity_candidate(location, 16)
+		if !_is_valid_generated_location_name(location):
+			location = currentSiteName
 		location_text = location
 	if !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
-		npcs[npc_name] = {"npc_describe": npc_describe, "npc_log": [], "特征": ""}
+		npcs[npc_name] = {"npc_describe": npc_describe, "npc_log": [], "特征": "", "important_events": []}
 	else:
 		if !npcs[npc_name].has("npc_describe") or str(npcs[npc_name].get("npc_describe", "")).strip_edges() == "":
 			npcs[npc_name]["npc_describe"] = npc_describe
 		if !npcs[npc_name].has("npc_log") or !(npcs[npc_name]["npc_log"] is Array):
 			npcs[npc_name]["npc_log"] = []
+		if !npcs[npc_name].has("important_events") or !(npcs[npc_name]["important_events"] is Array):
+			npcs[npc_name]["important_events"] = []
 	if location != "":
 		if !sites.has(location) or !(sites[location] is Dictionary):
 			sites[location] = {"能前往的地点": [], "npc": {}, "地点名称": location, "地点描述": "", "英文描述": ""}
@@ -2782,14 +3808,31 @@ func _append_event_memories_to_npc_log(npc_name: String) -> void:
 		return
 	if !npcs[npc_name].has("npc_log") or !(npcs[npc_name]["npc_log"] is Array):
 		npcs[npc_name]["npc_log"] = []
+	if !npcs[npc_name].has("important_events") or !(npcs[npc_name]["important_events"] is Array):
+		npcs[npc_name]["important_events"] = []
+	var arr: Array = npcs[npc_name]["npc_log"]
+	var npc_events: Array = npcs[npc_name]["important_events"]
+	if !npc_events.is_empty():
+		var start_idx = max(0, npc_events.size() - 4)
+		for i in range(start_idx, npc_events.size()):
+			var event_row = npc_events[i]
+			if !(event_row is Dictionary):
+				continue
+			var view_text = str(event_row.get("npc_view", "")).strip_edges()
+			if view_text == "":
+				continue
+			var note = "重要事件：" + view_text
+			if !arr.has(note):
+				arr.append(note)
+		npcs[npc_name]["npc_log"] = arr
+		return
 	var mems = _get_recent_related_event_memories(currentSiteName, npc_name, 3)
 	if mems.is_empty():
 		return
-	var arr: Array = npcs[npc_name]["npc_log"]
 	for m in mems:
 		if !(m is Dictionary):
 			continue
-		var note = "系统记录：与该NPC/地点相关的重要事件【" + str(m.get("text", "")) + "】。"
+		var note = "重要事件：" + str(m.get("text", ""))
 		if !arr.has(note):
 			arr.append(note)
 	npcs[npc_name]["npc_log"] = arr
@@ -2943,10 +3986,23 @@ func _auto_handle_action_search(action_input: String, action_reply: String) -> v
 	elif target.find("找") != -1:
 		target = target.substr(target.find("找") + 1)
 	target = target.replace("。", "").replace("，", "").replace("!", "").replace("？", "").strip_edges()
+	target = _sanitize_generated_npc_name(target)
+	target = _extract_compact_entity_candidate(target, 16)
 	if target != "" and action_reply.find("没有" + target) != -1:
 		return
 
 	if target == "":
+		return
+	if !_is_valid_generated_npc_name(target):
+		var maybe_loc = _is_valid_generated_location_name(target)
+		if !maybe_loc and _is_relation_npc_query(action_input):
+			target = _fallback_relation_npc_name(action_input)
+			target = _extract_compact_entity_candidate(target, 12)
+	if !_is_valid_generated_npc_name(target) and !_is_valid_generated_location_name(target):
+		return
+	if !_is_valid_generated_npc_name(target) and _is_relation_npc_query(action_input):
+		target = _fallback_relation_npc_name(action_input)
+	if target == "" or dead_npc_names.has(target):
 		return
 
 	var location_hints = ["楼", "馆", "店", "部", "室", "场", "食堂", "宿舍", "图书馆", "超市", "办公室", "校门"]
@@ -2957,9 +4013,16 @@ func _auto_handle_action_search(action_input: String, action_reply: String) -> v
 			break
 
 	if is_location:
+		if !_is_valid_generated_location_name(target):
+			return
 		create_location(currentSiteName + "-" + target)
 	else:
-		create_NPC(target, currentSiteName, "正在此地活动")
+		if !_is_valid_generated_npc_name(target):
+			return
+		var npc_desc = "正在此地活动"
+		if _is_relation_npc_query(action_input):
+			npc_desc = _guess_related_npc_desc(action_input, str(currentNpc.npcName) if currentNpc != null else "")
+		create_NPC(target, currentSiteName, npc_desc)
 
 # 创建传闻：NPC提及了某个传闻、新闻或谣言
 func create_rumors(rumor_name: String, content: String) -> void:
@@ -2989,15 +4052,29 @@ func set_time(hour: int, minute: int) -> float:
 	return float(rec.get("hours", 0.0))
 
 # 自我销毁：NPC说想要永远离开或自己要死了
-func destroy_yourself() -> void:
-	if currentNpc == null:
-		return
-	var npc_name = currentNpc.npcName
+func destroy_yourself(npc_name_hint: String = "") -> void:
+	var npc_name = str(npc_name_hint).strip_edges()
+	if npc_name == "":
+		if currentNpc == null:
+			return
+		npc_name = str(currentNpc.npcName)
+	if !dead_npc_names.has(npc_name):
+		dead_npc_names.append(npc_name)
+	if npcs.has(npc_name):
+		npcs.erase(npc_name)
+	for site_key in sites.keys():
+		if !(sites[site_key] is Dictionary):
+			continue
+		if !sites[site_key].has("npc") or !(sites[site_key]["npc"] is Dictionary):
+			continue
+		sites[site_key]["npc"].erase(npc_name)
+		_save_site_json(str(site_key), sites[site_key])
 	addLog("<" + npc_name + "离开了，也许再也见不到了...>")
 	for i:npcButton in %npc_buttons.get_children():
 		if i.npcName == npc_name:
 			i.queue_free()
-			return
+	if currentNpc != null and str(currentNpc.npcName) == npc_name:
+		await changeStateInto(GameManager.worldState.explore)
 
 # 处理从AI接收的JSON指令
 func handle_npc_instruction(tool_calls: Array) -> void:
@@ -3097,7 +4174,10 @@ func handle_npc_instruction(tool_calls: Array) -> void:
 			"set_time":
 				set_time(int(parameters.get("hour", 0)), int(parameters.get("minute", 0)))
 			"destroy_self":
-				destroy_yourself()
+				var leave_target = ""
+				if currentNpc != null:
+					leave_target = str(currentNpc.npcName)
+				_request_npc_leave_confirm(leave_target)
 			_:
 				print("未知方法: ", method)
 				addLog("<调试：未知工具调用 " + method + ">")
@@ -3211,7 +4291,12 @@ func save_game() -> void:
 		"env_dic": envDic,
 		"items": item_list,
 		"logs": log_list,
-		"important_event_memories": important_event_memories
+		"important_event_memories": important_event_memories,
+		"current_chat_session_npc": current_chat_session_npc,
+		"current_chat_session_records": current_chat_session_records,
+		"dead_npc_names": dead_npc_names,
+		"output_mode": output_mode,
+		"efficient_mode_min_chars": efficient_mode_min_chars
 	}
 
 	var file = FileAccess.open(SAVE_FILE, FileAccess.WRITE)
@@ -3250,6 +4335,23 @@ func load_game() -> bool:
 	npcs            = data.get("npcs", {})
 	rumors          = data.get("rumors", {})
 	important_event_memories = data.get("important_event_memories", [])
+	current_chat_session_npc = str(data.get("current_chat_session_npc", "")).strip_edges()
+	current_chat_session_records = []
+	var loaded_session_records = data.get("current_chat_session_records", [])
+	if loaded_session_records is Array:
+		for row in loaded_session_records:
+			var rec = str(row).strip_edges()
+			if rec != "":
+				current_chat_session_records.append(rec)
+	if current_chat_session_records.size() > chat_session_record_limit:
+		current_chat_session_records = current_chat_session_records.slice(current_chat_session_records.size() - chat_session_record_limit, current_chat_session_records.size())
+	if current_chat_session_npc == "" or !npcs.has(current_chat_session_npc):
+		current_chat_session_npc = ""
+		current_chat_session_records = []
+	dead_npc_names = data.get("dead_npc_names", [])
+	output_mode = str(data.get("output_mode", "performance"))
+	efficient_mode_min_chars = int(data.get("efficient_mode_min_chars", 100))
+	_set_output_mode(output_mode)
 
 	var p = data.get("player", {})
 	playerName  = p.get("name", playerName)

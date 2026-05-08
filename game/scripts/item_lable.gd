@@ -13,6 +13,20 @@ var effect_value: int = 0
 @onready var image_button: TextureButton = %ItemImageButton
 @onready var quantity_label: Label = %QuantityLabel
 
+const ITEM_ICON_SIZE_NORMAL := 52.0
+const ITEM_ICON_SIZE_COMPACT := 40.0
+
+func _apply_compact_visual(is_compact: bool) -> void:
+	if image_button == null or quantity_label == null:
+		return
+	var icon_size = ITEM_ICON_SIZE_COMPACT if is_compact else ITEM_ICON_SIZE_NORMAL
+	image_button.custom_minimum_size = Vector2(icon_size, icon_size)
+	custom_minimum_size = Vector2(icon_size, icon_size + 16.0)
+	if is_compact:
+		quantity_label.add_theme_font_size_override("font_size", 10)
+	else:
+		quantity_label.add_theme_font_size_override("font_size", 12)
+
 func _ready() -> void:
 	_refresh_view()
 
@@ -60,6 +74,11 @@ func _effect_display_text() -> String:
 func _refresh_view() -> void:
 	if quantity_label == null or image_button == null:
 		return
+	var sibling_count = 0
+	var parent_node = get_parent()
+	if parent_node != null:
+		sibling_count = parent_node.get_child_count()
+	_apply_compact_visual(sibling_count >= 10)
 	quantity_label.text = "x" + str(item_num)
 	var display_texture: Texture2D = item_texture
 	if display_texture == null:
