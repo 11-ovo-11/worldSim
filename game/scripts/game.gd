@@ -45,7 +45,7 @@ var last_crime_event_context: String = ""
 var last_action_input: String = ""
 var last_dialogue_input: String = ""
 var preferred_input_focus: String = "action"
-var chat_session_record_limit: int = 80
+var chat_session_record_limit: int = 120
 var pending_action_confirm: Dictionary = {}
 var important_event_memories: Array = []
 var current_chat_session_npc: String = ""
@@ -55,18 +55,16 @@ var explore_route_retry_count: int = 0
 var bg_debug_enabled: bool = true
 var has_saved_in_session: bool = false
 var dead_npc_names: Array = []
-var output_mode: String = "performance"
-var efficient_mode_min_chars: int = 100
-var action_narration_min_chars: int = 60
-var prompt_session_memory_max_lines: int = 16
-var prompt_session_memory_max_chars: int = 1200
+var dialogue_min_chars: int = 90
+var action_narration_min_chars: int = 90
+var prompt_session_memory_max_lines: int = 24
+var prompt_session_memory_max_chars: int = 1800
 var prompt_action_context_max_chars: int = 2200
 var output_mode_debug_enabled: bool = false
-var efficient_mode_button: Button
-var performance_mode_button: Button
-var output_mode_group := ButtonGroup.new()
+var output_length_button: Button
 var min_chars_dialog: AcceptDialog
-var min_chars_spin: SpinBox
+var dialogue_min_chars_spin: SpinBox
+var action_min_chars_spin: SpinBox
 var img_watchdog_seq: int = 0
 
 # 游戏数据
@@ -102,35 +100,35 @@ const ACTION_PROACTIVE_NPC_RATE: float = 0.2
 
 # 系统提示词
 var role_prompt = """
-系统：你是一个角色扮演世界生成器。你必须严格遵循“用户初始设定”和“当前世界观”。
-硬性约束：
-1) 不得默认使用赛博朋克、机器人、义体、飞船、未来军武等元素。
-2) 只有当用户设定或世界观明确提及这些元素时，才允许出现。
-3) 若用户设定偏现代日常（如大学校园、城市、普通职业），场景与NPC必须保持对应的现代现实风格（大学设定要有大学生氛围和面貌，而不是中学）。
-4) 若时代设定明确（如古代、近现代、科幻、奇幻），地点命名、建筑细节、职业称谓、NPC外观必须优先匹配该时代；除非明确有“穿越/多世界桥接”，不得混入其他时代元素。
-5) 若设定出现“奴隶制/封建/王朝”等社会结构，要在地点与NPC信息里体现等级关系与社会分工，不能弱化成中性模板。
-
-根据用户想去的地点，严格输出有效 JSON，包含：
+系统：你是角色扮演世界生成器，必须严格遵循“用户初始设定”和“当前世界观”。
+约束：
+1) 禁止默认加入赛博朋克/机器人/义体/飞船/未来军武元素；仅在设定明确提及时可用。
+2) 现代日常设定（如大学/城市/普通职业）必须保持现实风格，不能错位成其他学段或题材。
+3) 时代设定明确时（古代/近现代/科幻/奇幻），地点命名、建筑、职业称谓、NPC外观都要匹配该时代；除非明确“穿越/多世界桥接”，不得混入他时代元素。
+4) 若有奴隶制/封建/王朝等结构，地点与NPC信息要体现等级与社会分工，不能中性化。
+按玩家想去的地点输出合法 JSON，字段必须包含：
 1. 地点名称
 2. 地点描述
-3. 英文描述（用于生图，风格与世界观一致）
+3. 英文描述（用于生图，风格需一致）
 4. 能前往的地点（数组）
-5. npc（对象，键为姓名，值为一句外观描述）
+5. npc（对象：键=姓名，值=一句外观描述）
 """
 
 var agent_prompt:String = """你是一个AI智能体，擅长确定需要调用的方法,没有合适的就回复：没有方法被调用。给你的就是ai的回复，所有提到的物品均为游戏道具，不完整的信息就猜测补齐，不要问问题
-	如果输入信息类似于：<以50的价格卖1把剑>，那就是要以单价50卖给玩家某件物品，is_total_price=false。
-	如果输入信息类似于：<以总价100卖3瓶药水>，那就是要以总价100（而非单价）卖给玩家物品，is_total_price=true。
-	如果输入信息类似于：<送1瓶治疗药水>，那就是要送给玩家某件物品。
-	如果输入信息类似于：<接受1瓶治疗药水>，那就是要接受玩家的某件物品。
-	如果输入信息类似于：<创建路径：幽暗森林-雪山-龙之谷><创建路径：商贩摊位>，那就是提到了某个地点或提到了到达某个地方的一系列地点的路径。
-	如果输入信息类似于：<老约翰在酒馆，是一个靠在墙角的男人，右眼闪着红光，脚边放着行李箱>，那就是提及了某个地方有某个NPC。
-	如果输入信息类似于：<传闻：国王被暗杀-国王被暗杀，引起震惊>，那就是提及了类似于传闻、新闻、谣言的事件
-	如果输入信息类似于：<离开>，那就是想要离开，或者自己要死了。
-	如果输入信息类似于：<设置时间：16:00>，那就是要将游戏时间跳跃到该时刻。
-	如果一次输入里包含多个可执行指令，必须按顺序调用多个函数，不要只调用一个。
-	涉及物品数量时，quantity 必须填写真实数量，不能默认写1。
-	提取物品名称时，严格以<>标签内的原文为准，不得自行修改、替换或从其他地方推断物品名称。
+	规则：无可调用方法时回复“没有方法被调用”。输入是AI回复文本；其中物品均为游戏道具；信息不全可合理补齐；不要反问。
+	标签解释：
+	- <以50的价格卖1把剑>：单价售卖，is_total_price=false。
+	- <以总价100卖3瓶药水>：总价售卖，is_total_price=true。
+	- <送1瓶治疗药水>：给玩家物品。
+	- <接受1瓶治疗药水>：收取玩家物品。
+	- <创建路径：A-B-C> 或 <创建路径：商贩摊位>：地点/路径信息。
+	- <老约翰在酒馆，是一个描述>：地点NPC信息。
+	- <传闻：主题-内容>：传闻/新闻事件。
+	- <离开>：离开或死亡离场意图。
+	- <设置时间：16:00>：时间跳转。
+	若一次输入含多个标签，必须按顺序调用多个函数。
+	涉及数量时 quantity 必须是真实值，不能默认1。
+	物品名必须严格取自<>原文，不得改写或外推。
 """
 
 var item_profile_prompt:String = """
@@ -152,17 +150,15 @@ var validation_feedback_prompt:String = """
 """
 
 var action_prompt:String = """
-你是文字游戏的世界叙述者。玩家进行了一个行动，请根据世界背景与当前玩家数据，输出细节充分、自然连贯的中文叙述。
-叙述尽量精炼，通常1~3句，建议45~90字（确实应简短的失败反馈可更短）。
-表达风格要求：尽量直接、清楚、口语化，少用抒情环境描写；除非必要，不要写大段人物台词。
-重点写清“做了什么、是否成功、造成了什么变化（资产/物品/地点/NPC态度）”。
-你必须先判断是否符合常理与数据（资产、背包、数量、地点关系、角色身份与当前场景）。
-玩家身份（玩家名称/设定）由系统确认，为当前世界中的真实事实，不得质疑、否认或重置为普通人设。
-涉及NPC反应时，必须综合玩家身份、玩家声望、当前NPC身份、历史重要事件来给出态度（敬畏/尊重/戒备/敌意等），不能与设定脱节。
-若不成立（如钱不够、背包没有该物品、地点不合理、角色在当前场景中无法完成该行动——例如大学生在学校找不到菜市场），只输出失败反馈，不要伪造成功，不要添加交易/物品变更指令。
-若行动结果导致创建了地点或NPC，必须在叙述中明确表示找到了该地点或NPC；若失败，不得添加任何地点创建指令。
-
-若成立且涉及可执行变化，在叙述末追加一个或多个<>指令：
+你是文字游戏叙述者。根据世界背景与当前玩家数据，描述玩家这次行动结果。
+输出：1~3句，至少140字；口语化、直接、少抒情、少长对白。
+必须写清：做了什么、是否成功、造成什么变化（资产/物品/地点/NPC态度）。
+先校验常理与数据：资产、背包、数量、地点关系、角色身份、当前场景。
+玩家身份由系统确认，视为世界事实，不得质疑/否认/重置。
+涉及NPC态度时，必须结合玩家身份、声望、NPC身份、历史重要事件（敬畏/尊重/戒备/敌意等）。
+若不成立（钱不够/缺物品/地点不合理/场景不可执行等），只输出失败，不得伪造成功，不得添加交易或物品变更指令。
+若成功并创建了地点或NPC，叙述中要明确“找到了该地点或NPC”；失败时不得添加地点创建指令。
+若成立且有可执行变化，在叙述末追加一个或多个<>指令：
 1) 交易出售：<以50的价格卖1把剑> 或 <以总价100卖3瓶药水>
 2) 获得物品：<送1瓶治疗药水>
 3) 交出/消耗物品：<接受1瓶治疗药水>
@@ -173,9 +169,8 @@ var action_prompt:String = """
 8) 时间变化：<设置时间：16:00>
 9) 离开：<离开>
 10) 违规行为：<犯罪：偷窃>
-11) 前往地点（行动是去某处且判断可成功到达时）：<前往:地点名>
-
-工具指令以<>附加在句末，不要解释。
+11) 前往地点（行动为去某处且可成功到达时）：<前往:地点名>
+工具指令仅用<>附在句末，不要解释。
 """
 
 var ai_busy: bool = false
@@ -215,74 +210,68 @@ func _ready():
 	%backgroundImg.material = null
 	changeTextTo(%siteName, "未定位")
 	player_update()
+	_setup_output_mode_controls()
 	_apply_interaction_locks()
 	call_deferred("_focus_active_input")
 
 func _setup_output_mode_controls() -> void:
 	if response_label == null:
 		return
-	var parent_node = response_label.get_parent()
-	if parent_node == null:
+	if output_length_button != null and is_instance_valid(output_length_button):
 		return
-	var mode_row = HBoxContainer.new()
-	mode_row.name = "OutputModeRow"
-	mode_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mode_row.alignment = BoxContainer.ALIGNMENT_END
-	performance_mode_button = Button.new()
-	performance_mode_button.text = "性能模式"
-	performance_mode_button.toggle_mode = true
-	performance_mode_button.button_group = output_mode_group
-	performance_mode_button.button_pressed = true
-	performance_mode_button.pressed.connect(func(): _set_output_mode("performance"))
-	efficient_mode_button = Button.new()
-	efficient_mode_button.text = "高效模式"
-	efficient_mode_button.toggle_mode = true
-	efficient_mode_button.button_group = output_mode_group
-	efficient_mode_button.pressed.connect(func(): _set_output_mode("efficient"))
-	efficient_mode_button.gui_input.connect(_on_efficient_mode_button_gui_input)
-	mode_row.add_child(performance_mode_button)
-	mode_row.add_child(efficient_mode_button)
-	parent_node.add_child(mode_row)
-	parent_node.move_child(mode_row, response_label.get_index())
+	output_length_button = Button.new()
+	output_length_button.name = "OutputLengthButton"
+	output_length_button.text = "字数"
+	output_length_button.custom_minimum_size = Vector2(52, 26)
+	output_length_button.anchors_preset = 1
+	output_length_button.anchor_left = 1.0
+	output_length_button.anchor_right = 1.0
+	output_length_button.offset_left = -60.0
+	output_length_button.offset_top = 4.0
+	output_length_button.offset_right = -4.0
+	output_length_button.offset_bottom = 30.0
+	output_length_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	output_length_button.pressed.connect(_on_output_length_button_pressed)
+	response_label.add_child(output_length_button)
 	min_chars_dialog = AcceptDialog.new()
-	min_chars_dialog.title = "设置高效模式最小字数"
+	min_chars_dialog.title = "设置输出字数"
 	var box = VBoxContainer.new()
-	var tip = Label.new()
-	tip.text = "最小输出字数"
-	min_chars_spin = SpinBox.new()
-	min_chars_spin.min_value = 40
-	min_chars_spin.max_value = 2000
-	min_chars_spin.step = 10
-	min_chars_spin.value = efficient_mode_min_chars
-	box.add_child(tip)
-	box.add_child(min_chars_spin)
+	var dialogue_tip = Label.new()
+	dialogue_tip.text = "对话最小字数"
+	dialogue_min_chars_spin = SpinBox.new()
+	dialogue_min_chars_spin.min_value = 40
+	dialogue_min_chars_spin.max_value = 2000
+	dialogue_min_chars_spin.step = 10
+	dialogue_min_chars_spin.value = dialogue_min_chars
+	var action_tip = Label.new()
+	action_tip.text = "行动最小字数"
+	action_min_chars_spin = SpinBox.new()
+	action_min_chars_spin.min_value = 40
+	action_min_chars_spin.max_value = 2000
+	action_min_chars_spin.step = 10
+	action_min_chars_spin.value = action_narration_min_chars
+	box.add_child(dialogue_tip)
+	box.add_child(dialogue_min_chars_spin)
+	box.add_child(action_tip)
+	box.add_child(action_min_chars_spin)
 	min_chars_dialog.add_child(box)
 	add_child(min_chars_dialog)
 	min_chars_dialog.confirmed.connect(_on_min_chars_dialog_confirmed)
 
-func _set_output_mode(mode_name: String) -> void:
-	if mode_name != "efficient":
-		output_mode = "performance"
-		if performance_mode_button != null:
-			performance_mode_button.button_pressed = true
+func _on_output_length_button_pressed() -> void:
+	if min_chars_dialog == null:
 		return
-	output_mode = "efficient"
-	if efficient_mode_button != null:
-		efficient_mode_button.button_pressed = true
-
-func _on_efficient_mode_button_gui_input(event: InputEvent) -> void:
-	if !(event is InputEventMouseButton):
-		return
-	var mb = event as InputEventMouseButton
-	if mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed and min_chars_dialog != null:
-		if min_chars_spin != null:
-			min_chars_spin.value = efficient_mode_min_chars
-		min_chars_dialog.popup_centered(Vector2i(320, 120))
+	if dialogue_min_chars_spin != null:
+		dialogue_min_chars_spin.value = dialogue_min_chars
+	if action_min_chars_spin != null:
+		action_min_chars_spin.value = action_narration_min_chars
+	min_chars_dialog.popup_centered(Vector2i(360, 180))
 
 func _on_min_chars_dialog_confirmed() -> void:
-	if min_chars_spin == null:
+	if dialogue_min_chars_spin == null or action_min_chars_spin == null:
 		return
-	efficient_mode_min_chars = clamp(int(min_chars_spin.value), 40, 2000)
+	dialogue_min_chars = clamp(int(dialogue_min_chars_spin.value), 40, 2000)
+	action_narration_min_chars = clamp(int(action_min_chars_spin.value), 40, 2000)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
@@ -394,10 +383,11 @@ func get_current_chat_session_memory(npc_name: String = "") -> String:
 		var row_text = str(current_chat_session_records[i]).strip_edges()
 		if row_text == "":
 			continue
-		lines.append("- " + _clip_prompt_text(row_text, 110))
+		lines.append("- " + _clip_prompt_text(row_text, 150))
 	if lines.is_empty():
 		return ""
-	return _clip_prompt_text("\n".join(lines), prompt_session_memory_max_chars)
+	var joined = "以下是当前会话中刚发生且必须延续影响的内容：\n" + "\n".join(lines)
+	return _clip_prompt_text(joined, prompt_session_memory_max_chars)
 
 func _clip_prompt_text(text: String, max_chars: int) -> String:
 	var src = str(text).strip_edges()
@@ -925,7 +915,7 @@ var tools = [
 func ask_ai(message: Array, askmode: aiMode):
 	currentMode = askmode
 	set_ai_busy(true)
-	var outbound_messages = _decorate_messages_for_output_mode(message, askmode)
+	var outbound_messages = _compact_messages_for_request(_decorate_messages_for_output_mode(message, askmode))
 	var body = [outbound_messages,null,"text"]
 	match askmode:
 		aiMode.tools:
@@ -960,13 +950,40 @@ func ask_ai(message: Array, askmode: aiMode):
 	await $HTTPRequest.request_completed
 
 func _decorate_messages_for_output_mode(message: Array, askmode: aiMode) -> Array:
-	if output_mode != "efficient":
-		return message
 	if askmode != aiMode.chat and askmode != aiMode.action:
 		return message
 	var copied = message.duplicate(true)
-	var constraint = "输出要求：本次回复最少" + str(efficient_mode_min_chars) + "字，信息完整、自然，不要省略关键细节。"
+	var min_chars = dialogue_min_chars if askmode == aiMode.chat else action_narration_min_chars
+	min_chars = max(40, min_chars)
+	var constraint = "输出要求：本次回复至少" + str(min_chars) + "字，信息完整、自然，不要省略关键细节，不要用固定收尾句硬凑字数。"
 	copied.push_front({"role":"system", "content": constraint})
+	return copied
+
+func _compact_prompt_content(text: String) -> String:
+	var src = str(text).replace("\r\n", "\n").replace("\r", "\n")
+	var rows = src.split("\n", false)
+	var out: Array = []
+	for row in rows:
+		var cleaned = str(row).strip_edges()
+		if cleaned == "":
+			continue
+		while cleaned.find("  ") != -1:
+			cleaned = cleaned.replace("  ", " ")
+		out.append(cleaned)
+	if out.is_empty():
+		return ""
+	return "\n".join(out)
+
+func _compact_messages_for_request(messages: Array) -> Array:
+	var copied = messages.duplicate(true)
+	for i in range(copied.size()):
+		var row = copied[i]
+		if !(row is Dictionary):
+			continue
+		if !row.has("content"):
+			continue
+		row["content"] = _compact_prompt_content(str(row.get("content", "")))
+		copied[i] = row
 	return copied
 
 func _output_mode_debug(msg: String) -> void:
@@ -980,48 +997,8 @@ func _tail_preview(text: String, max_chars: int = 48) -> String:
 		return src
 	return src.substr(src.length() - max_chars, max_chars)
 
-func _build_mode_consistent_extensions(base_text: String, askmode: aiMode) -> Array:
-	var plain = _strip_angle_tags(base_text).strip_edges()
-	if plain == "":
-		return []
-	var has_first_person = plain.find("我") != -1
-	var has_second_person = plain.find("你") != -1
-	var has_dialogue_tone = plain.find("“") != -1 or plain.find("”") != -1 or plain.find("：") != -1
-	if askmode == aiMode.action:
-		return [
-			"结果已经生效，你可以继续下一步行动。",
-			"相关状态已按这次行动更新，后续可继续推进。",
-			"这一步已经处理完成，新的变化会体现在后续选择里。"
-		]
-	if askmode == aiMode.chat:
-		if has_first_person:
-			return [
-				"我又补了一句：这事牵连的人不少，得一层层说清楚才不至于误会。",
-				"我缓了口气，把刚才没讲完的细节接着往下说，前后因果也顺了一遍。",
-				"我把关键处再讲得更明白些，免得你只听到一半就下判断。"
-			]
-		if has_dialogue_tone:
-			return [
-				"对方压低声音又补了几句，把前后的来龙去脉交代得更完整。",
-				"话音刚落，对方又顺着线索往下讲，细节一层层展开。",
-				"短暂沉默后，对方把遗漏的部分补上，语气里仍带着谨慎。"
-			]
-		return [
-			"气氛并没有就此平息，周围人的反应和后续变化还在继续发酵。",
-			"眼前这段经历还远没结束，新的信息正随着交流一点点浮现。",
-			"场面看似暂时安静下来，但真正关键的后续还在慢慢显形。"
-		]
-	if has_second_person:
-		return [
-			"你能感觉到局势仍在推进，接下来每一步都会牵动周围人的态度。",
-			"你眼前的变化只是开端，更多结果会在后续行动里逐步显现。",
-			"你还来得及调整选择，因为这件事的余波正在继续扩散。"
-		]
-	return [
-		"局势仍在变化，后续线索和人物动向会在接下来的推进中逐步清晰。",
-		"眼前的信息只是当前截面，新的细节会随着时间和行动不断显现。",
-		"这段进展尚未收束，接下来还会有更多可观察到的反馈与变化。"
-	]
+func _build_mode_consistent_extensions(_base_text: String, _askmode: aiMode) -> Array:
+	return []
 
 func _strip_angle_tags(text: String) -> String:
 	var src = str(text)
@@ -1030,62 +1007,14 @@ func _strip_angle_tags(text: String) -> String:
 		return src
 	return regex.sub(src, "", true)
 
-func _expand_text_to_min_chars(text: String, min_chars: int, askmode: aiMode) -> String:
-	var src = str(text).strip_edges()
-	if src == "":
-		return src
-	_output_mode_debug("expand:start mode=" + str(askmode) + ", src_len=" + str(src.length()) + ", min=" + str(min_chars))
-	var tags = ""
-	var plain = src
-	var regex = RegEx.new()
-	if regex.compile("<[^>]*>") == OK:
-		for m in regex.search_all(src):
-			tags += str(m.get_string())
-		plain = regex.sub(src, "", true).strip_edges()
-	var cur_len = plain.length()
-	if cur_len >= min_chars:
-		_output_mode_debug("expand:skip already enough, plain_len=" + str(cur_len))
-		return src
-	var extensions = _build_mode_consistent_extensions(plain, askmode)
-	if extensions.is_empty():
-		extensions = ["眼前这段发展还在继续，后续变化会逐步显现。"]
-	var joiner = "\n" if src.find("\n") != -1 else " "
-	var loop_count = 0
-	var used_extensions: Array = []
-	while plain.length() < min_chars:
-		var ext = str(extensions[loop_count % extensions.size()]).strip_edges()
-		if ext == "":
-			break
-		plain += joiner + ext
-		used_extensions.append(ext)
-		loop_count += 1
-		if loop_count > 12:
-			break
-	_output_mode_debug("expand:done loops=" + str(loop_count) + ", final_len=" + str(plain.length()) + ", used=" + " | ".join(used_extensions))
-	if tags != "":
-		return plain + tags
-	return plain
+func _expand_text_to_min_chars(text: String, _min_chars: int, _askmode: aiMode) -> String:
+	return text
 
-func _enforce_output_min_length(text: String, askmode: aiMode) -> String:
-	if output_mode != "efficient":
-		return text
-	if askmode != aiMode.chat and askmode != aiMode.action:
-		return text
-	var plain = _strip_angle_tags(text).strip_edges()
-	var plain_len = plain.length()
-	_output_mode_debug("enforce:mode=" + str(askmode) + ", plain_len=" + str(plain_len) + ", min=" + str(efficient_mode_min_chars) + ", tail=" + _tail_preview(plain, 36))
-	if plain_len >= efficient_mode_min_chars:
-		return text
-	var expanded = _expand_text_to_min_chars(text, efficient_mode_min_chars, askmode)
-	var expanded_plain = _strip_angle_tags(expanded).strip_edges()
-	_output_mode_debug("enforce:expanded_len=" + str(expanded_plain.length()) + ", expanded_tail=" + _tail_preview(expanded_plain, 48))
-	return expanded
+func _enforce_output_min_length(text: String, _askmode: aiMode) -> String:
+	return text
 
 func _enforce_action_narration_richness(text: String) -> String:
-	var plain = _strip_angle_tags(text).strip_edges()
-	if plain.length() >= action_narration_min_chars:
-		return text
-	return _expand_text_to_min_chars(text, action_narration_min_chars, aiMode.action)
+	return text
 
 func _looks_like_action_or_dialogue_phrase(text: String) -> bool:
 	var t = _normalize_single_line_input(text)
@@ -2056,29 +1985,29 @@ func _submit_action_input(raw_input: String, bypass_lock_check: bool = false) ->
 	addLog("【行动】" + user_input)
 	changeTextTo(%speakerNameLabel, playerName)
 	changeTextTo(response_label, user_input)
-	var action_context = "用户初始设定：" + world_seed_input
-	action_context += "\n当前世界观：" + background
-	action_context += "\n当前地点：" + currentSiteName
-	action_context += "\n玩家资产：" + str(money)
-	action_context += "\n玩家身份：" + playerName
-	action_context += "\n玩家背包：" + _build_inventory_snapshot()
+	var action_context = "设定：" + world_seed_input
+	action_context += "\n世界：" + background
+	action_context += "\n地点：" + currentSiteName
+	action_context += "\n资产：" + str(money)
+	action_context += "\n身份：" + playerName
+	action_context += "\n背包：" + _build_inventory_snapshot()
 	var focus_npc_name = ""
 	var focus_npc_desc = ""
 	if currentState == worldState.chat and currentNpc != null:
 		focus_npc_name = str(currentNpc.npcName)
 		focus_npc_desc = str(currentNpc.npcDescribe)
-		action_context += "\n当前对话对象：" + focus_npc_name
-		action_context += "\n对方身份描述：" + focus_npc_desc
-		action_context += "\n行动理解规则：当行动没有明确对象时，优先视为对当前对话对象发起。"
+		action_context += "\n对象：" + focus_npc_name
+		action_context += "\n对象身份：" + focus_npc_desc
+		action_context += "\n规则：行动无明确对象时默认对当前对象发起。"
 	var identity_guidance = _clip_prompt_text(_build_identity_attitude_guidance(focus_npc_name, focus_npc_desc), 520)
 	if identity_guidance != "":
-		action_context += "\n身份与态度导向：\n" + identity_guidance
-	var chat_session_mem = _clip_prompt_text(get_current_chat_session_memory(focus_npc_name), 520)
+		action_context += "\n态度导向：\n" + identity_guidance
+	var chat_session_mem = _clip_prompt_text(get_current_chat_session_memory(focus_npc_name), 900)
 	if chat_session_mem != "":
-		action_context += "\n本次对话会话内上下文（仅本轮有效）：\n" + chat_session_mem
+		action_context += "\n当前会话强约束：\n" + chat_session_mem
 	var related_events = _clip_prompt_text(_build_related_event_memory_for_action(user_input, focus_npc_name), 480)
 	if related_events != "":
-		action_context += "\n相关重要事件记忆：\n" + related_events
+		action_context += "\n事件记忆：\n" + related_events
 	if focus_npc_name != "":
 		_record_current_chat_session("行动输入", playerName, user_input)
 	action_context = _clip_prompt_text(action_context, prompt_action_context_max_chars)
@@ -2423,6 +2352,10 @@ func _remember_important_event(raw_text: String, site_name: String = "", focus_n
 		"trade": int(sig.get("trade", 0)),
 		"gift": int(sig.get("gift", 0)),
 		"assist": int(sig.get("assist", 0)),
+		"positive": int(sig.get("positive", 0)),
+		"negative": int(sig.get("negative", 0)),
+		"coercion": int(sig.get("coercion", 0)),
+		"respect": int(sig.get("respect", 0)),
 		"t": Time.get_unix_time_from_system()
 	}
 	for i in range(important_event_memories.size() - 1, -1, -1):
@@ -2464,23 +2397,68 @@ func _should_store_npc_personal_event(plain_text: String, sig: Dictionary) -> bo
 		return false
 	if t.begins_with("【行动】"):
 		return false
-	if t.find("你抵达了") != -1 or t.find("地图更新") != -1:
-		return false
+	var outcome_flags = _extract_npc_result_outcome_flags(t, sig)
+	if bool(outcome_flags.get("accepted", false)) or bool(outcome_flags.get("rejected", false)) or bool(outcome_flags.get("cooperated", false)):
+		return true
+	if bool(outcome_flags.get("warned", false)) or bool(outcome_flags.get("harmed", false)) or bool(outcome_flags.get("breached", false)):
+		return true
+	if bool(outcome_flags.get("gifted", false)) or bool(outcome_flags.get("traded", false)) or bool(outcome_flags.get("protected", false)):
+		return true
+	if bool(outcome_flags.get("softened", false)):
+		return true
 	if int(sig.get("trade", 0)) > 0 or int(sig.get("gift", 0)) > 0 or int(sig.get("assist", 0)) > 0:
 		return true
+	if int(sig.get("positive", 0)) > 0 or int(sig.get("negative", 0)) > 0 or int(sig.get("coercion", 0)) > 0 or int(sig.get("respect", 0)) > 0:
+		return true
 	var keep_keywords = [
-		"传闻", "声望", "违规", "警报", "离开", "拒绝", "同意", "成交", "感谢", "敌意", "戒备", "尊重", "敬畏", "帮", "救", "冲突", "道歉"
+		"传闻", "声望", "违规", "警报", "离开", "拒绝", "同意", "成交", "感谢", "敌意", "戒备", "尊重", "敬畏", "帮", "救", "冲突", "道歉", "威胁", "命令", "羞辱", "冒犯", "安慰", "保护", "信任", "怀疑", "欺骗", "冷淡", "亲近"
 	]
 	for kw in keep_keywords:
 		if t.find(kw) != -1:
 			return true
 	return false
 
+func _extract_npc_result_outcome_flags(plain_text: String, sig: Dictionary) -> Dictionary:
+	var source = str(plain_text).strip_edges()
+	var accepted = _contains_any_keyword(source, ["接受", "收下", "接过", "答应", "同意", "愿意", "允许", "放行", "成交", "买下", "卖给", "告诉你", "带你", "让你", "配合", "照办", "原谅", "饶过"])
+	var rejected = _contains_any_keyword(source, ["拒绝", "回绝", "谢绝", "不肯", "不愿", "不同意", "无视", "不理", "赶走", "驱逐", "轰走", "拦住", "阻止", "阻拦"])
+	var cooperated = int(sig.get("assist", 0)) > 0 or _contains_any_keyword(source, ["帮你", "协助", "接应", "带路", "照应", "掩护", "治疗", "救下", "保护", "替你", "配合"])
+	var traded = int(sig.get("trade", 0)) > 0 or _contains_any_keyword(source, ["交易", "成交", "买下", "卖给", "付款", "付钱", "报价", "按价", "钱货两清"])
+	var gifted = int(sig.get("gift", 0)) > 0 or _contains_any_keyword(source, ["送", "赠", "递给", "交给", "给你", "给我", "补给", "分享"])
+	var warned = _contains_any_keyword(source, ["警报", "报警", "通缉", "围住", "盘问", "搜身", "扣留", "盯上", "怀疑", "戒备", "防盗", "违规"])
+	var harmed = _contains_any_keyword(source, ["威胁", "命令", "逼", "强迫", "羞辱", "冒犯", "欺骗", "骗", "偷", "抢", "打伤", "伤害", "砍", "捅", "勒索", "辱骂"])
+	var breached = _contains_any_keyword(source, ["食言", "失约", "赖账", "反悔", "违约", "不守信用", "说话不算"])
+	var protected = _contains_any_keyword(source, ["救", "保护", "掩护", "照顾", "安慰", "治疗", "扶住", "拉开", "挡下"])
+	var softened = _contains_any_keyword(source, ["感谢", "谢谢", "道歉", "赔偿", "归还", "谅解", "缓和", "客气"])
+	if warned:
+		rejected = true
+	if int(sig.get("coercion", 0)) > 0:
+		harmed = true
+	if traded and _contains_any_keyword(source, ["成交", "买下", "卖给", "付款", "钱货两清"]):
+		accepted = true
+	if gifted and _contains_any_keyword(source, ["接受", "收下", "接过"]):
+		accepted = true
+	if protected:
+		cooperated = true
+	return {
+		"accepted": accepted,
+		"rejected": rejected,
+		"cooperated": cooperated,
+		"traded": traded,
+		"gifted": gifted,
+		"warned": warned,
+		"harmed": harmed,
+		"breached": breached,
+		"protected": protected,
+		"softened": softened
+	}
+
 func _build_npc_personal_event_summary(plain_text: String, npc_name: String, focus_npc: String, sig: Dictionary) -> String:
 	var t = str(plain_text).strip_edges()
 	if !_should_store_npc_personal_event(t, sig):
 		return ""
 	var source = _clip_prompt_text(t, 90)
+	var outcome_flags = _extract_npc_result_outcome_flags(source, sig)
 	if source.begins_with("传闻："):
 		var rumor_text = source.trim_prefix("传闻：").strip_edges()
 		if npc_name == focus_npc:
@@ -2490,23 +2468,183 @@ func _build_npc_personal_event_summary(plain_text: String, npc_name: String, foc
 		return "玩家声望上升，我对其态度更积极。"
 	if source.find("声望值-") != -1:
 		return "玩家声望下降，我对其更警惕。"
+	if bool(outcome_flags.get("warned", false)):
+		return "这次结果直接触发了警报、盘查或违规处置，我会把玩家当作高风险对象。"
+	if bool(outcome_flags.get("harmed", false)):
+		return "这次结果里我遭到威逼、欺骗、羞辱或实际伤害，我会记仇并明显提高戒备。"
+	if bool(outcome_flags.get("breached", false)):
+		return "这次结果显示玩家失约、赖账或反悔，我会把他视为不可靠的人。"
+	if bool(outcome_flags.get("rejected", false)):
+		return "这次结果以拒绝、阻拦或驱离收场，我会继续与玩家保持距离。"
+	if bool(outcome_flags.get("protected", false)):
+		return "这次结果里玩家实际保护、救助或照应了我，我会把这件事记得很深。"
+	if bool(outcome_flags.get("cooperated", false)):
+		return "这次结果显示玩家确实与我合作、帮忙或配合，我会更愿意继续往来。"
 	if int(sig.get("trade", 0)) > 0:
+		if bool(outcome_flags.get("accepted", false)):
+			return "这次结果里交易真的谈成了，我会按对方是否守信、是否讲价有度来记住他。"
 		if npc_name == focus_npc:
-			return "我与玩家发生交易，后续会按结果调整态度。"
-		return "我相关的交易事件发生，需按结果调整态度。"
+			return "我与玩家出现交易往来，我会根据最终成没成交、是否守规矩来重新判断。"
+		return "我相关的交易结果已经发生，我会按照实际得失与风险重新判断玩家。"
 	if int(sig.get("gift", 0)) > 0:
-		if source.find("接受") != -1:
-			return "我收到了玩家物品，对其态度偏正向。"
-		return "我向玩家提供了物品，对其态度偏缓和。"
+		if bool(outcome_flags.get("accepted", false)):
+			return "这次结果里我收下了玩家给出的物品，这会明显拉近我对他的看法。"
+		return "我向玩家提供了物品，若对方识趣守分，我会更愿意缓和相处。"
 	if int(sig.get("assist", 0)) > 0:
-		return "我与玩家有协作行为，会影响后续配合意愿。"
-	if _contains_any_keyword(source, ["拒绝", "敌意", "警报", "违规", "冲突"]):
-		return "我与玩家存在负面事件，对其更戒备。"
-	if _contains_any_keyword(source, ["感谢", "帮助", "道歉", "尊重", "敬畏"]):
-		return "我与玩家有正向互动，对其更愿意配合。"
+		return "我与玩家有实际协作结果，这会明显影响我之后是否继续信任和配合。"
+	if bool(outcome_flags.get("softened", false)):
+		return "这次结果里出现感谢、道歉、赔偿或归还等明确表示，我对玩家的态度会有所松动。"
 	if npc_name == focus_npc:
-		return "我经历了关键事件：" + _clip_prompt_text(source, 58)
-	return "与我相关关键事件：" + _clip_prompt_text(source, 58)
+		return "我记住了一件会直接影响我对玩家态度的事：" + _clip_prompt_text(source, 56)
+	return "有一件与我相关的事会影响我之后对玩家的判断：" + _clip_prompt_text(source, 56)
+
+func _classify_npc_attitude_change(plain_text: String, npc_name: String, focus_npc: String, sig: Dictionary) -> Dictionary:
+	var source = str(plain_text).strip_edges()
+	var out = {
+		"attitude": "我还会继续观察玩家，再决定该怎么对他。",
+		"bond_delta": 0,
+		"trust_delta": 0,
+		"fear_delta": 0,
+		"summary": ""
+	}
+	if source == "":
+		return out
+	var outcome_flags = _extract_npc_result_outcome_flags(source, sig)
+	if source.begins_with("传闻："):
+		out["summary"] = ("我得知一条与玩家有关的传闻，会据此调整看法。" if npc_name == focus_npc else "我听到与玩家有关的传闻，会影响后续判断。")
+		return out
+	if source.find("声望值+") != -1:
+		out["attitude"] = "玩家最近名声在变好，我会更愿意高看他一眼。"
+		out["bond_delta"] = 2
+		out["trust_delta"] = 2
+		out["summary"] = "玩家名声变好，我对其更尊重，也更愿意相信。"
+		return out
+	if source.find("声望值-") != -1:
+		out["attitude"] = "玩家最近名声不太好，我会先留个心眼再接触。"
+		out["bond_delta"] = -1
+		out["trust_delta"] = -2
+		out["fear_delta"] = 2
+		out["summary"] = "玩家名声变差，我会更警惕，也更难轻信。"
+		return out
+	if bool(outcome_flags.get("warned", false)):
+		out["attitude"] = "这次已经闹到警报和盘查，我会把玩家当成麻烦源主动提防。"
+		out["bond_delta"] = -3
+		out["trust_delta"] = -3
+		out["fear_delta"] = 2
+		out["summary"] = "这次结果直接发展成警报、盘查或违规处置，我会把玩家视为高风险对象。"
+		return out
+	if int(sig.get("coercion", 0)) > 0:
+		out["attitude"] = "玩家这次是在逼我做事，我表面会应付，心里会一直防着他。"
+		out["bond_delta"] = -3
+		out["trust_delta"] = -2
+		out["fear_delta"] = 3
+		out["summary"] = "这次结果里玩家对我施压、命令或威逼，我会明显紧张、防备，表面顺从也未必真心。"
+		return out
+	if bool(outcome_flags.get("harmed", false)):
+		out["attitude"] = "玩家这次实打实地伤到我了，我会排斥他，也不想再给他好脸色。"
+		out["bond_delta"] = -3
+		out["trust_delta"] = -2
+		out["fear_delta"] = 1
+		out["summary"] = "这次结果里玩家对我造成了伤害、羞辱、欺骗或强夺，我会更容易拒绝、顶撞或疏远。"
+		return out
+	if bool(outcome_flags.get("breached", false)):
+		out["attitude"] = "玩家这次没有守约，我会觉得他靠不住，之后很难再轻信。"
+		out["bond_delta"] = -2
+		out["trust_delta"] = -3
+		out["summary"] = "这次结果显示玩家失约、赖账或反悔，我会把他视为不可靠的人。"
+		return out
+	if bool(outcome_flags.get("rejected", false)):
+		out["attitude"] = "这次我和玩家没谈拢，我会先和他拉开距离。"
+		out["bond_delta"] = -2
+		out["trust_delta"] = -1
+		out["summary"] = "这次结果以拒绝、阻拦或驱离收场，我之后会继续与玩家保持距离。"
+		return out
+	if bool(outcome_flags.get("protected", false)):
+		out["attitude"] = "玩家这次确实护住了我，我会把这份人情记住，也更愿意信他。"
+		out["bond_delta"] = 3
+		out["trust_delta"] = 3
+		out["summary"] = "这次结果里玩家实际保护、救助或照应了我，我会明显更信任也更愿意回报。"
+		return out
+	if bool(outcome_flags.get("cooperated", false)):
+		out["attitude"] = "这次合作是成了的，我会把玩家当成还能继续打交道的人。"
+		out["bond_delta"] = 2
+		out["trust_delta"] = 2
+		out["summary"] = "这次结果显示玩家确实与我合作、帮忙或配合，我会更愿意继续往来。"
+		return out
+	if int(sig.get("gift", 0)) > 0:
+		if bool(outcome_flags.get("accepted", false)):
+			out["attitude"] = "我收下了玩家给的东西，心里自然会对他软一些。"
+			out["bond_delta"] = 3
+			out["trust_delta"] = 2
+			out["summary"] = "这次结果里我收下了玩家给出的物品，我对其更亲近，也更容易给出善意回应。"
+		else:
+			out["attitude"] = "这次有了实在的物品往来，我对玩家的态度会先缓下来一点。"
+			out["bond_delta"] = 2
+			out["trust_delta"] = 1
+			out["summary"] = "这次结果里双方有明确物品往来，彼此关系有所缓和。"
+		return out
+	if int(sig.get("trade", 0)) > 0:
+		out["attitude"] = "交易已经发生了，我会按玩家这次办事是否靠谱来继续看他。"
+		out["bond_delta"] = 1
+		out["trust_delta"] = 2
+		out["summary"] = "这次结果里交易已实际发生，我会更快根据对方是否守规矩、讲信用来调整后续态度。"
+		return out
+	if int(sig.get("assist", 0)) > 0:
+		out["attitude"] = "玩家这次帮上了忙，我会觉得他至少在这件事上是能靠一下的。"
+		out["bond_delta"] = 2
+		out["trust_delta"] = 3
+		out["summary"] = "这次结果里我与玩家有协作或帮助往来，因此更愿意信任和配合。"
+		return out
+	if bool(outcome_flags.get("accepted", false)):
+		out["attitude"] = "这次我接受了玩家的要求，短时间内不会再对他那么绷着。"
+		out["bond_delta"] = 1
+		out["trust_delta"] = 1
+		out["summary"] = "这次结果是接受、同意或放行，我对玩家会暂时放下些戒心。"
+		return out
+	if bool(outcome_flags.get("softened", false)):
+		out["attitude"] = "这次结果里有赔礼、道歉或感谢，我对玩家的火气会先消一点。"
+		out["bond_delta"] = 1
+		out["trust_delta"] = 1
+		out["summary"] = "这次结果里出现感谢、道歉、赔偿或归还等明确表示，我对玩家的态度会有所松动。"
+		return out
+	if _contains_any_keyword(source, ["拒绝", "敌意", "警报", "违规", "冲突", "威胁", "偷", "抢", "犯罪"]):
+		out["attitude"] = "这次结果不太对劲，我会把玩家当成需要提防的人。"
+		out["bond_delta"] = -3
+		out["trust_delta"] = -3
+		out["fear_delta"] = 2
+		out["summary"] = "这次结果里出现了明显风险或冲突后果，我会更戒备，也更不愿配合。"
+		return out
+	if _contains_any_keyword(source, ["感谢", "帮助", "道歉", "救", "照顾", "安慰", "保护", "体谅", "信任"]):
+	if npc_name == "" or !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
+		return ""
+	if !npcs[npc_name].has("important_events") or !(npcs[npc_name]["important_events"] is Array):
+		return ""
+	var bucket: Array = npcs[npc_name]["important_events"]
+	if bucket.is_empty():
+		return ""
+	var latest_attitude = ""
+	var recent_causes: Array = []
+	for i in range(bucket.size() - 1, -1, -1):
+		var row = bucket[i]
+		if !(row is Dictionary):
+			continue
+		var row_attitude = str(row.get("attitude", "")).strip_edges()
+		if latest_attitude == "" and row_attitude != "":
+			latest_attitude = _clip_prompt_text(row_attitude, 90)
+		var row_view = str(row.get("npc_view", "")).strip_edges()
+		if row_view != "":
+			recent_causes.append(_clip_prompt_text(row_view, 48))
+		if latest_attitude != "" and recent_causes.size() >= 2:
+			break
+	recent_causes.reverse()
+	if latest_attitude == "" and recent_causes.is_empty():
+		return ""
+	if latest_attitude == "":
+		latest_attitude = "我会继续根据最近和玩家之间发生的结果来判断他。"
+	var lines: Array = ["- 当前态度：" + latest_attitude]
+	if !recent_causes.is_empty():
+		lines.append("- 态度来源：" + "；".join(recent_causes))
+	return "\n".join(lines)
 
 func _append_event_to_npc_memory(npc_name: String, record: Dictionary, focus_npc: String) -> void:
 	if npc_name == "":
@@ -2518,19 +2656,36 @@ func _append_event_to_npc_memory(npc_name: String, record: Dictionary, focus_npc
 	var sig = {
 		"trade": int(record.get("trade", 0)),
 		"gift": int(record.get("gift", 0)),
-		"assist": int(record.get("assist", 0))
+		"assist": int(record.get("assist", 0)),
+		"positive": int(record.get("positive", 0)),
+		"negative": int(record.get("negative", 0)),
+		"coercion": int(record.get("coercion", 0)),
+		"respect": int(record.get("respect", 0))
 	}
 	var npc_view = _build_npc_personal_event_summary(plain, npc_name, focus_npc, sig)
 	if npc_view == "":
 		return
-	var bucket: Array = npcs[npc_name].get("important_events", [])
-	for old in bucket:
-		if old is Dictionary and str(old.get("npc_view", "")) == npc_view:
+	var attitude_row = _classify_npc_attitude_change(plain, npc_name, focus_npc, sig)
+	var attitude = str(attitude_row.get("attitude", "我还会继续观察玩家，再决定该怎么对他。")).strip_edges()
+	var attitude_summary = str(attitude_row.get("summary", "")).strip_edges()
+	if attitude_summary != "":
+		npc_view = attitude_summary
+	var npc_bucket: Array = npcs[npc_name].get("important_events", [])
+	for old in npc_bucket:
+		if old is Dictionary and str(old.get("npc_view", "")) == npc_view and str(old.get("attitude", "")) == attitude:
 			return
-	bucket.append({"text": _clip_prompt_text(plain, 90), "npc_view": _clip_prompt_text(npc_view, 80), "t": int(record.get("t", Time.get_unix_time_from_system()))})
-	if bucket.size() > 40:
-		bucket = bucket.slice(bucket.size() - 40, bucket.size())
-	npcs[npc_name]["important_events"] = bucket
+	npc_bucket.append({
+		"text": _clip_prompt_text(plain, 90),
+		"npc_view": _clip_prompt_text(npc_view, 90),
+		"attitude": attitude,
+		"bond_delta": int(attitude_row.get("bond_delta", 0)),
+		"trust_delta": int(attitude_row.get("trust_delta", 0)),
+		"fear_delta": int(attitude_row.get("fear_delta", 0)),
+		"t": int(record.get("t", Time.get_unix_time_from_system()))
+	})
+	if npc_bucket.size() > 40:
+		npc_bucket = npc_bucket.slice(npc_bucket.size() - 40, npc_bucket.size())
+	npcs[npc_name]["important_events"] = npc_bucket
 
 func _get_recent_npc_personal_events(npc_name: String, limit_count: int = 3) -> Array:
 	var out: Array = []
@@ -2589,12 +2744,15 @@ func _get_recent_related_event_memories(site_name: String, npc_name: String = ""
 	return out
 
 func get_relevant_event_memory_for_npc(npc_name: String, _npc_desc: String = "") -> String:
-	var personal_rows = _get_recent_npc_personal_events(npc_name, 3)
-	if !personal_rows.is_empty():
+	var attitude_state = _build_npc_attitude_state_text(npc_name)
+	var personal_rows = _get_recent_npc_personal_events(npc_name, 4)
+	if !personal_rows.is_empty() or attitude_state != "":
 		var personal_lines: Array = []
+		if attitude_state != "":
+			personal_lines.append(attitude_state)
 		for line in personal_rows:
 			personal_lines.append("- " + str(line))
-		return _clip_prompt_text("\n".join(personal_lines), 260)
+		return _clip_prompt_text("\n".join(personal_lines), 320)
 	var rows = _get_recent_related_event_memories(currentSiteName, npc_name, 2)
 	if rows.is_empty():
 		return ""
@@ -2608,23 +2766,23 @@ func _build_identity_attitude_guidance(focus_npc_name: String = "", focus_npc_de
 	var lines: Array = []
 	var player_role_text = (playerName + " " + world_seed_input).strip_edges()
 	var npc_text = (focus_npc_name + " " + focus_npc_desc).strip_edges()
-	lines.append("- 玩家身份（系统确认，不可质疑）：" + playerName)
+	lines.append("- 玩家身份（系统确认）:" + playerName)
 	if _contains_any_keyword(player_role_text, ["国王", "皇帝", "君主", "王", "摄政", "王储"]):
-		lines.append("- 身份关系导向：玩家为高统治权身份，普通NPC默认应更谨慎、敬畏或恭敬，除非有强事件依据才敢明显顶撞。")
+		lines.append("- 统治身份导向：普通NPC默认更谨慎/敬畏，除非有强事件依据才会顶撞。")
 	if _contains_any_keyword(player_role_text, ["奴隶主", "领主", "将军", "军阀", "老板", "主任", "警长"]):
-		lines.append("- 权力导向：玩家具备较高支配权，NPC态度应体现权力差（迎合、畏惧或压抑反感），不要像对待陌生平民。")
+		lines.append("- 权力导向：NPC态度需体现权力差（迎合/畏惧/压抑反感），不可按陌生平民处理。")
 	if _contains_any_keyword(player_role_text, ["囚犯", "逃犯", "通缉", "流浪汉", "乞丐"]):
-		lines.append("- 身份导向：玩家处于弱势或风险身份，NPC更可能戒备、排斥或利用。")
+		lines.append("- 风险身份导向：NPC更可能戒备、排斥或利用。")
 	if reputation >= 130.0:
-		lines.append("- 声望导向：玩家声望高，NPC更容易尊重、配合。")
+		lines.append("- 声望高导向：NPC更易尊重、配合。")
 	elif reputation <= 60.0:
-		lines.append("- 声望导向：玩家声望偏低，NPC更容易警惕、厌恶或拒绝。")
+		lines.append("- 声望低导向：NPC更易警惕、厌恶或拒绝。")
 	if focus_npc_name != "":
-		lines.append("- 当前交互NPC：" + focus_npc_name + "（" + focus_npc_desc + "）")
+		lines.append("- 当前NPC：" + focus_npc_name + "（" + focus_npc_desc + "）")
 		if _contains_any_keyword(npc_text, ["护卫", "保安", "警察", "士兵", "侍卫"]):
-			lines.append("- 对方为秩序角色：更强调规则、风险和立场，不会无条件顺从。")
+			lines.append("- 秩序角色导向：更重规则/风险/立场，不会无条件顺从。")
 		if _contains_any_keyword(npc_text, ["平民", "学生", "路人", "店员", "仆人"]):
-			lines.append("- 对方为普通角色：在高权势身份面前通常更保守或顺从。")
+			lines.append("- 普通角色导向：在高权势面前通常更保守或顺从。")
 	return "\n".join(lines)
 
 func get_identity_attitude_guidance_for_npc(npc_name: String, npc_desc: String = "") -> String:
@@ -2637,12 +2795,15 @@ func _build_related_event_memory_for_action(action_text: String, focus_npc_name:
 	if !mentions.is_empty():
 		focus_npc = str(mentions[0])
 	if focus_npc != "":
-		var personal_rows = _get_recent_npc_personal_events(focus_npc, 3)
-		if !personal_rows.is_empty():
+		var attitude_state = _build_npc_attitude_state_text(focus_npc)
+		var personal_rows = _get_recent_npc_personal_events(focus_npc, 4)
+		if !personal_rows.is_empty() or attitude_state != "":
 			var personal_lines: Array = []
+			if attitude_state != "":
+				personal_lines.append(attitude_state)
 			for line in personal_rows:
 				personal_lines.append("- " + str(line))
-			return _clip_prompt_text("\n".join(personal_lines), 260)
+			return _clip_prompt_text("\n".join(personal_lines), 320)
 	var rows = _get_recent_related_event_memories(currentSiteName, focus_npc, 2, hint)
 	if rows.is_empty():
 		return ""
@@ -2817,6 +2978,7 @@ func _on_request_completed(result, response_code, _header, body):
 						_auto_handle_action_search(last_action_input, action_reply)
 					if currentState == worldState.chat and currentNpc != null:
 						_record_current_chat_session("行动结果", "旁白", action_reply)
+						_remember_important_event("<行动结果>" + str(currentNpc.npcName) + "：" + process_string(action_reply), currentSiteName, str(currentNpc.npcName))
 					await _auto_apply_action_effects(last_action_input, action_reply, tool_tags)
 					if nav_target != "" and currentState != worldState.chat:
 						advance_time_minutes(float(randi_range(15, 60)), true)
@@ -3846,7 +4008,7 @@ func _contains_any_keyword(text: String, words: Array) -> bool:
 func _extract_interaction_signals(text: String) -> Dictionary:
 	var t = str(text).strip_edges()
 	if t == "":
-		return {"trade": 0, "gift": 0, "assist": 0, "interaction_score": 0}
+		return {"trade": 0, "gift": 0, "assist": 0, "positive": 0, "negative": 0, "coercion": 0, "respect": 0, "interaction_score": 0}
 	var trade_keywords = [
 		"买", "购买", "卖", "出售", "交易", "成交", "收购", "收你", "报价", "价格", "多少钱", "单价", "总价", "换"
 	]
@@ -3856,9 +4018,25 @@ func _extract_interaction_signals(text: String) -> Dictionary:
 	var assist_keywords = [
 		"帮", "帮我", "帮你", "替", "替我", "替你", "代", "代我", "代你", "陪", "带我", "去帮"
 	]
+	var positive_keywords = [
+		"感谢", "谢谢", "帮忙", "照顾", "安慰", "道歉", "体谅", "关心", "保护", "救", "信任", "友好", "客气"
+	]
+	var negative_keywords = [
+		"拒绝", "敌意", "冲突", "冒犯", "羞辱", "欺骗", "冷淡", "厌恶", "怀疑", "不耐烦", "辱骂", "看不起"
+	]
+	var coercion_keywords = [
+		"威胁", "命令", "逼", "强迫", "施压", "滚", "跪下", "闭嘴", "老实点", "给我", "立刻", "马上"
+	]
+	var respect_keywords = [
+		"尊重", "敬畏", "请", "拜托", "劳烦", "失礼", "抱歉", "请教", "愿意听你", "照你规矩"
+	]
 	var trade_score = 0
 	var gift_score = 0
 	var assist_score = 0
+	var positive_score = 0
+	var negative_score = 0
+	var coercion_score = 0
+	var respect_score = 0
 	for kw in trade_keywords:
 		if t.find(kw) != -1:
 			trade_score += 1
@@ -3868,17 +4046,39 @@ func _extract_interaction_signals(text: String) -> Dictionary:
 	for kw in assist_keywords:
 		if t.find(kw) != -1:
 			assist_score += 1
+	for kw in positive_keywords:
+		if t.find(kw) != -1:
+			positive_score += 1
+	for kw in negative_keywords:
+		if t.find(kw) != -1:
+			negative_score += 1
+	for kw in coercion_keywords:
+		if t.find(kw) != -1:
+			coercion_score += 1
+	for kw in respect_keywords:
+		if t.find(kw) != -1:
+			respect_score += 1
 	if _contains_any_keyword(t, ["个", "件", "瓶", "把", "份", "张", "点", "块", "元"]):
 		trade_score += 1
 		gift_score += 1
 	if _extract_first_number(t) > 0:
 		trade_score += 1
 		gift_score += 1
+	if t.find("请") != -1 and t.find("帮") != -1:
+		respect_score += 1
+		positive_score += 1
+	if _contains_any_keyword(t, ["不许", "否则", "后果", "弄死", "收拾你"]):
+		coercion_score += 2
+		negative_score += 1
 	return {
 		"trade": trade_score,
 		"gift": gift_score,
 		"assist": assist_score,
-		"interaction_score": trade_score + gift_score + assist_score
+		"positive": positive_score,
+		"negative": negative_score,
+		"coercion": coercion_score,
+		"respect": respect_score,
+		"interaction_score": trade_score + gift_score + assist_score + positive_score + negative_score + coercion_score + respect_score
 	}
 
 func _needs_tool_inference_from_context(player_text: String, npc_text: String) -> bool:
@@ -4295,8 +4495,8 @@ func save_game() -> void:
 		"current_chat_session_npc": current_chat_session_npc,
 		"current_chat_session_records": current_chat_session_records,
 		"dead_npc_names": dead_npc_names,
-		"output_mode": output_mode,
-		"efficient_mode_min_chars": efficient_mode_min_chars
+		"dialogue_min_chars": dialogue_min_chars,
+		"action_narration_min_chars": action_narration_min_chars
 	}
 
 	var file = FileAccess.open(SAVE_FILE, FileAccess.WRITE)
@@ -4349,9 +4549,8 @@ func load_game() -> bool:
 		current_chat_session_npc = ""
 		current_chat_session_records = []
 	dead_npc_names = data.get("dead_npc_names", [])
-	output_mode = str(data.get("output_mode", "performance"))
-	efficient_mode_min_chars = int(data.get("efficient_mode_min_chars", 100))
-	_set_output_mode(output_mode)
+	dialogue_min_chars = clamp(int(data.get("dialogue_min_chars", data.get("efficient_mode_min_chars", 90))), 40, 2000)
+	action_narration_min_chars = clamp(int(data.get("action_narration_min_chars", 90)), 40, 2000)
 
 	var p = data.get("player", {})
 	playerName  = p.get("name", playerName)
