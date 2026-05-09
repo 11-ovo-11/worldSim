@@ -19,11 +19,22 @@ SDXL_ENGINE_ID = "stable-diffusion-xl-1024-v1-0"
 app = Flask(__name__)
 CORS(app)
 
-# DeepSeek 配置
+# ==================== API 提供商配置（换源时只改这里）====================
+# base_url 示例：
+#   DeepSeek : https://api.deepseek.com
+#   SiliconFlow: https://api.siliconflow.cn/v1
+#   Moonshot  : https://api.moonshot.cn/v1
+#   OpenAI    : https://api.openai.com/v1
+#   Qwen      : https://dashscope.aliyuncs.com/compatible-mode/v1
+API_BASE_URL = "https://api.deepseek.com"#"https://api.vectorengine.ai/v1"
+# model 示例：deepseek-chat / deepseek-r1 / Qwen/Qwen3-30B-A3B / moonshot-v1-8k
+API_MODEL_CHAT ="deepseek-v4-pro"
+# =========================================================================
+
 DEEP_SEEK_KEY = key
 clientOpenAI = OpenAI(
     api_key=DEEP_SEEK_KEY,
-    base_url="https://api.deepseek.com"
+    base_url=API_BASE_URL
 )
 
 #def comfy_headers():
@@ -34,7 +45,7 @@ clientOpenAI = OpenAI(
 
 # 原有的 Ollama 配置
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "deepseek-v2:16b"
+MODEL_NAME = "deepseek-v4-pro"
 AGENT_MODEL_NAME = "qwen3:8b"
 chat_mode = "openai"
 CHAT_RESTART_THRESHOLD = int(os.getenv("CHAT_RESTART_THRESHOLD", "300"))
@@ -54,7 +65,7 @@ def _rebuild_openai_client():
     global clientOpenAI
     clientOpenAI = OpenAI(
         api_key=DEEP_SEEK_KEY,
-        base_url="https://api.deepseek.com"
+        base_url=API_BASE_URL
     )
 
 def _maybe_recycle_runtime(force: bool = False, reason: str = ""):
@@ -180,7 +191,7 @@ def chat():
             print("发起了一次openai请求：", user_msg)
             try:
                 response = clientOpenAI.chat.completions.create(
-                    model="deepseek-chat",
+                    model=API_MODEL_CHAT,
                     messages=user_msg,
                     tools=tools,
                     response_format = { "type": output_format } ,
@@ -412,7 +423,7 @@ def check_chat_service():
                 # 检查DeepSeek API服务
                 # 发送一个简单的测试请求
                 test_response = clientOpenAI.chat.completions.create(
-                    model="deepseek-chat",
+                    model=API_MODEL_CHAT,
                     messages=[{"role": "user", "content": "测试连接"}],
                     max_tokens=5,
                     stream=False
@@ -437,8 +448,8 @@ def check_chat_service():
                     return jsonify({
                         "status": "connected",
                         "message": "神经网络已连接" + balance_msg,
-                        "service": "DeepSeek API",
-                        "model": "deepseek-chat"
+                        "service": API_BASE_URL,
+                        "model": API_MODEL_CHAT
                     })
                 else:
                     return jsonify({

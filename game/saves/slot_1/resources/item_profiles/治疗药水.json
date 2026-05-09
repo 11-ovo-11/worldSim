@@ -1,8 +1,0 @@
-{
-	"description": "一瓶能恢复少量体力的红色药水，适合冒险途中使用。",
-	"effect_type": "hp_restore",
-	"effect_value": 20,
-	"image_prompt": "A red potion in a glass bottle with a cork stopper, glowing slightly, isolated on white background, simple icon style, no text",
-	"rarity": "common",
-	"value": 50
-}

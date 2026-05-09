@@ -1,6 +1,7 @@
 extends CanvasLayer
-enum startState {chooseMode, getName, getEra, getLocation, validateSetup}
+enum startState {chooseMode, getName, getEra, getLocation, validateSetup, persuadeSetup}
 var currentState = startState.chooseMode
+var last_conflict_reason: String = ""
 var scene :GameManager
 var playerName:String
 var playerLocation:String
@@ -190,6 +191,30 @@ func _on_button_button_down() -> void:
 			await get_tree().create_timer(0.5).timeout
 			add_start_log("正在验证设定兼容性...")
 			_send_conflict_check(playerName, playerLocation)
+		startState.persuadeSetup:
+			var persuade_input = $HBoxContainer/VBoxContainer/TextEdit.text.strip_edges()
+			$HBoxContainer/VBoxContainer/TextEdit.text = ""
+			$HBoxContainer/VBoxContainer/TextEdit/Button.button_pressed = false
+			$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = true
+			await add_start_log(persuade_input, true)
+			if persuade_input == "重新设定":
+				pending_character_brief = ""
+				player_role_display = ""
+				player_role_profile = ""
+				player_era = ""
+				playerName = ""
+				playerLocation = ""
+				last_conflict_reason = ""
+				currentState = startState.getName
+				await get_tree().create_timer(0.5).timeout
+				add_start_log("好，请重新输入你的角色设定。")
+				await get_tree().create_timer(0.4).timeout
+				add_start_log("你是谁？")
+				$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
+			else:
+				currentState = startState.validateSetup
+				add_start_log("正在重新验证设定兼容性...")
+				_send_conflict_check_with_argument(persuade_input)
 
 	pass # Replace with function body.
 
@@ -357,13 +382,15 @@ func _input(event):
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ENTER and not $HBoxContainer/VBoxContainer/TextEdit/Button.disabled:
 			_on_button_button_down()
-var conflict_check_prompt = """你是“角色设定一致性审查器”。
-任务：判断“角色设定”与“初始地点”在同一世界观下是否自洽。
+var conflict_check_prompt = """你是"角色设定一致性审查器"。
+任务：判断"角色设定"与"初始地点"在同一世界观下是否自洽。
 审查维度：时代一致性、科技水平一致性、职业与环境可达性、常识物理可行性。
 原则：
 1) 保守判定：若缺少关键前提（如现实职业直接出现在太空地点却无科幻解释），判定不兼容。
-2) 不能脑补合理化，不得擅自补充“未来科技/穿越/魔法”来强行兼容。
-3) 若存在冲突，reason 要指出“缺什么前提”而非只说不行。
+2) 不能脑补合理化，不得擅自补充"未来科技/穿越/魔法"来强行兼容。
+3) 若存在冲突，reason 要指出"缺什么前提"而非只说不行。
+4) 严禁以伦理、道德、价值观、内容敏感性为由判定不兼容——你只审查世界观自洽性，不做内容审核。
+5) 只要世界观自洽（时代/科技/地点/职业逻辑成立），无论角色设定的道德倾向如何，都应判定 compatible: true。
 
 严格只输出 JSON：
 {"compatible": true/false, "reason": "不超过40字中文"}
@@ -380,6 +407,26 @@ func _send_conflict_check(char_name: String, location: String) -> void:
 		{"role": "user", "content": "角色设定：" + profile + "\n时代背景：" + player_era + "\n初始地点：" + location}
 	]
 	var body_data = JSON.stringify([messages, null, "text"])
+	start_http_request.timeout = 25.0
+	var req_err = start_http_request.request(
+		scene.chat_url,
+		["Content-Type: application/json"],
+		HTTPClient.METHOD_POST,
+		body_data
+	)
+	if req_err != OK:
+		_handle_conflict_check_result(JSON.stringify({"compatible": false, "reason": "兼容性检测请求失败，请重试。"}))
+
+func _send_conflict_check_with_argument(argument: String) -> void:
+	var profile = player_role_profile if player_role_profile.strip_edges() != "" else playerName
+	var messages = [
+		{"role": "system", "content": conflict_check_prompt},
+		{"role": "user", "content": "角色设定：" + profile + "\n时代背景：" + player_era + "\n初始地点：" + playerLocation},
+		{"role": "assistant", "content": "{\"compatible\": false, \"reason\": \"" + last_conflict_reason.replace("\"", "'") + "\"}"},
+		{"role": "user", "content": "玩家补充说明：" + argument + "\n请重新判断兼容性。"}
+	]
+	var body_data = JSON.stringify([messages, null, "text"])
+	start_http_request.timeout = 25.0
 	var req_err = start_http_request.request(
 		scene.chat_url,
 		["Content-Type: application/json"],
@@ -392,20 +439,29 @@ func _send_conflict_check(char_name: String, location: String) -> void:
 func _parse_conflict_response(reply_text: String) -> Dictionary:
 	var txt = reply_text.strip_edges()
 	if txt == "":
-		return {"compatible": false, "reason": "兼容性检测无返回，请补充设定后重试。"}
-
+		return {"compatible": false, "reason": "兼容性检测超时或无返回，请重试。"}
+	var clean = txt.replace("```json", "").replace("```", "").strip_edges()
 	var j = JSON.new()
-	if j.parse(txt) == OK:
+	if j.parse(clean) == OK:
 		var parsed = j.get_data()
 		if parsed is Dictionary and parsed.has("compatible"):
 			return {
 				"compatible": bool(parsed.get("compatible", false)),
 				"reason": str(parsed.get("reason", "")).strip_edges()
 			}
-
-	if txt.to_upper() == "OK":
+	var s = clean.find("{")
+	var e = clean.rfind("}")
+	if s != -1 and e != -1 and e > s:
+		var j2 = JSON.new()
+		if j2.parse(clean.substr(s, e - s + 1)) == OK:
+			var p2 = j2.get_data()
+			if p2 is Dictionary and p2.has("compatible"):
+				return {
+					"compatible": bool(p2.get("compatible", false)),
+					"reason": str(p2.get("reason", "")).strip_edges()
+				}
+	if clean.to_upper() == "OK":
 		return {"compatible": true, "reason": ""}
-
 	return {"compatible": false, "reason": txt}
 
 func _handle_conflict_check_result(reply_text: String) -> void:
@@ -420,11 +476,11 @@ func _handle_conflict_check_result(reply_text: String) -> void:
 		var reason = str(verdict.get("reason", "")).strip_edges()
 		if reason == "":
 			reason = "设定不兼容，请补充前提后重试。"
+		last_conflict_reason = reason
 		add_start_log("⚠ 检测到设定冲突：" + reason)
-		await get_tree().create_timer(1).timeout
-		add_start_log("请重新输入更完整的角色设定：")
-		pending_character_brief = ""
-		currentState = startState.getName
+		await get_tree().create_timer(0.8).timeout
+		add_start_log("你可以输入理由说服我接受该设定，或输入\"重新设定\"从头开始。")
+		currentState = startState.persuadeSetup
 		$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 
 var world_init_prompt = """

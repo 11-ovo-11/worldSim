@@ -61,6 +61,7 @@ var output_length_button: Button
 var min_chars_dialog: AcceptDialog
 var dialogue_min_chars_spin: SpinBox
 var action_min_chars_spin: SpinBox
+var timeout_seconds_spin: SpinBox
 var img_watchdog_seq: int = 0
 
 # 游戏数据
@@ -171,6 +172,9 @@ var action_prompt:String = """
 var ai_busy: bool = false
 var _text_update_seq: int = 0
 var _active_text_tweens: Dictionary = {}
+var _ignore_next_request_completed: bool = false
+var ai_request_timeout_seconds: float = 10.0
+var force_release_button: Button
 var lock_debug_enabled: bool = false
 const LOG_LABEL_SCENE := preload("res://fabs/log_rich_text_label.tscn")
 var max_visible_logs: int = 180
@@ -216,7 +220,7 @@ func _setup_output_mode_controls() -> void:
 		return
 	output_length_button = Button.new()
 	output_length_button.name = "OutputLengthButton"
-	output_length_button.text = "字数"
+	output_length_button.text = "设置"
 	output_length_button.custom_minimum_size = Vector2(52, 26)
 	output_length_button.anchors_preset = 1
 	output_length_button.anchor_left = 1.0
@@ -228,8 +232,22 @@ func _setup_output_mode_controls() -> void:
 	output_length_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	output_length_button.pressed.connect(_on_output_length_button_pressed)
 	response_label.add_child(output_length_button)
+	force_release_button = Button.new()
+	force_release_button.name = "ForceReleaseButton"
+	force_release_button.text = "强制释放"
+	force_release_button.custom_minimum_size = Vector2(72, 26)
+	force_release_button.anchors_preset = 1
+	force_release_button.anchor_left = 1.0
+	force_release_button.anchor_right = 1.0
+	force_release_button.offset_left = -136.0
+	force_release_button.offset_top = 4.0
+	force_release_button.offset_right = -64.0
+	force_release_button.offset_bottom = 30.0
+	force_release_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	force_release_button.pressed.connect(_on_force_release_button_pressed)
+	response_label.add_child(force_release_button)
 	min_chars_dialog = AcceptDialog.new()
-	min_chars_dialog.title = "设置输出字数"
+	min_chars_dialog.title = "输出设置"
 	var box = VBoxContainer.new()
 	var dialogue_tip = Label.new()
 	dialogue_tip.text = "对话最小字数"
@@ -245,10 +263,19 @@ func _setup_output_mode_controls() -> void:
 	action_min_chars_spin.max_value = 2000
 	action_min_chars_spin.step = 10
 	action_min_chars_spin.value = action_narration_min_chars
+	var timeout_tip = Label.new()
+	timeout_tip.text = "最长响应时间（秒）"
+	timeout_seconds_spin = SpinBox.new()
+	timeout_seconds_spin.min_value = 5
+	timeout_seconds_spin.max_value = 120
+	timeout_seconds_spin.step = 5
+	timeout_seconds_spin.value = ai_request_timeout_seconds
 	box.add_child(dialogue_tip)
 	box.add_child(dialogue_min_chars_spin)
 	box.add_child(action_tip)
 	box.add_child(action_min_chars_spin)
+	box.add_child(timeout_tip)
+	box.add_child(timeout_seconds_spin)
 	min_chars_dialog.add_child(box)
 	add_child(min_chars_dialog)
 	min_chars_dialog.confirmed.connect(_on_min_chars_dialog_confirmed)
@@ -260,13 +287,17 @@ func _on_output_length_button_pressed() -> void:
 		dialogue_min_chars_spin.value = dialogue_min_chars
 	if action_min_chars_spin != null:
 		action_min_chars_spin.value = action_narration_min_chars
-	min_chars_dialog.popup_centered(Vector2i(360, 180))
+	if timeout_seconds_spin != null:
+		timeout_seconds_spin.value = ai_request_timeout_seconds
+	min_chars_dialog.popup_centered(Vector2i(360, 240))
 
 func _on_min_chars_dialog_confirmed() -> void:
 	if dialogue_min_chars_spin == null or action_min_chars_spin == null:
 		return
 	dialogue_min_chars = clamp(int(dialogue_min_chars_spin.value), 40, 2000)
 	action_narration_min_chars = clamp(int(action_min_chars_spin.value), 40, 2000)
+	if timeout_seconds_spin != null:
+		ai_request_timeout_seconds = clamp(float(timeout_seconds_spin.value), 5.0, 120.0)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
@@ -345,6 +376,43 @@ func _start_chat_session(npc_name: String) -> void:
 func _end_chat_session() -> void:
 	current_chat_session_npc = ""
 	current_chat_session_records = []
+
+func _compact_history_rows_for_recovery(rows: Array, recent_keep: int = 6, summary_keep: int = 8, max_item_chars: int = 28) -> Array:
+	var cleaned: Array = []
+	for row in rows:
+		var line = str(row).strip_edges()
+		if line != "":
+			cleaned.append(line)
+	if cleaned.size() <= recent_keep:
+		return cleaned
+	var older_end = max(0, cleaned.size() - recent_keep)
+	var summary_parts: Array = []
+	var summary_start = max(0, older_end - summary_keep)
+	for i in range(summary_start, older_end):
+		var piece = str(cleaned[i]).strip_edges()
+		if piece == "":
+			continue
+		if piece.length() > max_item_chars:
+			piece = piece.substr(0, max_item_chars).strip_edges() + "..."
+		summary_parts.append(piece)
+	var out: Array = []
+	if !summary_parts.is_empty():
+		out.append("[系统摘要]此前上下文：" + "；".join(summary_parts))
+	for i in range(older_end, cleaned.size()):
+		out.append(cleaned[i])
+	return out
+
+func _compact_text_for_recovery(text: String, recent_keep: int = 8) -> String:
+	var rows = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n", false)
+	var compacted = _compact_history_rows_for_recovery(rows, recent_keep, 10, 36)
+	if compacted.is_empty():
+		return ""
+	return "\n".join(compacted)
+
+func _compact_current_context_for_recovery() -> void:
+	current_chat_session_records = _compact_history_rows_for_recovery(current_chat_session_records, 6, 10, 32)
+	if currentNpc != null and is_instance_valid(currentNpc):
+		currentNpc.currentChat = _compact_text_for_recovery(currentNpc.currentChat, 10)
 
 func _record_current_chat_session(kind: String, speaker: String, text: String) -> void:
 	if currentState != worldState.chat or currentNpc == null:
@@ -902,6 +970,8 @@ var tools = [
 func ask_ai(message: Array, askmode: aiMode):
 	currentMode = askmode
 	set_ai_busy(true)
+	_ignore_next_request_completed = false
+	http_request.timeout = ai_request_timeout_seconds
 	var outbound_messages = _compact_messages_for_request(_decorate_messages_for_output_mode(message, askmode))
 	var body = [outbound_messages,null,"text"]
 	match askmode:
@@ -2445,7 +2515,7 @@ func _build_npc_personal_event_summary(plain_text: String, npc_name: String, foc
 	if !_should_store_npc_personal_event(t, sig):
 		return ""
 	var source = _clip_prompt_text(t, 90)
-	var outcome_flags = _extract_npc_result_outcome_flags(source, sig)
+	var _outcome_flags = _extract_npc_result_outcome_flags(source, sig)
 	if source.begins_with("传闻："):
 		var rumor_text = source.trim_prefix("传闻：").strip_edges()
 		if npc_name == focus_npc:
@@ -2608,6 +2678,7 @@ func _build_related_event_memory_for_action(action_text: String, focus_npc_name:
 		if m is Dictionary:
 			lines.append("- " + _clip_prompt_text(str(m.get("text", "")), 90))
 	return _clip_prompt_text("\n".join(lines), 260)
+	var parts: Array = []
 
 func _build_inventory_snapshot(max_items: int = 6) -> String:
 	var parts: Array = []
@@ -2620,18 +2691,72 @@ func _build_inventory_snapshot(max_items: int = 6) -> String:
 		return "空"
 	return "，".join(parts)
 
-# ==================== HTTP 响应处理 ====================
+func _on_force_release_button_pressed() -> void:
+	_force_release_runtime(true, false)
+
+func _clear_active_text_tweens(force_complete_visible: bool = true) -> void:
+	for key in _active_text_tweens.keys():
+		var tw = _active_text_tweens[key]
+		if tw is Tween and tw.is_valid():
+			tw.kill()
+	_active_text_tweens.clear()
+	if force_complete_visible:
+		if response_label != null and is_instance_valid(response_label):
+			response_label.visible_ratio = 1.0
+		if has_node("%speakerNameLabel"):
+			%speakerNameLabel.visible_ratio = 1.0
+	refresh_interaction_locks()
+
+func _force_release_runtime(show_notice: bool = true, compact_context: bool = false) -> void:
+	if compact_context:
+		_compact_current_context_for_recovery()
+	_ignore_next_request_completed = true
+	if http_request.get_http_client_status() == HTTPClient.STATUS_REQUESTING and http_request.has_method("cancel_request"):
+		http_request.cancel_request()
+	_clear_active_text_tweens(true)
+	clear_children(%event)
+	pending_action_confirm = {}
+	site_loading_lock = false
+	event_flow_lock = false
+	ai_busy = false
+	refresh_interaction_locks()
+	call_deferred("_focus_active_input")
+	if show_notice:
+		addLog("<已强制释放：你现在可以继续输入、切换场景或切换对话对象>")
+		changeTextTo(%speakerNameLabel, "【系统】", 240, 0.12)
+		changeTextTo(response_label, "已强制解除当前输出与交互锁定，你可以继续进行对话、行动输入，以及切换场景或对话对象。", 240, 0.2)
+
+func _recover_from_ai_stall(reason: String) -> void:
+	_compact_current_context_for_recovery()
+	_force_release_runtime(false, false)
+	addLog("<AI响应超时，已精简保留上下文并解除锁定：" + reason + ">")
+	changeTextTo(%speakerNameLabel, "【系统】", 240, 0.12)
+	changeTextTo(response_label, "AI超过" + str(int(ceil(ai_request_timeout_seconds))) + "秒未响应，已精简并保留先前上下文后清理卡住状态。你可以继续输入、切换场景或切换对话对象。", 240, 0.24)
+
 func _on_request_completed(result, response_code, _header, body):
+	if _ignore_next_request_completed:
+		_ignore_next_request_completed = false
+		set_ai_busy(false)
+		return
 	set_ai_busy(false)
+	if result == HTTPRequest.RESULT_TIMEOUT:
+		_recover_from_ai_stall("请求超时")
+		return
 	if result != HTTPRequest.RESULT_SUCCESS:
 		changeTextTo(response_label, "网络错误: " + str(result))
+		if currentMode == aiMode.init_env and has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
+			$mainMenu.if_weather_failed("环境创建网络错误，已使用默认天气。")
 		return
 	if response_code != 200:
 		changeTextTo(response_label, "服务器错误: " + str(response_code))
+		if currentMode == aiMode.init_env and has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
+			$mainMenu.if_weather_failed("环境创建服务器错误(" + str(response_code) + ")，已使用默认天气。")
 		return
 	var json = JSON.new()
 	if json.parse(body.get_string_from_utf8()) != OK:
 		changeTextTo(response_label, "解析响应失败")
+		if currentMode == aiMode.init_env and has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
+			$mainMenu.if_weather_failed("环境创建响应解析失败，已使用默认天气。")
 		return
 	var data = json.get_data()
 	if data.has("text"):
@@ -2660,7 +2785,6 @@ func _on_request_completed(result, response_code, _header, body):
 					pending_site_update = false
 					_set_site_loading_lock(false)
 					return
-				# 先确保必要字段存在
 				jsonDic["能前往的地点"] = _extract_route_candidates_from_site_json(jsonDic)
 				if !jsonDic.has("npc") or !(jsonDic["npc"] is Dictionary):
 					jsonDic["npc"] = {}
@@ -2705,11 +2829,9 @@ func _on_request_completed(result, response_code, _header, body):
 				print("能前往的地点", jsonDic["能前往的地点"])
 				if currentSiteName != "" && !jsonDic["能前往的地点"].has(currentSiteName):
 					jsonDic["能前往的地点"].append(currentSiteName)
-				# 已经存在，执行合并操作
 				var old_site: Dictionary = {}
 				if sites.has(location_name) and sites[location_name] is Dictionary:
 					old_site = sites[location_name]
-
 				if !old_site.is_empty():
 					if old_site.has("能前往的地点") and old_site["能前往的地点"] is Array:
 						for old_route in old_site["能前往的地点"]:
@@ -2721,7 +2843,6 @@ func _on_request_completed(result, response_code, _header, body):
 							if !jsonDic["npc"].has(npc_name):
 								jsonDic["npc"][npc_name] = old_site["npc"][npc_name]
 						print("发现了预先存在的npc")
-
 				if model_location_name != "" and model_location_name != location_name and sites.has(model_location_name):
 					var alias_site = sites[model_location_name]
 					if alias_site is Dictionary:
@@ -2734,7 +2855,6 @@ func _on_request_completed(result, response_code, _header, body):
 								if !jsonDic["npc"].has(npc_name):
 									jsonDic["npc"][npc_name] = alias_site["npc"][npc_name]
 					sites.erase(model_location_name)
-
 				sites[location_name] = jsonDic
 				if currentSiteName != "" and currentSiteName != location_name:
 					create_location(currentSiteName + "-" + location_name)
@@ -2743,7 +2863,6 @@ func _on_request_completed(result, response_code, _header, body):
 				_save_site_json(location_name, jsonDic)
 				pending_site_update = false
 			aiMode.chat:
-				#print("开始聊天")
 				var chat_text = _enforce_output_min_length(str(data.get("text", "")), aiMode.chat)
 				npc_reply(chat_text)
 			aiMode.action:
@@ -2767,10 +2886,12 @@ func _on_request_completed(result, response_code, _header, body):
 						await ask_ai(aprompts, aiMode.tools)
 					elif !handled_direct:
 						var infer_prompts = [
-							{"role":"system","content": agent_prompt + "\n若输入没有<>标签，也要从语义中尽力提取可执行方法；如果确实没有再回复没有方法被调用。"},
+							{"role":"system","content": agent_prompt + "\n若输入没有<>标签，也要从语义中尽力提取可执行方法；如果确实没有再回复没有方法被调用。\n重要限制：consume_items（玩家交出或消耗背包物品）禁止从语义推断，只能由明确的<接受...>标签触发。"},
 							{"role":"user","content": "玩家行动：" + last_action_input + "\n旁白结果：" + action_reply}
 						]
-						await ask_ai(infer_prompts, aiMode.tools)
+						var _action_infer_src = (last_action_input + " " + action_reply).strip_edges()
+						if _contains_any_keyword(_action_infer_src, ["送", "给", "卖", "买", "赠", "以", "价", "路径", "地点", "创建", "传闻", "赶往", "前往"]):
+							await ask_ai(infer_prompts, aiMode.tools)
 						_auto_handle_action_search(last_action_input, action_reply)
 					if currentState == worldState.chat and currentNpc != null:
 						_record_current_chat_session("行动结果", "旁白", action_reply)
@@ -3330,8 +3451,8 @@ func _apply_direct_action_tool_tags(action_reply: String) -> Dictionary:
 				money = max(0, money + money_delta)
 				var real_delta = money - before_money
 				if real_delta != 0:
-					var sign = "+" if real_delta > 0 else ""
-					addLog("<资产变化" + sign + str(real_delta) + "，当前资产" + str(money) + ">")
+					var delta_sign = "+" if real_delta > 0 else ""
+					addLog("<资产变化" + delta_sign + str(real_delta) + "，当前资产" + str(money) + ">")
 				handled_any = true
 			else:
 				unresolved += "<" + raw_tag + ">"
@@ -3348,6 +3469,13 @@ func _apply_direct_action_tool_tags(action_reply: String) -> Dictionary:
 			var target = normalized.trim_prefix("前往").replace(":", "").strip_edges()
 			if target != "":
 				nav_target = target
+				handled_any = true
+			else:
+				unresolved += "<" + raw_tag + ">"
+		elif normalized.begins_with("设置时间"):
+			var time_info = _extract_target_time(normalized)
+			if bool(time_info.get("valid", false)):
+				set_time(int(time_info.get("hour", 0)), int(time_info.get("minute", 0)))
 				handled_any = true
 			else:
 				unresolved += "<" + raw_tag + ">"
@@ -3560,6 +3688,15 @@ func consume_items(item_name: String, quantity: int) -> void:
 		if item_name.find(alias) != -1:
 			is_money_action = true
 			break
+	if !is_money_action:
+		var _exists_in_bag = false
+		for _child in %itemContainer.get_children():
+			if _child is item and str(_child.item_name) == item_name:
+				_exists_in_bag = true
+				break
+		if !_exists_in_bag:
+			addLog("<物品使用被拦截：背包中没有「" + item_name + "」，操作已忽略>")
+			return
 
 	if is_money_action:
 		if money < quantity:
