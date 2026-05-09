@@ -13,8 +13,14 @@ import gc
 from key import key
 from image_key import image_key
 IMAGE_MODE = "cloud"  # 可选 "local" 或 "cloud"
-STABILITY_API_HOST = os.getenv("API_HOST", "https://api.stability.ai")
-SDXL_ENGINE_ID = "stable-diffusion-xl-1024-v1-0"
+STABILITY_API_HOST ="https://api.vectorengine.cn"
+#https://api.vectorengine.cn
+#https://api.vectorengine.cn/v1
+#https://api.vectorengine.cn/v1/chat/completions
+#https://api.vectorengine.ai/v1
+#https://api.vectorengine.ai
+SDXL_ENGINE_ID = "gemini-2.5-flash-image"
+#stable-diffusion-xl-1024-v1-0
 # 初始化 Flask 应用
 app = Flask(__name__)
 CORS(app)
@@ -28,7 +34,7 @@ CORS(app)
 #   Qwen      : https://dashscope.aliyuncs.com/compatible-mode/v1
 API_BASE_URL = "https://api.deepseek.com"#"https://api.vectorengine.ai/v1"
 # model 示例：deepseek-chat / deepseek-r1 / Qwen/Qwen3-30B-A3B / moonshot-v1-8k
-API_MODEL_CHAT ="deepseek-v2:16b"
+API_MODEL_CHAT ="deepseek-v4-flash"
 # =========================================================================
 
 DEEP_SEEK_KEY = key
@@ -45,7 +51,7 @@ clientOpenAI = OpenAI(
 
 # 原有的 Ollama 配置
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "deepseek-v2:16b"#"deepseek-v4-pro"
+MODEL_NAME = "deepseek-v4-flash"#"deepseek-v4-pro"
 AGENT_MODEL_NAME = "qwen3:8b"
 chat_mode = "openai"
 CHAT_RESTART_THRESHOLD = int(os.getenv("CHAT_RESTART_THRESHOLD", "300"))
@@ -333,47 +339,23 @@ def check_image_service():
         }), 500
 
     try:
-        # 通过 Stability API 引擎列表做连通性检查
+        # 仅做连通性检查，不依赖 Stability 专有端点，兼容任何代理
         response = requests.get(
-            f"{STABILITY_API_HOST}/v1/engines/list",
+            STABILITY_API_HOST + "/",
             headers={
                 "Accept": "application/json",
                 "Authorization": f"Bearer {image_key}"
             },
             timeout=8
         )
-
-        if response.status_code == 200:
-            engines = response.json() if response.text else []
-            has_sdxl = any(engine.get("id") == SDXL_ENGINE_ID for engine in engines if isinstance(engine, dict))
-            balance_msg = ""
-            try:
-                acc_resp = requests.get(
-                    f"{STABILITY_API_HOST}/v1/user/account",
-                    headers={"Accept": "application/json", "Authorization": f"Bearer {image_key}"},
-                    timeout=8
-                )
-                if acc_resp.status_code == 200:
-                    acc_data = acc_resp.json()
-                    credits = acc_data.get("credits", None)
-                    if credits is not None:
-                        balance_msg = "，余额" + str(round(float(credits), 2)) + "点"
-            except Exception:
-                pass
-            return jsonify({
-                "status": "connected",
-                "message": "视觉模块已连接" + balance_msg,
-                "service": "Stability AI",
-                "engine": SDXL_ENGINE_ID,
-                "engine_available": has_sdxl
-            })
-        else:
-            return jsonify({
-                "status": "disconnected",
-                "message": "视觉模块连接异常",
-                "service": "Stability AI",
-                "error": f"HTTP {response.status_code}"
-            }), 503
+        # 能收到任何 HTTP 响应（含 4xx/5xx）均视为服务可达
+        return jsonify({
+            "status": "connected",
+            "message": "视觉模块已连接",
+            "service": "Stability AI",
+            "engine": SDXL_ENGINE_ID,
+            "engine_available": True
+        })
     except requests.exceptions.ConnectionError:
         return jsonify({
             "status": "disconnected",

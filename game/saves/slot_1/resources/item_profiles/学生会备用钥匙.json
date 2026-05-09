@@ -1,0 +1,8 @@
+{
+	"description": "学生会备用钥匙，用于开启学生会办公室大门，由内部成员保管。",
+	"effect_type": "none",
+	"effect_value": 0,
+	"image_prompt": "A single key icon, metallic texture, with a student council logo or school badge on the key ring, clean background, no text.",
+	"rarity": "uncommon",
+	"value": 30
+}

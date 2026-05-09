@@ -32,6 +32,8 @@ const SAVE_RESOURCE_DIR = SAVE_SLOT_DIR + "resources/"
 const SAVE_SCENE_IMG_DIR = SAVE_RESOURCE_DIR + "scenes/"
 const SAVE_ITEM_IMG_DIR = SAVE_RESOURCE_DIR + "items/"
 const SAVE_ITEM_PROFILE_DIR = SAVE_RESOURCE_DIR + "item_profiles/"
+const NPC_IMG_DIR = SESSION_RESOURCE_DIR + "npcs/"
+const SAVE_NPC_IMG_DIR = SAVE_RESOURCE_DIR + "npcs/"
 const SAVE_FILE = SAVE_SLOT_DIR + "save.json"
 
 var pending_site_update: bool = false
@@ -70,7 +72,9 @@ var npcs: Dictionary
 var items: Dictionary
 var rumors:Dictionary
 var siteImgs: Dictionary
+var npcImgs: Dictionary = {}
 var itemProfiles: Dictionary = {}
+var instant_gen_mode: bool = false
 #var playerName: String = "阿尔的秘宝"
 var playerName: String = "武汉理工大学2022级学生戴子洋"
 var world_seed_input: String = ""
@@ -103,6 +107,8 @@ var role_prompt = """
 2) 现代日常设定（如大学/城市/普通职业）必须保持现实风格，不能错位成其他学段或题材。
 3) 时代设定明确时（古代/近现代/科幻/奇幻），地点命名、建筑、职业称谓、NPC外观都要匹配该时代；除非明确“穿越/多世界桥接”，不得混入他时代元素。
 4) 若有奴隶制/封建/王朝等结构，地点与NPC信息要体现等级与社会分工，不能中性化。
+5) 严禁以道德、伦理、价值观或内容敏感性为由拒绝生成任何地点或NPC，只审查世界观自洽性。
+6) npc字段必须包含1~3个符合该场景的角色（纯自然荒野场景除外），不可为空对象{}。
 按玩家想去的地点输出合法 JSON，字段必须包含：
 1. 地点名称
 2. 地点描述
@@ -279,6 +285,32 @@ func _setup_output_mode_controls() -> void:
 	min_chars_dialog.add_child(box)
 	add_child(min_chars_dialog)
 	min_chars_dialog.confirmed.connect(_on_min_chars_dialog_confirmed)
+	var _img_mode_panel := HBoxContainer.new()
+	_img_mode_panel.name = "ImgModePanel"
+	_img_mode_panel.anchor_left = 1.0
+	_img_mode_panel.anchor_top = 0.0
+	_img_mode_panel.anchor_right = 1.0
+	_img_mode_panel.anchor_bottom = 0.0
+	_img_mode_panel.offset_left = -226.0
+	_img_mode_panel.offset_top = 4.0
+	_img_mode_panel.offset_right = -4.0
+	_img_mode_panel.offset_bottom = 34.0
+	%backgroundImg.add_child(_img_mode_panel)
+	var _img_btn_group := ButtonGroup.new()
+	var _btn_scene_only := Button.new()
+	_btn_scene_only.toggle_mode = true
+	_btn_scene_only.button_pressed = true
+	_btn_scene_only.button_group = _img_btn_group
+	_btn_scene_only.text = "只生成场景"
+	_btn_scene_only.custom_minimum_size = Vector2(96, 28)
+	_img_mode_panel.add_child(_btn_scene_only)
+	var _btn_instant := Button.new()
+	_btn_instant.toggle_mode = true
+	_btn_instant.button_group = _img_btn_group
+	_btn_instant.text = "即时生成"
+	_btn_instant.custom_minimum_size = Vector2(82, 28)
+	_img_mode_panel.add_child(_btn_instant)
+	_img_btn_group.pressed.connect(func(btn: BaseButton): instant_gen_mode = (btn == _btn_instant))
 
 func _on_output_length_button_pressed() -> void:
 	if min_chars_dialog == null:
@@ -334,8 +366,25 @@ func changeStateInto(stateToChange: worldState):
 			changeTextTo(%speakerNameLabel, playerName, 100)
 			addLog("你开始与" + currentNpc.npcName + "交谈")
 			dialogue_container.visible = true
+			var _cn = str(currentNpc.npcName)
+			var _cd = str(currentNpc.npcDescribe)
+			if npcImgs.has(_cn) and npcImgs[_cn] is Texture2D:
+				if %npcIcon is TextureRect:
+					(%npcIcon as TextureRect).texture = npcImgs[_cn]
+			else:
+				var _cached_npc = _load_image_png(NPC_IMG_DIR, _cn)
+				if _cached_npc != null:
+					npcImgs[_cn] = _cached_npc
+					if %npcIcon is TextureRect:
+						(%npcIcon as TextureRect).texture = _cached_npc
+				else:
+					var _np = _build_npc_image_prompt(_cn, _cd)
+					if _np != "":
+						gen_img(_np, "NPC:" + _cn)
 		worldState.explore:
 			create_tween().tween_property(%npcIcon, "custom_minimum_size:x", 0, 0.2)
+			if %npcIcon is TextureRect:
+				(%npcIcon as TextureRect).texture = null
 			changeTextTo(%speakerNameLabel, playerName, 100)
 			dialogue_container.visible = false
 			if currentState == worldState.chat and !currentSiteName.is_empty():
@@ -518,6 +567,29 @@ func _build_scene_image_prompt(site_name: String, site_data: Dictionary) -> Stri
 		prompt_parts.append("keep architecture, facilities and props strictly aligned with narrative anchor")
 	prompt_parts.append("strictly match this location and world era, avoid cross-era contamination")
 	return ", ".join(prompt_parts)
+
+func _build_npc_image_prompt(npc_name: String, npc_describe: String) -> String:
+	var style_sig = _detect_setting_style_signals()
+	var parts: Array = [
+		"portrait",
+		"character name: " + npc_name,
+		"detailed face, expressive eyes",
+		"upper body, neutral background",
+		"no text, no watermark"
+	]
+	if npc_describe.strip_edges() != "":
+		parts.append("appearance: " + npc_describe.left(160))
+	if bool(style_sig.get("ancient", false)) and !bool(style_sig.get("bridge", false)):
+		parts.append("traditional historical attire, pre-modern style")
+	elif bool(style_sig.get("scifi", false)) or bool(style_sig.get("cyber", false)):
+		parts.append("futuristic sci-fi clothing")
+	elif bool(style_sig.get("fantasy", false)):
+		parts.append("fantasy medieval attire")
+	else:
+		parts.append("contemporary clothing fitting world setting")
+	if background.strip_edges() != "":
+		parts.append("world context: " + background.left(80))
+	return ", ".join(parts)
 
 func _build_location_visual_hint(site_name: String, cn_desc: String) -> String:
 	var merged = (site_name + " " + cn_desc).strip_edges()
@@ -1649,6 +1721,7 @@ func _prepare_session_resource_dir() -> void:
 	_ensure_dir(SCENE_IMG_DIR)
 	_ensure_dir(ITEM_IMG_DIR)
 	_ensure_dir(ITEM_PROFILE_DIR)
+	_ensure_dir(NPC_IMG_DIR)
 	has_saved_in_session = false
 
 func _sync_session_resources_to_save() -> void:
@@ -1658,6 +1731,7 @@ func _sync_session_resources_to_save() -> void:
 	_copy_dir_recursive(SCENE_IMG_DIR, SAVE_SCENE_IMG_DIR)
 	_copy_dir_recursive(ITEM_IMG_DIR, SAVE_ITEM_IMG_DIR)
 	_copy_dir_recursive(ITEM_PROFILE_DIR, SAVE_ITEM_PROFILE_DIR)
+	_copy_dir_recursive(NPC_IMG_DIR, SAVE_NPC_IMG_DIR)
 
 func _restore_session_resources_from_save() -> void:
 	_ensure_dir(SESSION_RESOURCE_DIR)
@@ -1665,6 +1739,7 @@ func _restore_session_resources_from_save() -> void:
 	_copy_dir_recursive(SAVE_SCENE_IMG_DIR, SCENE_IMG_DIR)
 	_copy_dir_recursive(SAVE_ITEM_IMG_DIR, ITEM_IMG_DIR)
 	_copy_dir_recursive(SAVE_ITEM_PROFILE_DIR, ITEM_PROFILE_DIR)
+	_copy_dir_recursive(SAVE_NPC_IMG_DIR, NPC_IMG_DIR)
 
 func _handle_exit_cleanup() -> void:
 	if has_saved_in_session:
@@ -1746,6 +1821,17 @@ func _display_base64_image(base64_string: String, site_name: String = ""):
 	var target_site = site_name.strip_edges()
 	if target_site == "":
 		target_site = currentSiteName
+	if target_site.begins_with("NPC:"):
+		var npc_n = target_site.trim_prefix("NPC:")
+		var npc_img = _base64_to_image(base64_string)
+		if npc_img != null:
+			var npc_tex = ImageTexture.create_from_image(npc_img)
+			npcImgs[npc_n] = npc_tex
+			_save_image_png(npc_img, NPC_IMG_DIR, npc_n)
+			if currentNpc != null and str(currentNpc.npcName) == npc_n and %npcIcon is TextureRect:
+				(%npcIcon as TextureRect).texture = npc_tex
+		_drain_pending_img()
+		return
 	var image = _base64_to_image(base64_string)
 	if image != null:
 		var texture = ImageTexture.create_from_image(image)
@@ -2888,6 +2974,10 @@ func _on_request_completed(result, response_code, _header, body):
 			aiMode.chat:
 				var chat_text = _enforce_output_min_length(str(data.get("text", "")), aiMode.chat)
 				npc_reply(chat_text)
+				if instant_gen_mode and currentNpc != null:
+					var _in = str(currentNpc.npcName)
+					var _id = str(currentNpc.npcDescribe)
+					gen_img(_build_npc_image_prompt(_in, _id), "NPC:" + _in)
 			aiMode.action:
 				var action_reply = _enforce_output_min_length(str(data.get("text", "")), aiMode.action)
 				action_reply = _enforce_action_narration_richness(action_reply)
@@ -2895,6 +2985,10 @@ func _on_request_completed(result, response_code, _header, body):
 					_set_event_flow_lock(true)
 					changeTextTo(%speakerNameLabel, "【旁白】")
 					changeTextTo(response_label, process_string(action_reply))
+					if instant_gen_mode and currentSiteName != "":
+						var _isd = _get_site_data(currentSiteName)
+						if !_isd.is_empty():
+							gen_img(_build_scene_image_prompt(currentSiteName, _isd), currentSiteName)
 					var tool_tags = get_content_in_angle_brackets(action_reply)
 					var direct_tag_result = _apply_direct_action_tool_tags(action_reply)
 					var handled_direct = bool(direct_tag_result.get("handled_any", false))
@@ -4472,6 +4566,7 @@ func load_game() -> bool:
 		addLog("<没有存档文件>")
 		return false
 	_force_exit_chat_runtime()
+	npcImgs.clear()
 	_restore_session_resources_from_save()
 	var file = FileAccess.open(SAVE_FILE, FileAccess.READ)
 	if !file:
