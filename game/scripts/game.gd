@@ -173,7 +173,7 @@ var ai_busy: bool = false
 var _text_update_seq: int = 0
 var _active_text_tweens: Dictionary = {}
 var _ignore_next_request_completed: bool = false
-var ai_request_timeout_seconds: float = 10.0
+var ai_request_timeout_seconds: float = 30.0
 var force_release_button: Button
 var lock_debug_enabled: bool = false
 const LOG_LABEL_SCENE := preload("res://fabs/log_rich_text_label.tscn")
@@ -971,7 +971,10 @@ func ask_ai(message: Array, askmode: aiMode):
 	currentMode = askmode
 	set_ai_busy(true)
 	_ignore_next_request_completed = false
-	http_request.timeout = ai_request_timeout_seconds
+	if askmode == aiMode.init_background or askmode == aiMode.init_env:
+		http_request.timeout = 0.0
+	else:
+		http_request.timeout = ai_request_timeout_seconds
 	var outbound_messages = _compact_messages_for_request(_decorate_messages_for_output_mode(message, askmode))
 	var body = [outbound_messages,null,"text"]
 	match askmode:
@@ -2678,7 +2681,6 @@ func _build_related_event_memory_for_action(action_text: String, focus_npc_name:
 		if m is Dictionary:
 			lines.append("- " + _clip_prompt_text(str(m.get("text", "")), 90))
 	return _clip_prompt_text("\n".join(lines), 260)
-	var parts: Array = []
 
 func _build_inventory_snapshot(max_items: int = 6) -> String:
 	var parts: Array = []
@@ -2727,6 +2729,16 @@ func _force_release_runtime(show_notice: bool = true, compact_context: bool = fa
 		changeTextTo(response_label, "已强制解除当前输出与交互锁定，你可以继续进行对话、行动输入，以及切换场景或对话对象。", 240, 0.2)
 
 func _recover_from_ai_stall(reason: String) -> void:
+	if currentMode == aiMode.init_env:
+		_force_release_runtime(false, false)
+		if has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
+			$mainMenu.if_weather_failed("环境创建中断（" + reason + "），已使用默认天气。")
+		return
+	if currentMode == aiMode.init_background:
+		_force_release_runtime(false, false)
+		if has_node("mainMenu") and $mainMenu.has_method("add_start_log"):
+			$mainMenu.add_start_log("⚠ 世界初始化中断（" + reason + "），正在继续...")
+		return
 	_compact_current_context_for_recovery()
 	_force_release_runtime(false, false)
 	addLog("<AI响应超时，已精简保留上下文并解除锁定：" + reason + ">")
@@ -2740,12 +2752,22 @@ func _on_request_completed(result, response_code, _header, body):
 		return
 	set_ai_busy(false)
 	if result == HTTPRequest.RESULT_TIMEOUT:
+		if currentMode == aiMode.init_env:
+			if has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
+				$mainMenu.if_weather_failed("环境创建超时，已使用默认天气。")
+			return
+		if currentMode == aiMode.init_background:
+			if has_node("mainMenu") and $mainMenu.has_method("add_start_log"):
+				$mainMenu.add_start_log("⚠ 世界初始化超时，请检查网络后重试。")
+			return
 		_recover_from_ai_stall("请求超时")
 		return
 	if result != HTTPRequest.RESULT_SUCCESS:
 		changeTextTo(response_label, "网络错误: " + str(result))
 		if currentMode == aiMode.init_env and has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
 			$mainMenu.if_weather_failed("环境创建网络错误，已使用默认天气。")
+		elif currentMode == aiMode.init_background and has_node("mainMenu") and $mainMenu.has_method("add_start_log"):
+			$mainMenu.add_start_log("⚠ 世界初始化网络错误（" + str(result) + "），请检查后端服务。")
 		return
 	if response_code != 200:
 		changeTextTo(response_label, "服务器错误: " + str(response_code))
@@ -2774,7 +2796,8 @@ func _on_request_completed(result, response_code, _header, body):
 					return
 				envDic =jsonDic
 				if %envContainer.load_weather_config_from_json(envDic):
-					$mainMenu.if_weather_ok()
+					if has_node("mainMenu") and $mainMenu.has_method("if_weather_ok"):
+						$mainMenu.if_weather_ok()
 				else:
 					if has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
 						$mainMenu.if_weather_failed("天气配置校验失败，已回退默认天气。")

@@ -28,7 +28,7 @@ CORS(app)
 #   Qwen      : https://dashscope.aliyuncs.com/compatible-mode/v1
 API_BASE_URL = "https://api.deepseek.com"#"https://api.vectorengine.ai/v1"
 # model 示例：deepseek-chat / deepseek-r1 / Qwen/Qwen3-30B-A3B / moonshot-v1-8k
-API_MODEL_CHAT ="deepseek-v4-pro"
+API_MODEL_CHAT ="deepseek-v2:16b"
 # =========================================================================
 
 DEEP_SEEK_KEY = key
@@ -45,7 +45,7 @@ clientOpenAI = OpenAI(
 
 # 原有的 Ollama 配置
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "deepseek-v4-pro"
+MODEL_NAME = "deepseek-v2:16b"#"deepseek-v4-pro"
 AGENT_MODEL_NAME = "qwen3:8b"
 chat_mode = "openai"
 CHAT_RESTART_THRESHOLD = int(os.getenv("CHAT_RESTART_THRESHOLD", "300"))

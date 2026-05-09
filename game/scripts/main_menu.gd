@@ -2,6 +2,7 @@ extends CanvasLayer
 enum startState {chooseMode, getName, getEra, getLocation, validateSetup, persuadeSetup}
 var currentState = startState.chooseMode
 var last_conflict_reason: String = ""
+var _init_watchdog_active: bool = false
 var scene :GameManager
 var playerName:String
 var playerLocation:String
@@ -499,8 +500,25 @@ var world_init_prompt = """
 环境与天气：
 （描述世界的物理环境和天气现象。回答：环境有何特点？天气是常态化的异常，还是循环往复的极端？它如何影响人们的生活？）
 """
+func _start_init_watchdog() -> void:
+	_init_watchdog_active = true
+	_run_init_watchdog()
+
+func _stop_init_watchdog() -> void:
+	_init_watchdog_active = false
+
+func _run_init_watchdog() -> void:
+	var secs := 0
+	while _init_watchdog_active:
+		await get_tree().create_timer(15.0).timeout
+		if not _init_watchdog_active:
+			break
+		secs += 15
+		add_start_log("⏳ AI思考中，请稍候（已等待 " + str(secs) + " 秒）...")
+
 func _init_world(location:String):
 	scene.world_seed_input = location
+	_start_init_watchdog()
 	var prompts = [
 		{"role":"system","content": world_init_prompt},
 		{"role":"user","content": location}]
@@ -515,6 +533,7 @@ func _init_world(location:String):
 	pass
 
 func if_weather_ok():
+	_stop_init_watchdog()
 	add_start_log("环境创建完成...")
 	await get_tree().create_timer(1).timeout
 	if player_role_display.strip_edges() != "":
@@ -530,6 +549,7 @@ func if_weather_ok():
 	pass
 
 func if_weather_failed(reason: String = ""):
+	_stop_init_watchdog()
 	var rs = reason.strip_edges()
 	if rs == "":
 		rs = "天气初始化失败，已使用默认天气参数。"
