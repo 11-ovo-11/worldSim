@@ -19,7 +19,7 @@ STABILITY_API_HOST ="https://api.vectorengine.cn"
 #https://api.vectorengine.cn/v1/chat/completions
 #https://api.vectorengine.ai/v1
 #https://api.vectorengine.ai
-SDXL_ENGINE_ID = "gemini-2.5-flash-image"
+SDXL_ENGINE_ID = "gpt-image-1-mini"
 #stable-diffusion-xl-1024-v1-0
 # 初始化 Flask 应用
 app = Flask(__name__)
@@ -220,92 +220,167 @@ def chat():
 
 @app.route("/generate_image", methods=["POST"])
 def generate_image():
-    data = request.get_json()
-    prompt = data.get("prompt", "")
-    width = data.get("width", 1024)
-    height = data.get("height", 1024)
-    steps = int(data.get("steps", 30))
-    cfg_scale = float(data.get("cfg_scale", 7))
-    mode = data.get("mode", "default")
+
+    req_data = request.get_json()
+
+    prompt = req_data.get("prompt", "")
+    width = int(req_data.get("width", 1024))
+    height = int(req_data.get("height", 1024))
 
     if not prompt:
-        return jsonify({"success": False, "error": "提示词不能为空"}), 400
-
-    if not image_key:
-        return jsonify({"success": False, "error": "未配置 image_key"}), 500
-
-    # 允许的分辨率组合（官方规定）
-    allowed_sizes = [
-        (1024, 1024),
-        (1152, 896),
-        (896, 1152),
-        (1216, 832),
-        (1344, 768),
-        (768, 1344),
-        (1536, 640),
-        (640, 1536),
-    ]
-
-    if (width, height) not in allowed_sizes:
         return jsonify({
             "success": False,
-            "error": f"不支持的分辨率 {width}x{height}"
+            "error": "提示词不能为空"
         }), 400
 
-    # 允许调用端按需调低参数提升速度
-    if mode == "ultra_fast_item":
-        steps = max(4, min(20, steps))
-        cfg_scale = max(1.0, min(12.0, cfg_scale))
-    else:
-        steps = max(10, min(40, steps))
-        cfg_scale = max(1.0, min(20.0, cfg_scale))
+    if not image_key:
+        return jsonify({"success": False, "error": "未配置 image_key",
+                        "debug": {"exception": "image_key is empty"}}), 500
 
     try:
+
         response = requests.post(
-            f"{STABILITY_API_HOST}/v1/generation/{SDXL_ENGINE_ID}/text-to-image",
+            "https://api.vectorengine.ai/v1/images/generations",
             headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "Authorization": f"Bearer {image_key}"
+                "Authorization": f"Bearer {image_key}",
+                "Content-Type": "application/json"
             },
             json={
-                "text_prompts": [
-                    {
-                        "text": prompt
-                    }
-                ],
-                "cfg_scale": cfg_scale,
-                "height": height,
-                "width": width,
-                "samples": 1,
-                "steps": steps
+                "model": "grok-imagine-image-pro",
+                "prompt": prompt,
+                "size": f"{width}x{height}"
             },
-            timeout=60
+            timeout=180
         )
+
+        print("[IMG_DEBUG] status =", response.status_code)
+        print("[IMG_DEBUG] body =", response.text[:500])
 
         if response.status_code != 200:
             return jsonify({
                 "success": False,
                 "error": response.text
-            }), response.status_code
+            }), 500
 
         data = response.json()
 
-        image_base64 = data["artifacts"][0]["base64"]
+        items = data.get("data", [])
 
+        if not items:
+            return jsonify({
+                "success": False,
+                "error": "API未返回图片"
+            }), 500
+
+        image_url = items[0].get("url")
+
+        if not image_url:
+            return jsonify({
+                "success": False,
+                "error": "未找到图片URL"
+            }), 500
+
+        print("[IMG_DEBUG] downloading image:", image_url)
+
+        # 下载图片
+        img_response = requests.get(
+            image_url,
+            timeout=120
+        )
+
+        if img_response.status_code != 200:
+            return jsonify({
+                "success": False,
+                "error": "图片下载失败"
+            }), 500
+
+        # 转base64
+        image_base64 = base64.b64encode(
+            img_response.content
+        ).decode("utf-8")
+
+        print("[IMG_DEBUG] image downloaded, b64 len =", len(image_base64))
+
+        # 返回给Godot（兼容旧结构）
         return jsonify({
             "success": True,
             "image": image_base64,
-            "model": "sdxl-1.0",
-            "provider": "stability-ai"
+            "provider": "vectorengine",
+            "model": "grok-imagine-image-pro"
         })
 
     except Exception as e:
+
+        print("[IMG_DEBUG] exception =", str(e))
+
         return jsonify({
             "success": False,
             "error": str(e)
         }), 500
 
+
+@app.route("/test_image", methods=["GET"])
+def test_image():
+    """快速测试图片生成，返回完整调试信息"""
+    test_prompt = "a simple red apple on white background"
+    size = "1024x1024"
+    target_url = "https://api.vectorengine.ai/v1/images/generations"
+    print(f"[TEST_IMAGE] POST {target_url} model={SDXL_ENGINE_ID}")
+    result = {"url": target_url, "model": SDXL_ENGINE_ID, "key_prefix": (image_key or "")[:8] + "..."}
+    if not image_key:
+        result["error"] = "image_key 未配置"
+        return jsonify(result), 500
+    try:
+        resp = requests.post(
+            target_url,
+            headers={"Authorization": f"Bearer {image_key}", "Content-Type": "application/json"},
+            json={"model": SDXL_ENGINE_ID, "prompt": test_prompt, "size": size},
+            timeout=120
+        )
+        result["status"] = resp.status_code
+        result["body_preview"] = resp.text[:800]
+        if resp.status_code == 200:
+            data = resp.json()
+            items = data.get("data", [])
+            if items:
+                img_url = items[0].get("url", "")
+                result["img_url"] = img_url
+                if img_url:
+                    dl = requests.get(img_url, timeout=60)
+                    result["dl_status"] = dl.status_code
+                    result["dl_bytes"] = len(dl.content)
+                    result["success"] = dl.status_code == 200
+                else:
+                    b64 = items[0].get("b64_json", "")
+                    result["b64_len"] = len(b64)
+                    result["success"] = bool(b64)
+            else:
+                result["error"] = "响应中没有data字段"
+        else:
+            result["error"] = f"HTTP {resp.status_code}"
+    except Exception as e:
+        result["error"] = str(e)
+    print(f"[TEST_IMAGE] result={result}")
+    return jsonify(result)
+
+@app.route("/test_chat", methods=["GET"])
+def test_chat():
+    """快速测试AI文本生成，返回完整调试信息"""
+    result = {"chat_mode": chat_mode}
+    try:
+        client = OpenAI(api_key=key, base_url=provider_base_url)
+        resp = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": "用一句话证明你已运行"}],
+            max_tokens=50
+        )
+        result["text"] = resp.choices[0].message.content
+        result["success"] = True
+    except Exception as e:
+        result["error"] = str(e)
+        result["success"] = False
+    print(f"[TEST_CHAT] result={result}")
+    return jsonify(result)
 
 @app.route("/health", methods=["GET"])
 def health_check():

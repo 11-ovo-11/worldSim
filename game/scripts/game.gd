@@ -1629,6 +1629,7 @@ func gen_img(prompt: String, site_name: String = ""):
 	print("正在同时生成图片...")
 	var headers = ["Content-Type: application/json"]
 	var image_json_data = JSON.stringify({"prompt": prompt})
+	%ImgHTTPRequest.timeout = 200.0
 	var error_image = %ImgHTTPRequest.request(image_api_url, headers, HTTPClient.METHOD_POST, image_json_data)
 	print("请求返回了...",error_image)
 	if error_image != OK:
@@ -1652,7 +1653,7 @@ func gen_img(prompt: String, site_name: String = ""):
 func _start_img_watchdog(target_site: String) -> void:
 	img_watchdog_seq += 1
 	var seq = img_watchdog_seq
-	await get_tree().create_timer(10.0).timeout
+	await get_tree().create_timer(200.0).timeout
 	if seq != img_watchdog_seq:
 		return
 	if pending_site_update and inflight_img_site == target_site:
@@ -3223,20 +3224,27 @@ func _on_img_http_request_request_completed(result: int, response_code: int, _he
 		_drain_pending_img()
 	else:
 		var error_msg = response.get("error", "未知错误")
-		print("图片生成失败：" + error_msg)
 		var debug_data = response.get("debug", {})
-		if debug_data is Dictionary and !debug_data.is_empty():
-			print("[IMG_CLIENT_DEBUG] provider=", str(debug_data.get("provider", "")),
-				" status=", str(debug_data.get("status_code", "")),
-				" content_type=", str(debug_data.get("content_type", "")),
-				" cf_ray=", str(debug_data.get("cf_ray", "")))
+		var has_debug = debug_data is Dictionary and !debug_data.is_empty()
+		var debug_summary := ""
+		if has_debug:
+			var status = str(debug_data.get("status_code", ""))
+			var preview = str(debug_data.get("response_preview", str(debug_data.get("exception", ""))))
+			if preview.length() > 200:
+				preview = preview.left(200) + "..."
+			if status != "":
+				debug_summary = " [HTTP " + status + "] " + preview
+			else:
+				debug_summary = " " + preview
+			print("[IMG_CLIENT_DEBUG] status=", status,
+				"  content_type=", str(debug_data.get("content_type", "")),
+				"  exception=", str(debug_data.get("exception", "")))
 			if debug_data.has("response_preview"):
-				print("[IMG_CLIENT_DEBUG] response_preview=", str(debug_data.get("response_preview", "")))
-			if debug_data.has("exception"):
-				print("[IMG_CLIENT_DEBUG] exception=", str(debug_data.get("exception", "")))
+				print("[IMG_CLIENT_DEBUG] response_preview=", str(debug_data.get("response_preview", "")).left(400))
 			if debug_data.has("request"):
 				print("[IMG_CLIENT_DEBUG] request=", JSON.stringify(debug_data.get("request", {})))
-		_bg_debug("img callback failed, error=" + error_msg + ", has_debug=" + str(debug_data is Dictionary and !debug_data.is_empty()))
+		print("图片生成失败：" + error_msg + debug_summary)
+		_bg_debug("img callback failed, error=" + error_msg + debug_summary)
 		if pending_site_update:
 			pending_site_update = false
 			site_update()
