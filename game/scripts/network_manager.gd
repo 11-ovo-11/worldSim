@@ -5,6 +5,13 @@ var chat_url = "http://127.0.0.1:5000/chat"
 var agent_url = "http://127.0.0.1:5000/agent"
 var image_api_url = "http://localhost:5000/generate_image"
 @onready var http_request = $HTTPRequest
+var ai_request_timeout_seconds: float = 30.0
+var _ignore_next_request_completed: bool = false
+
+enum aiMode {
+    init_background,
+    init_env
+}
 
 func send_chat_request(message, askmode):
     set_ai_busy(true)
@@ -36,6 +43,18 @@ func send_chat_request(message, askmode):
             HTTPClient.METHOD_POST,
             json_string
         )
+
+func set_ai_busy(_state: bool):
+    # Placeholder for setting AI busy state
+    pass
+
+func _decorate_messages_for_output_mode(message, _askmode):
+    # Placeholder for message decoration logic
+    return message
+
+func _compact_messages_for_request(messages):
+    # Placeholder for message compaction logic
+    return messages
 
 func send_image_request():
     # 发送图片生成请求逻辑
