@@ -40,6 +40,7 @@ var pending_site_update: bool = false
 var pending_img_prompt: String = ""
 var pending_img_site: String = ""
 var inflight_img_site: String = ""
+var inflight_img_started_ms: int = 0
 var explore_needs_retry: bool = false
 var site_loading_lock: bool = false
 var event_flow_lock: bool = false
@@ -181,6 +182,7 @@ var _active_text_tweens: Dictionary = {}
 var _ignore_next_request_completed: bool = false
 var ai_request_timeout_seconds: float = 30.0
 var force_release_button: Button
+var continue_button: Button
 var lock_debug_enabled: bool = false
 const LOG_LABEL_SCENE := preload("res://fabs/log_rich_text_label.tscn")
 var max_visible_logs: int = 180
@@ -201,6 +203,8 @@ func _ready():
 	dialogue_button.connect("pressed", _on_dialogue_button_pressed)
 	save_button.connect("pressed", save_game)
 	load_button.connect("pressed", load_game)
+	if input_text_edit != null:
+		input_text_edit.placeholder_text = "输入行动，留空则继续"
 	if %npcIcon is Control:
 		%npcIcon.custom_minimum_size.x = 0
 		(%npcIcon as Control).mouse_filter = Control.MOUSE_FILTER_STOP
@@ -252,6 +256,21 @@ func _setup_output_mode_controls() -> void:
 	force_release_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	force_release_button.pressed.connect(_on_force_release_button_pressed)
 	response_label.add_child(force_release_button)
+	continue_button = Button.new()
+	continue_button.name = "ContinueButton"
+	continue_button.text = "继续"
+	continue_button.custom_minimum_size = Vector2(60, 26)
+	continue_button.anchor_left = 1.0
+	continue_button.anchor_top = 1.0
+	continue_button.anchor_right = 1.0
+	continue_button.anchor_bottom = 1.0
+	continue_button.offset_left = -64.0
+	continue_button.offset_top = -30.0
+	continue_button.offset_right = -4.0
+	continue_button.offset_bottom = -4.0
+	continue_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	continue_button.pressed.connect(_on_continue_button_pressed)
+	response_label.add_child(continue_button)
 	min_chars_dialog = AcceptDialog.new()
 	min_chars_dialog.title = "输出设置"
 	var box = VBoxContainer.new()
@@ -356,10 +375,12 @@ func changeStateInto(stateToChange: worldState):
 
 	match stateToChange:
 		worldState.chat:
-			create_tween().tween_property(%npcIcon, "custom_minimum_size:x", 300, 0.2)
+			create_tween().tween_property(%npcIcon, "custom_minimum_size:x", 240, 0.2)
 			if currentNpc != null:
 				currentNpc.queue_free()
 			currentNpc = newNpc
+			if %npcIcon is TextureRect:
+				(%npcIcon as TextureRect).texture = null
 			_start_chat_session(str(currentNpc.npcName))
 			currentNpc.start_chat()
 			changeTextTo(response_label, "你走近了" + currentNpc.npcName, 100)
@@ -571,10 +592,12 @@ func _build_scene_image_prompt(site_name: String, site_data: Dictionary) -> Stri
 func _build_npc_image_prompt(npc_name: String, npc_describe: String) -> String:
 	var style_sig = _detect_setting_style_signals()
 	var parts: Array = [
-		"portrait",
+		"anime character illustration",
 		"character name: " + npc_name,
-		"detailed face, expressive eyes",
-		"upper body, neutral background",
+		"expressive eyes, detailed face, clean lineart, cel shading",
+		"medium long shot, from thigh up, more body visible, subject scaled smaller in frame",
+		"non-photorealistic, stylized 2d anime art",
+		"simple clean background",
 		"no text, no watermark"
 	]
 	if npc_describe.strip_edges() != "":
@@ -590,6 +613,99 @@ func _build_npc_image_prompt(npc_name: String, npc_describe: String) -> String:
 	if background.strip_edges() != "":
 		parts.append("world context: " + background.left(80))
 	return ", ".join(parts)
+
+func _build_image_request_payload(prompt: String, target_site: String) -> Dictionary:
+	var target_key = target_site.strip_edges()
+	var target_type = "scene"
+	var target_name = target_key
+	var width = 1344
+	var height = 768
+	if target_key.begins_with("NPC:"):
+		target_type = "npc"
+		target_name = target_key.trim_prefix("NPC:")
+		width = 768
+		height = 1152
+	elif target_key.begins_with("ITEM:"):
+		target_type = "item"
+		target_name = target_key.trim_prefix("ITEM:")
+		width = 256
+		height = 256
+	elif target_name == "":
+		target_name = currentSiteName
+	if target_type == "scene" and %backgroundImg is Control:
+		var bg_ctrl := %backgroundImg as Control
+		var bg_w = int(max(bg_ctrl.size.x, bg_ctrl.custom_minimum_size.x))
+		var bg_h = int(max(bg_ctrl.size.y, bg_ctrl.custom_minimum_size.y))
+		if bg_w > 0 and bg_h > 0:
+			width = max(768, int(bg_w))
+			height = max(432, int(bg_h))
+	return {
+		"prompt": prompt,
+		"width": width,
+		"height": height,
+		"target_type": target_type,
+		"target_name": target_name,
+	}
+
+func _resolve_image_slot_size(target_type: String) -> Vector2i:
+	if target_type == "npc" and %npcIcon is Control:
+		var npc_ctrl := %npcIcon as Control
+		var nw = int(max(npc_ctrl.size.x, npc_ctrl.custom_minimum_size.x))
+		var nh = int(max(npc_ctrl.size.y, npc_ctrl.custom_minimum_size.y))
+		if nh <= 0 and %backgroundImg is Control:
+			var bg_ctrl := %backgroundImg as Control
+			nh = int(max(bg_ctrl.size.y, bg_ctrl.custom_minimum_size.y))
+		nw = max(nw, 220)
+		nh = max(nh, 360)
+		return Vector2i(nw, nh)
+	if target_type == "item":
+		return Vector2i(128, 128)
+	if %backgroundImg is Control:
+		var ctrl := %backgroundImg as Control
+		var w = int(max(ctrl.size.x, ctrl.custom_minimum_size.x))
+		var h = int(max(ctrl.size.y, ctrl.custom_minimum_size.y))
+		if w > 0 and h > 0:
+			return Vector2i(w, h)
+	return Vector2i(1024, 576)
+
+func _fit_image_to_target_slot(raw_image: Image, target_type: String) -> Image:
+	if raw_image == null:
+		return null
+	var target_size = _resolve_image_slot_size(target_type)
+	if target_size.x <= 0 or target_size.y <= 0:
+		return raw_image
+	var sw = raw_image.get_width()
+	var sh = raw_image.get_height()
+	if sw <= 0 or sh <= 0:
+		return raw_image
+	var src_ratio = float(sw) / float(sh)
+	var dst_ratio = float(target_size.x) / float(target_size.y)
+	var crop_rect := Rect2i(0, 0, sw, sh)
+	if absf(src_ratio - dst_ratio) > 0.001:
+		if src_ratio > dst_ratio:
+			var crop_w = int(round(float(sh) * dst_ratio))
+			crop_w = clampi(crop_w, 1, sw)
+			var x_offset = int(floor(float(sw - crop_w) / 2.0))
+			crop_rect = Rect2i(x_offset, 0, crop_w, sh)
+		else:
+			var crop_h = int(round(float(sw) / dst_ratio))
+			crop_h = clampi(crop_h, 1, sh)
+			var y_offset = int(floor(float(sh - crop_h) / 2.0))
+			crop_rect = Rect2i(0, y_offset, sw, crop_h)
+	var fitted = raw_image.get_region(crop_rect)
+	fitted.resize(target_size.x, target_size.y, Image.INTERPOLATE_LANCZOS)
+	return fitted
+
+func _resolve_image_callback_target(callback_site: String, response: Dictionary) -> String:
+	var response_type = str(response.get("target_type", "")).strip_edges().to_lower()
+	var response_name = str(response.get("target_name", "")).strip_edges()
+	if response_type == "npc" and response_name != "":
+		return "NPC:" + response_name
+	if response_type == "item" and response_name != "":
+		return "ITEM:" + response_name
+	if response_type == "scene" and response_name != "":
+		return response_name
+	return callback_site
 
 func _build_location_visual_hint(site_name: String, cn_desc: String) -> String:
 	var merged = (site_name + " " + cn_desc).strip_edges()
@@ -746,6 +862,7 @@ func goto(where: String):
 		return
 	changeTextTo(%siteName, where)
 	await changeStateInto(GameManager.worldState.explore)
+	_set_site_loading_lock(false)
 	_bg_debug("goto start, where=" + where + ", current=" + currentSiteName)
 	# 磁盘缓存恢复：内存中没有但磁盘JSON存在时补充
 	if !sites.has(where) or !(sites[where] is Dictionary) or !sites[where].has("地点描述"):
@@ -777,17 +894,10 @@ func goto(where: String):
 				has_bg = true
 				_bg_debug("scene image cache hit for " + where)
 		if !has_bg:
-			pending_site_update = true
 			var scene_prompt = _build_scene_image_prompt(where, site_data)
 			_bg_debug("scene image cache miss for " + where + ", prompt_len=" + str(scene_prompt.length()))
 			if scene_prompt != "":
-				site_update(false, false, false)
-				_set_site_loading_lock(true)
 				gen_img(scene_prompt, where)
-				return
-			else:
-				pending_site_update = false
-				_set_site_loading_lock(false)
 		site_update()
 	else:
 		changeTextTo(response_label, "正在探索" + where + "...", 8)
@@ -825,24 +935,107 @@ func goto(where: String):
 					siteImgs[discovered_site] = cached_new
 					has_bg_new = true
 			if has_bg_new:
-				pending_site_update = false
-				_set_site_loading_lock(false)
 				site_update()
 				return
 			var prompt = _build_scene_image_prompt(discovered_site, new_site)
 			if prompt != "":
-				site_update(false, false, false)
-				pending_site_update = true
-				_set_site_loading_lock(true)
 				gen_img(prompt, discovered_site)
-			else:
-				pending_site_update = false
-				_set_site_loading_lock(false)
-				site_update()
+			site_update()
 		else:
 			pending_site_update = false
 			_set_site_loading_lock(false)
 			changeTextTo(response_label, "无法探索「" + where + "」，请检查角色与场景设定后重试。")
+
+func _describe_image_target(target_site: String) -> String:
+	if target_site.begins_with("NPC:"):
+		return "NPC「" + target_site.trim_prefix("NPC:") + "」"
+	if target_site.begins_with("ITEM:"):
+		return "物品「" + target_site.trim_prefix("ITEM:") + "」"
+	return "场景「" + target_site + "」"
+
+func _try_use_cached_image_for_target(target_site: String) -> bool:
+	if target_site == "":
+		return false
+	if target_site.begins_with("NPC:"):
+		var npc_name = target_site.trim_prefix("NPC:")
+		var npc_tex: Texture2D = null
+		if npcImgs.has(npc_name) and npcImgs[npc_name] is Texture2D:
+			npc_tex = npcImgs[npc_name]
+		else:
+			npc_tex = _load_image_png(NPC_IMG_DIR, npc_name)
+			if npc_tex != null:
+				npcImgs[npc_name] = npc_tex
+		if npc_tex == null:
+			return false
+		if currentNpc != null and str(currentNpc.npcName) == npc_name and %npcIcon is TextureRect:
+			(%npcIcon as TextureRect).texture = npc_tex
+		return true
+	if target_site.begins_with("ITEM:"):
+		var item_name = target_site.trim_prefix("ITEM:")
+		var item_tex: Texture2D = null
+		if itemProfiles.has(item_name):
+			var t = itemProfiles[item_name].get("texture", null)
+			if t is Texture2D:
+				item_tex = t
+		if item_tex == null:
+			item_tex = _load_image_png(ITEM_IMG_DIR, item_name)
+			if item_tex != null and itemProfiles.has(item_name):
+				itemProfiles[item_name]["texture"] = item_tex
+				itemProfiles[item_name]["is_ready"] = true
+				itemProfiles[item_name]["is_generating"] = false
+		if item_tex == null:
+			return false
+		if itemProfiles.has(item_name):
+			%itemContainer.update_item_visual(
+				item_name,
+				item_tex,
+				str(itemProfiles[item_name].get("description", "这是一件实用的道具。")),
+				str(itemProfiles[item_name].get("effect_type", "none")),
+				int(itemProfiles[item_name].get("effect_value", 0))
+			)
+		return true
+	var scene_tex: Texture2D = null
+	if siteImgs.has(target_site) and siteImgs[target_site] is Texture2D:
+		scene_tex = siteImgs[target_site]
+	else:
+		scene_tex = _load_image_png(SCENE_IMG_DIR, target_site)
+		if scene_tex != null:
+			siteImgs[target_site] = scene_tex
+	if scene_tex == null:
+		return false
+	if target_site == currentSiteName and %backgroundImg is TextureRect:
+		(%backgroundImg as TextureRect).texture = scene_tex
+	return true
+
+func _build_bootstrap_scene_image_prompt(site_name: String) -> String:
+	var n = str(site_name).strip_edges()
+	if n == "":
+		return ""
+	var parts: Array = [
+		"cinematic environment faithful to world setting",
+		"daylight natural color",
+		"no text, no watermark",
+		"location:" + n
+	]
+	if background.strip_edges() != "":
+		parts.append("world context: " + background.left(160))
+	parts.append("scene detail: " + n)
+	return ", ".join(parts)
+
+func prefetch_scene_image_for_setup(site_name: String) -> void:
+	var target = _resolve_site_alias(str(site_name).strip_edges())
+	if target == "":
+		target = str(site_name).strip_edges()
+	if target == "":
+		return
+	if _try_use_cached_image_for_target(target):
+		_bg_debug("setup prefetch skipped (cache hit), target=" + target)
+		return
+	var prompt = _build_bootstrap_scene_image_prompt(target)
+	if prompt == "":
+		return
+	_bg_debug("setup prefetch start, target=" + target)
+	gen_img(prompt, target)
 
 func site_update(show_description: bool = true, unlock_after: bool = true, add_arrival_log: bool = true):
 	var site_data = _get_site_data(currentSiteName)
@@ -1149,58 +1342,18 @@ func _enforce_action_narration_richness(text: String) -> String:
 	return text
 
 func _looks_like_action_or_dialogue_phrase(text: String) -> bool:
-	var t = _normalize_single_line_input(text)
-	if t == "":
-		return true
-	if t.length() > 18:
-		return true
-	var invalid_tokens = ["请", "帮", "告诉", "一下", "怎么", "哪里", "为什么", "是否", "能不能", "可以吗", "然后", "如果", "因为", "所以", "行动", "对话", "回复", "输出"]
-	for token in invalid_tokens:
-		if t.find(token) != -1:
-			return true
-	return false
+	return GameEntityUtils.looks_like_action_phrase(text)
 
 func _extract_compact_entity_candidate(raw_text: String, max_len: int = 14) -> String:
-	var t = _normalize_single_line_input(raw_text)
-	t = t.replace("：", " ").replace(":", " ").replace("。", " ").replace("，", " ").replace("？", " ").replace("!", " ")
-	var regex = RegEx.new()
-	if regex.compile("([\\u4e00-\\u9fa5A-Za-z·]{2,24})") != OK:
-		return ""
-	var m = regex.search(t)
-	if m == null:
-		return ""
-	var candidate = str(m.get_string(1)).strip_edges()
-	if candidate.length() > max_len:
-		candidate = candidate.substr(0, max_len)
-	return candidate
+	return GameEntityUtils.extract_compact_entity(raw_text, max_len)
 
 func _is_valid_generated_location_name(raw_name: String) -> bool:
-	var n = _cleanup_location_candidate(raw_name)
-	if n == "":
+	if _looks_like_person_reference(GameEntityUtils.cleanup_location_candidate(raw_name)):
 		return false
-	if n.length() < 2 or n.length() > 16:
-		return false
-	if _looks_like_person_reference(n):
-		return false
-	if _looks_like_action_or_dialogue_phrase(n):
-		return false
-	var regex = RegEx.new()
-	if regex.compile("^[\\u4e00-\\u9fa5A-Za-z0-9·]+$") != OK:
-		return false
-	return regex.search(n) != null
+	return GameEntityUtils.is_valid_location_name_basic(raw_name)
 
 func _is_valid_generated_npc_name(raw_name: String) -> bool:
-	var n = _sanitize_generated_npc_name(raw_name)
-	if _is_bad_generated_npc_name(n):
-		return false
-	if n.length() > 12:
-		return false
-	if _looks_like_action_or_dialogue_phrase(n):
-		return false
-	var regex = RegEx.new()
-	if regex.compile("^[\\u4e00-\\u9fa5A-Za-z·]+$") != OK:
-		return false
-	return regex.search(n) != null
+	return GameEntityUtils.is_valid_npc_name(raw_name)
 
 func _extract_angle_tags(input_string: String) -> Array:
 	var tags: Array = []
@@ -1250,27 +1403,7 @@ func _is_location_query_dialogue(input_text: String) -> bool:
 	return false
 
 func _cleanup_location_candidate(raw_text: String) -> String:
-	var t = str(raw_text).strip_edges()
-	t = t.replace("？", "").replace("?", "").replace("。", "").replace("，", "")
-	var trims = ["请问", "问下", "一下", "告诉我", "你知道", "我想问", "这个", "那个", "一下子", "去", "到"]
-	for p in trims:
-		if t.begins_with(p):
-			t = t.trim_prefix(p).strip_edges()
-	if t.begins_with("的"):
-		t = t.trim_prefix("的").strip_edges()
-	if t.ends_with("在哪"):
-		t = t.left(t.length() - 2).strip_edges()
-	if t.ends_with("在哪里"):
-		t = t.left(t.length() - 3).strip_edges()
-	if t.ends_with("在哪儿"):
-		t = t.left(t.length() - 3).strip_edges()
-	if t.ends_with("怎么去"):
-		t = t.left(t.length() - 3).strip_edges()
-	if t.ends_with("怎么走"):
-		t = t.left(t.length() - 3).strip_edges()
-	if t.ends_with("怎么到"):
-		t = t.left(t.length() - 3).strip_edges()
-	return t
+	return GameEntityUtils.cleanup_location_candidate(raw_text)
 
 func _looks_like_person_reference(target: String) -> bool:
 	if target == "":
@@ -1356,40 +1489,13 @@ func _try_create_location_from_dialogue(reply: String) -> bool:
 	return true
 
 func _sanitize_generated_npc_name(raw_name: String) -> String:
-	var n = _normalize_single_line_input(raw_name)
-	n = n.replace("。", "").replace("，", "").replace("？", "").replace("?", "").replace("！", "").replace("!", "")
-	var prefixes = ["你的", "我的", "他的", "她的", "自己的", "这个", "那个", "一位", "有个", "有位"]
-	for p in prefixes:
-		if n.begins_with(p):
-			n = n.trim_prefix(p).strip_edges()
-	return n
+	return GameEntityUtils.sanitize_npc_name(raw_name)
 
 func _is_bad_generated_npc_name(npc_label: String) -> bool:
-	var n = npc_label.strip_edges()
-	if n == "":
-		return true
-	if n.length() < 2:
-		return true
-	var bad_words = ["女儿", "儿子", "父母", "父亲", "母亲", "爸爸", "妈妈", "兄弟", "姐妹", "同事", "上司", "下属", "家人", "亲戚", "熟人", "自己", "你的", "我的", "他的", "她的", "某人", "路人"]
-	if bad_words.has(n):
-		return true
-	if n.begins_with("你的") or n.begins_with("我的") or n.begins_with("他的") or n.begins_with("她的"):
-		return true
-	return false
+	return GameEntityUtils.is_bad_npc_name(npc_label)
 
 func _fallback_relation_npc_name(query_text: String) -> String:
-	var t = _normalize_single_line_input(query_text)
-	if _contains_any_keyword(t, ["女儿"]):
-		return ["阿莲", "小霜", "露娜", "清禾"][randi_range(0, 3)]
-	if _contains_any_keyword(t, ["儿子"]):
-		return ["阿成", "小川", "远山", "泽安"][randi_range(0, 3)]
-	if _contains_any_keyword(t, ["父亲", "爸爸"]):
-		return ["老周", "韩叔", "陈伯", "沈叔"][randi_range(0, 3)]
-	if _contains_any_keyword(t, ["母亲", "妈妈"]):
-		return ["周婶", "林姨", "方姨", "柳婶"][randi_range(0, 3)]
-	if _contains_any_keyword(t, ["兄弟", "姐妹"]):
-		return ["阿岳", "小宁", "云青", "子岚"][randi_range(0, 3)]
-	return ["阿远", "小禾", "程木", "林渡"][randi_range(0, 3)]
+	return GameEntityUtils.fallback_relation_npc_name(query_text)
 
 func _extract_location_name_from_reply(reply_text: String) -> String:
 	var plain = process_string(reply_text).strip_edges()
@@ -1400,7 +1506,7 @@ func _extract_location_name_from_reply(reply_text: String) -> String:
 		if site_name != "" and plain.find(site_name) != -1:
 			return site_name
 	var regex = RegEx.new()
-	if regex.compile("(?:在|位于|住在)([\\u4e00-\\u9fa5A-Za-z·]{2,16})") != OK:
+	if regex.compile("(?:在|位于|住在)([\\p{Han}A-Za-z·]{2,16})") != OK:
 		return ""
 	var m = regex.search(plain)
 	if m == null:
@@ -1416,8 +1522,8 @@ func _extract_unknown_npc_target_from_query(query_text: String) -> String:
 		return ""
 	var regex = RegEx.new()
 	var patterns = [
-		"([\\u4e00-\\u9fa5A-Za-z·]{2,12})(?:在哪|在哪里|在哪儿|是谁|什么人|在吗|的信息|的消息)",
-		"(?:找|寻找|打听|问|关于)([\\u4e00-\\u9fa5A-Za-z·]{2,12})"
+		"([\\p{Han}A-Za-z·]{2,12})(?:在哪|在哪里|在哪儿|是谁|什么人|在吗|的信息|的消息)",
+		"(?:找|寻找|打听|问|关于)([\\p{Han}A-Za-z·]{2,12})"
 	]
 	for p in patterns:
 		if regex.compile(p) != OK:
@@ -1434,14 +1540,7 @@ func _extract_unknown_npc_target_from_query(query_text: String) -> String:
 	return ""
 
 func _is_relation_npc_query(input_text: String) -> bool:
-	var t = _normalize_single_line_input(input_text)
-	if t == "":
-		return false
-	var relation_words = ["兄弟", "姐妹", "父母", "爸爸", "妈妈", "儿子", "女儿", "同事", "上司", "下属", "学徒", "师父", "朋友", "家人", "亲戚"]
-	for w in relation_words:
-		if t.find(w) != -1:
-			return true
-	return false
+	return GameEntityUtils.is_relation_npc_query(input_text)
 
 func _guess_related_npc_desc(query_text: String, source_npc_name: String) -> String:
 	var t = _normalize_single_line_input(query_text)
@@ -1468,10 +1567,10 @@ func _extract_named_people_from_dialogue(reply_text: String) -> Array:
 	var names: Array = []
 	var regex = RegEx.new()
 	var patterns = [
-		"(?:叫|名叫|名字是|是)([\\u4e00-\\u9fa5A-Za-z·]{2,12})",
-		"(?:有个|有位)([\\u4e00-\\u9fa5A-Za-z·]{2,12})",
-		"([\\u4e00-\\u9fa5A-Za-z·]{2,12})(?:是我的|跟我|在)",
-		"(?:他叫|她叫|我哥叫|我姐叫|我爸叫|我妈叫)([\\u4e00-\\u9fa5A-Za-z·]{2,12})"
+		"(?:叫|名叫|名字是|是)([\\p{Han}A-Za-z·]{2,12})",
+		"(?:有个|有位)([\\p{Han}A-Za-z·]{2,12})",
+		"([\\p{Han}A-Za-z·]{2,12})(?:是我的|跟我|在)",
+		"(?:他叫|她叫|我哥叫|我姐叫|我爸叫|我妈叫)([\\p{Han}A-Za-z·]{2,12})"
 	]
 	var reject_words = ["这里", "那里", "这个", "那个", "我们", "他们", "她们", "没有", "不知道", "不清楚", "路人"]
 	for p in patterns:
@@ -1620,15 +1719,26 @@ func gen_img(prompt: String, site_name: String = ""):
 	var target_site = site_name.strip_edges()
 	if target_site == "":
 		target_site = currentSiteName
+	if target_site == "":
+		return
 	if prompt == "":
 		if pending_site_update:
 			pending_site_update = false
 			site_update()
 		return
+	if _try_use_cached_image_for_target(target_site):
+		_bg_debug("gen_img skipped (cache hit), target=" + target_site)
+		if pending_site_update and !target_site.begins_with("NPC:") and !target_site.begins_with("ITEM:"):
+			pending_site_update = false
+			site_update()
+		return
+	if inflight_img_site == target_site or pending_img_site == target_site:
+		_bg_debug("gen_img skipped (duplicate inflight/pending), target=" + target_site)
+		return
 	_bg_debug("gen_img start, site=" + target_site + ", prompt=" + prompt.left(80))
 	print("正在同时生成图片...")
 	var headers = ["Content-Type: application/json"]
-	var image_json_data = JSON.stringify({"prompt": prompt})
+	var image_json_data = JSON.stringify(_build_image_request_payload(prompt, target_site))
 	%ImgHTTPRequest.timeout = 200.0
 	var error_image = %ImgHTTPRequest.request(image_api_url, headers, HTTPClient.METHOD_POST, image_json_data)
 	print("请求返回了...",error_image)
@@ -1644,9 +1754,13 @@ func gen_img(prompt: String, site_name: String = ""):
 			if pending_site_update:
 				pending_site_update = false
 				site_update()
+			if site_loading_lock:
+				_set_site_loading_lock(false)
 		inflight_img_site = ""
+		inflight_img_started_ms = 0
 		return
 	inflight_img_site = target_site
+	inflight_img_started_ms = Time.get_ticks_msec()
 	if pending_site_update:
 		_start_img_watchdog(target_site)
 
@@ -1760,6 +1874,24 @@ func _load_image_png(dir: String, file_name: String) -> Texture2D:
 			return ImageTexture.create_from_image(img)
 	return null
 
+func _restore_runtime_image_caches_from_disk() -> void:
+	siteImgs.clear()
+	npcImgs.clear()
+	for site_key in sites.keys():
+		var site_name = str(site_key).strip_edges()
+		if site_name == "":
+			continue
+		var s_tex = _load_image_png(SCENE_IMG_DIR, site_name)
+		if s_tex != null:
+			siteImgs[site_name] = s_tex
+	for npc_key in npcs.keys():
+		var npc_name = str(npc_key).strip_edges()
+		if npc_name == "":
+			continue
+		var n_tex = _load_image_png(NPC_IMG_DIR, npc_name)
+		if n_tex != null:
+			npcImgs[npc_name] = n_tex
+
 func _save_site_json(site_name: String, site_data: Dictionary) -> void:
 	_ensure_dir(SCENE_IMG_DIR)
 	var path = SCENE_IMG_DIR + _sanitize_filename(site_name) + ".json"
@@ -1822,22 +1954,44 @@ func _display_base64_image(base64_string: String, site_name: String = ""):
 	var target_site = site_name.strip_edges()
 	if target_site == "":
 		target_site = currentSiteName
+	if target_site.begins_with("ITEM:"):
+		var item_n = target_site.trim_prefix("ITEM:")
+		var item_img = _base64_to_image(base64_string)
+		if item_img != null:
+			var fitted_item_img = _fit_image_to_target_slot(item_img, "item")
+			var item_tex = ImageTexture.create_from_image(fitted_item_img)
+			if itemProfiles.has(item_n):
+				itemProfiles[item_n]["texture"] = item_tex
+				itemProfiles[item_n]["is_generating"] = false
+				itemProfiles[item_n]["is_ready"] = true
+				%itemContainer.update_item_visual(
+					item_n,
+					item_tex,
+					str(itemProfiles[item_n].get("description", "这是一件实用的道具。")),
+					str(itemProfiles[item_n].get("effect_type", "none")),
+					int(itemProfiles[item_n].get("effect_value", 0))
+				)
+			_save_image_png(fitted_item_img, ITEM_IMG_DIR, item_n)
+		_drain_pending_img()
+		return
 	if target_site.begins_with("NPC:"):
 		var npc_n = target_site.trim_prefix("NPC:")
 		var npc_img = _base64_to_image(base64_string)
 		if npc_img != null:
-			var npc_tex = ImageTexture.create_from_image(npc_img)
+			var fitted_npc_img = _fit_image_to_target_slot(npc_img, "npc")
+			var npc_tex = ImageTexture.create_from_image(fitted_npc_img)
 			npcImgs[npc_n] = npc_tex
-			_save_image_png(npc_img, NPC_IMG_DIR, npc_n)
+			_save_image_png(fitted_npc_img, NPC_IMG_DIR, npc_n)
 			if currentNpc != null and str(currentNpc.npcName) == npc_n and %npcIcon is TextureRect:
 				(%npcIcon as TextureRect).texture = npc_tex
 		_drain_pending_img()
 		return
 	var image = _base64_to_image(base64_string)
 	if image != null:
-		var texture = ImageTexture.create_from_image(image)
+		var fitted_scene = _fit_image_to_target_slot(image, "scene")
+		var texture = ImageTexture.create_from_image(fitted_scene)
 		siteImgs[target_site] = texture
-		_save_image_png(image, SCENE_IMG_DIR, target_site)
+		_save_image_png(fitted_scene, SCENE_IMG_DIR, target_site)
 		if target_site == currentSiteName:
 			%backgroundImg.texture = texture
 		_bg_debug("display image ok, site=" + target_site + ", b64_len=" + str(base64_string.length()))
@@ -1922,6 +2076,8 @@ func _generate_item_texture(image_prompt: String) -> Texture2D:
 			"prompt": ultra_fast_prompt,
 			"width": 1024,
 			"height": 1024,
+			"target_type": "item",
+			"target_name": "inventory_item",
 			"steps": 6,
 			"cfg_scale": 2.2,
 			"mode": "ultra_fast_item"
@@ -2111,6 +2267,9 @@ func update_item_trade_price(item_name: String, per_unit_price: int) -> void:
 
 # ==================== UI 操作 ====================
 func _on_send_button_pressed():
+	if _normalize_single_line_input(input_text_edit.text) == "":
+		await _trigger_continue_flow()
+		return
 	await _submit_action_input(input_text_edit.text, false)
 
 func _normalize_single_line_input(raw_text: String) -> String:
@@ -2118,6 +2277,40 @@ func _normalize_single_line_input(raw_text: String) -> String:
 	if t.find("\n") != -1:
 		t = t.substr(0, t.find("\n"))
 	return t.strip_edges()
+
+func _build_shared_interaction_context(interaction_text: String, focus_npc_name: String = "", focus_npc_desc: String = "") -> String:
+	var identity_guidance = _clip_prompt_text(_build_identity_attitude_guidance(focus_npc_name, focus_npc_desc), 520)
+	var chat_session_mem = _clip_prompt_text(get_current_chat_session_memory(focus_npc_name), 900)
+	var related_events = _clip_prompt_text(_build_related_event_memory_for_action(interaction_text, focus_npc_name), 480)
+	return _clip_prompt_text(GameInteractionContext.build_shared_context({
+		"world_seed_input": world_seed_input,
+		"background": background,
+		"current_site_name": currentSiteName,
+		"money": str(money),
+		"player_name": playerName,
+		"inventory_snapshot": _build_inventory_snapshot(),
+		"focus_npc_name": focus_npc_name,
+		"focus_npc_desc": focus_npc_desc,
+		"identity_guidance": identity_guidance,
+		"chat_session_mem": chat_session_mem,
+		"related_events": related_events,
+	}), 0)
+
+func _build_continue_action_text() -> String:
+	return "继续当前事情的发展"
+
+func _build_continue_dialogue_text() -> String:
+	return "继续当前对话和眼前发生的事情"
+
+func _trigger_continue_flow() -> void:
+	if ai_busy or event_flow_lock or _has_active_event_panel():
+		return
+	if input_text_edit != null:
+		input_text_edit.text = ""
+	if currentState == worldState.chat and currentNpc != null:
+		await _submit_dialogue_input(_build_continue_dialogue_text(), true)
+		return
+	await _submit_action_input(_build_continue_action_text(), true)
 
 func _submit_action_input(raw_input: String, bypass_lock_check: bool = false) -> void:
 	var user_input = _normalize_single_line_input(raw_input)
@@ -2132,41 +2325,28 @@ func _submit_action_input(raw_input: String, bypass_lock_check: bool = false) ->
 	addLog("【行动】" + user_input)
 	changeTextTo(%speakerNameLabel, playerName)
 	changeTextTo(response_label, user_input)
-	var action_context = "设定：" + world_seed_input
-	action_context += "\n世界：" + background
-	action_context += "\n地点：" + currentSiteName
-	action_context += "\n资产：" + str(money)
-	action_context += "\n身份：" + playerName
-	action_context += "\n背包：" + _build_inventory_snapshot()
 	var focus_npc_name = ""
 	var focus_npc_desc = ""
 	if currentState == worldState.chat and currentNpc != null:
 		focus_npc_name = str(currentNpc.npcName)
 		focus_npc_desc = str(currentNpc.npcDescribe)
-		action_context += "\n对象：" + focus_npc_name
-		action_context += "\n对象身份：" + focus_npc_desc
-		action_context += "\n规则：行动无明确对象时默认对当前对象发起。"
-	var identity_guidance = _clip_prompt_text(_build_identity_attitude_guidance(focus_npc_name, focus_npc_desc), 520)
-	if identity_guidance != "":
-		action_context += "\n态度导向：\n" + identity_guidance
-	var chat_session_mem = _clip_prompt_text(get_current_chat_session_memory(focus_npc_name), 900)
-	if chat_session_mem != "":
-		action_context += "\n当前会话强约束：\n" + chat_session_mem
-	var related_events = _clip_prompt_text(_build_related_event_memory_for_action(user_input, focus_npc_name), 480)
-	if related_events != "":
-		action_context += "\n事件记忆：\n" + related_events
 	if focus_npc_name != "":
 		_record_current_chat_session("行动输入", playerName, user_input)
-	action_context = _clip_prompt_text(action_context, 0)
+	var action_context = _build_shared_interaction_context(user_input, focus_npc_name, focus_npc_desc)
 	var aprompts = [
 		{"role":"system","content": action_prompt + "\n" + action_context},
 		{"role":"user","content": user_input}]
 	await ask_ai(aprompts, aiMode.action)
 
 func _on_dialogue_button_pressed():
+	await _submit_dialogue_input(dialogue_input.text, false)
+
+func _submit_dialogue_input(raw_input: String, allow_continue_text: bool = false) -> void:
 	if currentState != worldState.chat or currentNpc == null or ai_busy:
 		return
-	var user_input = _normalize_single_line_input(dialogue_input.text)
+	var user_input = _normalize_single_line_input(raw_input)
+	if user_input == "" and allow_continue_text:
+		user_input = _build_continue_dialogue_text()
 	if user_input == "":
 		return
 	preferred_input_focus = "dialogue"
@@ -2177,7 +2357,7 @@ func _on_dialogue_button_pressed():
 		if _has_active_event_panel():
 			changeTextTo(%speakerNameLabel, "【旁白】")
 			changeTextTo(response_label, "当前情况无法脱离，" + currentNpc.npcName + "不会让你就这么走。")
-			await currentNpc.chatWithNpc("[玩家试图离开]")
+			await currentNpc.chatWithNpc("[玩家试图离开]", _build_shared_interaction_context("离开", str(currentNpc.npcName), str(currentNpc.npcDescribe)))
 			return
 		_request_leave_chat_confirm()
 		return
@@ -2186,8 +2366,12 @@ func _on_dialogue_button_pressed():
 	changeTextTo(%speakerNameLabel, playerName)
 	changeTextTo(response_label, user_input)
 	_record_current_chat_session("对话输入", playerName, user_input)
-	await currentNpc.chatWithNpc(user_input)
+	var dialogue_context = _build_shared_interaction_context(user_input, str(currentNpc.npcName), str(currentNpc.npcDescribe))
+	await currentNpc.chatWithNpc(user_input, dialogue_context)
 	currentNpc.currentChat += "玩家：" + user_input + "\n"
+
+func _on_continue_button_pressed() -> void:
+	await _trigger_continue_flow()
 
 func _on_npc_icon_gui_input(event: InputEvent) -> void:
 	if !(event is InputEventMouseButton):
@@ -2248,6 +2432,8 @@ func request_site_switch(site_name: String) -> void:
 func _start_chat_with_existing_npc(npc_name: String) -> void:
 	if !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
 		return
+	if %npcIcon is TextureRect:
+		(%npcIcon as TextureRect).texture = null
 	prepare_npc_memory_for_chat(npc_name)
 	var new_npc = npc.new()
 	new_npc.npcName = npc_name
@@ -2350,6 +2536,8 @@ func _apply_interaction_locks() -> void:
 	var text_busy = !_active_text_tweens.is_empty()
 	send_button.disabled = ai_busy or event_flow_lock or has_event_panel or text_busy
 	dialogue_button.disabled = ai_busy or currentState != worldState.chat or has_event_panel or text_busy
+	if continue_button != null and is_instance_valid(continue_button):
+		continue_button.disabled = ai_busy or event_flow_lock or has_event_panel or text_busy
 	var map_lock = ai_busy or site_loading_lock or event_flow_lock or has_event_panel or text_busy
 	for btn in %site_buttons.get_children():
 		if btn is BaseButton:
@@ -3181,7 +3369,9 @@ func _drain_pending_img() -> void:
 func _on_img_http_request_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	img_watchdog_seq += 1
 	var callback_site = inflight_img_site
+	var started_ms = inflight_img_started_ms
 	inflight_img_site = ""
+	inflight_img_started_ms = 0
 	if callback_site == "":
 		callback_site = currentSiteName
 	_bg_debug("img callback, site=" + callback_site + ", result=" + str(result) + ", code=" + str(response_code) + ", body_len=" + str(body.size()))
@@ -3211,7 +3401,11 @@ func _on_img_http_request_request_completed(result: int, response_code: int, _he
 	if response_code == 200 and response.get("success", false):
 		var image_data = response.get("image", "")
 		if image_data:
-			_display_base64_image(image_data, callback_site)
+			var resolved_target = _resolve_image_callback_target(callback_site, response)
+			_display_base64_image(image_data, resolved_target)
+			if started_ms > 0:
+				var elapsed_s = snapped(float(Time.get_ticks_msec() - started_ms) / 1000.0, 0.01)
+				addLog("<图片生成完成：" + _describe_image_target(resolved_target) + "，耗时" + str(elapsed_s) + "秒>")
 		else:
 			print("图片生成失败：未收到图片数据")
 			_bg_debug("img callback success=true but image empty")
@@ -3230,6 +3424,8 @@ func _on_img_http_request_request_completed(result: int, response_code: int, _he
 		if has_debug:
 			var status = str(debug_data.get("status_code", ""))
 			var preview = str(debug_data.get("response_preview", str(debug_data.get("exception", ""))))
+			if debug_data.has("attempts"):
+				print("[IMG_CLIENT_DEBUG] attempts=", JSON.stringify(debug_data.get("attempts", [])))
 			if preview.length() > 200:
 				preview = preview.left(200) + "..."
 			if status != "":
@@ -4058,10 +4254,7 @@ func _append_event_memories_to_npc_log(npc_name: String) -> void:
 	npcs[npc_name]["npc_log"] = arr
 
 func _contains_any_keyword(text: String, words: Array) -> bool:
-	for w in words:
-		if text.find(str(w)) != -1:
-			return true
-	return false
+	return GameEntityUtils.contains_keyword(text, words)
 
 func _extract_interaction_signals(text: String) -> Dictionary:
 	var t = str(text).strip_edges()
@@ -4334,6 +4527,14 @@ func destroy_yourself(npc_name_hint: String = "") -> void:
 	if currentNpc != null and str(currentNpc.npcName) == npc_name:
 		await changeStateInto(GameManager.worldState.explore)
 
+func _safe_tool_param_string(parameters: Dictionary, key: String, fallback: String = "") -> String:
+	if !parameters.has(key):
+		return fallback
+	var value = parameters.get(key, fallback)
+	if value == null:
+		return fallback
+	return str(value)
+
 # 处理从AI接收的JSON指令
 func handle_npc_instruction(tool_calls: Array) -> void:
 	var normalized_calls: Array = []
@@ -4399,33 +4600,33 @@ func handle_npc_instruction(tool_calls: Array) -> void:
 		match method:
 			"initiate_transaction":
 				await initiate_transaction(
-					parameters.get("item_name", ""),
+					_safe_tool_param_string(parameters, "item_name", ""),
 					max(1, int(parameters.get("quantity", 1))),
 					int(parameters.get("price", 0)),
 					bool(parameters.get("is_total_price", false))
 				)
 			"got_items":
 				await got_items(
-					parameters.get("item_name", ""),
+					_safe_tool_param_string(parameters, "item_name", ""),
 					max(1, int(parameters.get("quantity", 1)))
 				)
 			"consume_items":
 				await consume_items(
-					parameters.get("item_name", ""),
+					_safe_tool_param_string(parameters, "item_name", ""),
 					max(1, int(parameters.get("quantity", 1)))
 				)
 			"create_location":
-				create_location(parameters.get("path", ""))
+				create_location(_safe_tool_param_string(parameters, "path", ""))
 			"create_NPC":
 				create_NPC(
-					parameters.get("npc_name", ""),
-					parameters.get("location", ""),
-					parameters.get("npc_describe", "")
+					_safe_tool_param_string(parameters, "npc_name", ""),
+					_safe_tool_param_string(parameters, "location", ""),
+					_safe_tool_param_string(parameters, "npc_describe", "")
 				)
 			"create_rumors":
 				create_rumors(
-					parameters.get("rumor_name", ""),
-					parameters.get("content", "")
+					_safe_tool_param_string(parameters, "rumor_name", ""),
+					_safe_tool_param_string(parameters, "content", "")
 				)
 			"update_reputation":
 				update_reputation(parameters.get("quantity", 0))
@@ -4574,7 +4775,12 @@ func load_game() -> bool:
 		addLog("<没有存档文件>")
 		return false
 	_force_exit_chat_runtime()
+	siteImgs.clear()
 	npcImgs.clear()
+	if %npcIcon is TextureRect:
+		(%npcIcon as TextureRect).texture = null
+	if %backgroundImg is TextureRect:
+		(%backgroundImg as TextureRect).texture = null
 	_restore_session_resources_from_save()
 	var file = FileAccess.open(SAVE_FILE, FileAccess.READ)
 	if !file:
@@ -4592,6 +4798,7 @@ func load_game() -> bool:
 	background      = data.get("background", "")
 	sites           = data.get("sites", {})
 	npcs            = data.get("npcs", {})
+	_restore_runtime_image_caches_from_disk()
 	rumors          = data.get("rumors", {})
 	important_event_memories = data.get("important_event_memories", [])
 	current_chat_session_npc = str(data.get("current_chat_session_npc", "")).strip_edges()

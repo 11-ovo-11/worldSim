@@ -19,7 +19,7 @@ STABILITY_API_HOST ="https://api.vectorengine.cn"
 #https://api.vectorengine.cn/v1/chat/completions
 #https://api.vectorengine.ai/v1
 #https://api.vectorengine.ai
-SDXL_ENGINE_ID = "gpt-image-1-mini"
+SDXL_ENGINE_ID = "flux-schnell"
 #stable-diffusion-xl-1024-v1-0
 # 初始化 Flask 应用
 app = Flask(__name__)
@@ -66,6 +66,208 @@ LAST_RUNTIME_RECYCLE_AT = 0.0
 # 全局变量，用于缓存工作流和客户端
 workflow_cache = {}
 workflow_lock = Lock()
+
+IMAGE_API_FALLBACK_HOSTS = [
+    "https://api.vectorengine.ai",
+    STABILITY_API_HOST,
+]
+
+IMAGE_REQUEST_TIMEOUT_SECONDS = float(os.getenv("IMAGE_REQUEST_TIMEOUT_SECONDS", "60"))
+IMAGE_PREFLIGHT_TTL_SECONDS = int(os.getenv("IMAGE_PREFLIGHT_TTL_SECONDS", "30"))
+_IMAGE_PREFLIGHT_CACHE = {
+    "checked_at": 0.0,
+    "ok": False,
+    "reason": "",
+    "endpoint": "",
+    "debug": {},
+}
+
+
+def _truncate_text(text: str, limit: int = 300) -> str:
+    src = str(text or "")
+    if len(src) <= limit:
+        return src
+    return src[:limit] + "..."
+
+
+def _extract_error_message(raw_text: str) -> str:
+    text = str(raw_text or "").strip()
+    if text == "":
+        return ""
+    try:
+        obj = json.loads(text)
+    except Exception:
+        return _truncate_text(text, 500)
+    if isinstance(obj, dict):
+        err = obj.get("error", "")
+        if isinstance(err, dict):
+            msg = str(err.get("message", "")).strip()
+            err_type = str(err.get("type", "")).strip()
+            if msg != "" and err_type != "":
+                return msg + f" [type={err_type}]"
+            if msg != "":
+                return msg
+            if err_type != "":
+                return err_type
+        if isinstance(err, str) and err.strip() != "":
+            return err.strip()
+        msg2 = str(obj.get("message", "")).strip()
+        if msg2 != "":
+            return msg2
+    return _truncate_text(text, 500)
+
+
+def _is_hard_image_failure(status_code: int, message: str) -> bool:
+    msg = str(message or "").lower()
+    if status_code in (401, 403):
+        return True
+    hard_keywords = [
+        "额度已用尽", "insufficient", "quota", "余额不足",
+        "invalid api key", "unauthorized", "forbidden", "model_not_found",
+        "does not exist", "not available", "permission denied"
+    ]
+    for kw in hard_keywords:
+        if kw in msg:
+            return True
+    return False
+
+
+def _load_image_api_hosts() -> list:
+    raw_hosts = str(os.getenv("IMAGE_API_HOSTS", "")).strip()
+    hosts = []
+    if raw_hosts != "":
+        for h in raw_hosts.split(","):
+            hh = h.strip()
+            if hh != "" and hh not in hosts:
+                hosts.append(hh)
+    for default_host in IMAGE_API_FALLBACK_HOSTS:
+        hh = str(default_host).strip()
+        if hh != "" and hh not in hosts:
+            hosts.append(hh)
+    return hosts
+
+def _build_image_endpoint_candidates() -> list:
+    endpoints = []
+    for host in _load_image_api_hosts():
+        clean_host = str(host).strip().rstrip("/")
+        if clean_host == "":
+            continue
+        endpoint = clean_host + "/v1/images/generations"
+        if endpoint not in endpoints:
+            endpoints.append(endpoint)
+    return endpoints
+
+
+def _probe_image_generation_once() -> dict:
+    endpoints = _build_image_endpoint_candidates()
+    attempts = []
+    test_payload = {
+        "model": SDXL_ENGINE_ID,
+        "prompt": "simple daylight campus scene, no text",
+        "size": "1024x1024"
+    }
+    for endpoint in endpoints:
+        start_at = time.time()
+        try:
+            resp = requests.post(
+                endpoint,
+                headers={
+                    "Authorization": f"Bearer {image_key}",
+                    "Content-Type": "application/json"
+                },
+                json=test_payload,
+                timeout=IMAGE_REQUEST_TIMEOUT_SECONDS
+            )
+            elapsed_ms = int((time.time() - start_at) * 1000)
+            preview = _truncate_text(resp.text, 500)
+            reason = _extract_error_message(preview)
+            attempt = {
+                "endpoint": endpoint,
+                "status_code": resp.status_code,
+                "elapsed_ms": elapsed_ms,
+                "reason": reason,
+            }
+            attempts.append(attempt)
+            print(f"[IMG_PREFLIGHT] endpoint={endpoint} status={resp.status_code} elapsed_ms={elapsed_ms} reason={_truncate_text(reason, 200)}")
+            if resp.status_code == 200:
+                try:
+                    data = resp.json()
+                except Exception:
+                    continue
+                items = data.get("data", [])
+                if isinstance(items, list) and len(items) > 0:
+                    has_url = str(items[0].get("url", "")).strip() != ""
+                    has_b64 = str(items[0].get("b64_json", "")).strip() != ""
+                    if has_url or has_b64:
+                        return {
+                            "ok": True,
+                            "endpoint": endpoint,
+                            "reason": "",
+                            "debug": {"attempts": attempts}
+                        }
+            if _is_hard_image_failure(resp.status_code, reason):
+                return {
+                    "ok": False,
+                    "endpoint": endpoint,
+                    "reason": reason if reason != "" else f"HTTP {resp.status_code}",
+                    "debug": {"attempts": attempts}
+                }
+        except Exception as e:
+            elapsed_ms = int((time.time() - start_at) * 1000)
+            reason = str(e)
+            attempts.append({
+                "endpoint": endpoint,
+                "elapsed_ms": elapsed_ms,
+                "reason": reason,
+            })
+            print(f"[IMG_PREFLIGHT] endpoint={endpoint} exception={reason} elapsed_ms={elapsed_ms}")
+    final_reason = "图片试生成失败：所有端点均不可用"
+    if attempts:
+        last_reason = str(attempts[-1].get("reason", "")).strip()
+        if last_reason != "":
+            final_reason = last_reason
+    return {
+        "ok": False,
+        "endpoint": "",
+        "reason": final_reason,
+        "debug": {"attempts": attempts}
+    }
+
+
+def _ensure_image_preflight(force: bool = False) -> dict:
+    now = time.time()
+    age = now - float(_IMAGE_PREFLIGHT_CACHE.get("checked_at", 0.0))
+    if (not force) and age >= 0 and age < IMAGE_PREFLIGHT_TTL_SECONDS:
+        return {
+            "ok": bool(_IMAGE_PREFLIGHT_CACHE.get("ok", False)),
+            "endpoint": str(_IMAGE_PREFLIGHT_CACHE.get("endpoint", "")),
+            "reason": str(_IMAGE_PREFLIGHT_CACHE.get("reason", "")),
+            "debug": dict(_IMAGE_PREFLIGHT_CACHE.get("debug", {})),
+            "cached": True,
+            "cache_age": int(age)
+        }
+    result = _probe_image_generation_once()
+    _IMAGE_PREFLIGHT_CACHE["checked_at"] = now
+    _IMAGE_PREFLIGHT_CACHE["ok"] = bool(result.get("ok", False))
+    _IMAGE_PREFLIGHT_CACHE["reason"] = str(result.get("reason", ""))
+    _IMAGE_PREFLIGHT_CACHE["endpoint"] = str(result.get("endpoint", ""))
+    _IMAGE_PREFLIGHT_CACHE["debug"] = dict(result.get("debug", {}))
+    result["cached"] = False
+    result["cache_age"] = 0
+    return result
+
+def _build_image_size_candidates(target_type: str, width: int, height: int) -> list:
+    requested = (max(1, int(width)), max(1, int(height)))
+    presets = {
+        "scene": [(1344, 768), (1536, 1024), (1024, 1024)],
+        "npc": [(1024, 1536), (896, 1152), (1024, 1024)],
+        "item": [(1024, 1024)],
+    }
+    candidates = []
+    for size in [requested] + presets.get(target_type, presets["scene"]):
+        if size not in candidates:
+            candidates.append(size)
+    return candidates
 
 def _rebuild_openai_client():
     global clientOpenAI
@@ -221,11 +423,13 @@ def chat():
 @app.route("/generate_image", methods=["POST"])
 def generate_image():
 
-    req_data = request.get_json()
+    req_data = request.get_json(silent=True) or {}
 
-    prompt = req_data.get("prompt", "")
+    prompt = str(req_data.get("prompt", "")).strip()
     width = int(req_data.get("width", 1024))
     height = int(req_data.get("height", 1024))
+    target_type = str(req_data.get("target_type", "scene")).strip().lower()
+    target_name = str(req_data.get("target_name", "")).strip()
 
     if not prompt:
         return jsonify({
@@ -237,77 +441,133 @@ def generate_image():
         return jsonify({"success": False, "error": "未配置 image_key",
                         "debug": {"exception": "image_key is empty"}}), 500
 
-    try:
-
-        response = requests.post(
-            "https://api.vectorengine.ai/v1/images/generations",
-            headers={
-                "Authorization": f"Bearer {image_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "grok-imagine-image-pro",
-                "prompt": prompt,
-                "size": f"{width}x{height}"
-            },
-            timeout=180
-        )
-
-        print("[IMG_DEBUG] status =", response.status_code)
-        print("[IMG_DEBUG] body =", response.text[:500])
-
-        if response.status_code != 200:
-            return jsonify({
-                "success": False,
-                "error": response.text
-            }), 500
-
-        data = response.json()
-
-        items = data.get("data", [])
-
-        if not items:
-            return jsonify({
-                "success": False,
-                "error": "API未返回图片"
-            }), 500
-
-        image_url = items[0].get("url")
-
-        if not image_url:
-            return jsonify({
-                "success": False,
-                "error": "未找到图片URL"
-            }), 500
-
-        print("[IMG_DEBUG] downloading image:", image_url)
-
-        # 下载图片
-        img_response = requests.get(
-            image_url,
-            timeout=120
-        )
-
-        if img_response.status_code != 200:
-            return jsonify({
-                "success": False,
-                "error": "图片下载失败"
-            }), 500
-
-        # 转base64
-        image_base64 = base64.b64encode(
-            img_response.content
-        ).decode("utf-8")
-
-        print("[IMG_DEBUG] image downloaded, b64 len =", len(image_base64))
-
-        # 返回给Godot（兼容旧结构）
+    preflight = _ensure_image_preflight(False)
+    if not preflight.get("ok", False):
+        reason = str(preflight.get("reason", "图片试生成失败")).strip()
+        print(f"[IMG_DEBUG] preflight failed: {reason}")
         return jsonify({
-            "success": True,
-            "image": image_base64,
-            "provider": "vectorengine",
-            "model": "grok-imagine-image-pro"
-        })
+            "success": False,
+            "error": "图片试生成失败：" + (reason if reason != "" else "未知原因"),
+            "debug": {
+                "stage": "preflight",
+                "cached": bool(preflight.get("cached", False)),
+                "cache_age": int(preflight.get("cache_age", 0)),
+                "endpoint": str(preflight.get("endpoint", "")),
+                "attempts": preflight.get("debug", {}).get("attempts", []),
+                "model": SDXL_ENGINE_ID,
+            }
+        }), 503
+
+    endpoints = _build_image_endpoint_candidates()
+    sizes = _build_image_size_candidates(target_type, width, height)
+    attempts = []
+
+    try:
+        for endpoint in endpoints:
+            for candidate in sizes:
+                size_text = f"{candidate[0]}x{candidate[1]}"
+                print(f"[IMG_DEBUG] POST {endpoint} target_type={target_type} target_name={target_name} size={size_text} model={SDXL_ENGINE_ID} prompt_len={len(prompt)}")
+                try:
+                    response = requests.post(
+                        endpoint,
+                        headers={
+                            "Authorization": f"Bearer {image_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": SDXL_ENGINE_ID,
+                            "prompt": prompt,
+                            "size": size_text
+                        },
+                        timeout=IMAGE_REQUEST_TIMEOUT_SECONDS
+                    )
+                except Exception as request_error:
+                    attempt = {
+                        "endpoint": endpoint,
+                        "size": size_text,
+                        "exception": str(request_error)
+                    }
+                    attempts.append(attempt)
+                    print(f"[IMG_DEBUG] request exception endpoint={endpoint} size={size_text} error={request_error}")
+                    continue
+
+                body_preview = _truncate_text(response.text, 500)
+                reason = _extract_error_message(body_preview)
+                attempts.append({
+                    "endpoint": endpoint,
+                    "size": size_text,
+                    "status_code": response.status_code,
+                    "reason": reason,
+                    "response_preview": body_preview,
+                })
+                print(f"[IMG_DEBUG] attempt status={response.status_code} endpoint={endpoint} size={size_text} reason={_truncate_text(reason, 200)}")
+
+                if response.status_code != 200:
+                    if _is_hard_image_failure(response.status_code, reason):
+                        return jsonify({
+                            "success": False,
+                            "error": reason if reason != "" else f"HTTP {response.status_code}",
+                            "debug": {
+                                "stage": "request",
+                                "target_type": target_type,
+                                "target_name": target_name,
+                                "endpoint": endpoint,
+                                "attempts": attempts,
+                                "model": SDXL_ENGINE_ID,
+                            }
+                        }), 502
+                    continue
+
+                try:
+                    data = response.json()
+                except Exception:
+                    continue
+                items = data.get("data", [])
+                if not items:
+                    continue
+
+                image_url = str(items[0].get("url", "")).strip()
+                image_base64 = str(items[0].get("b64_json", "")).strip()
+
+                if image_url != "":
+                    print("[IMG_DEBUG] downloading image:", image_url)
+                    img_response = requests.get(image_url, timeout=120)
+                    if img_response.status_code != 200:
+                        attempts.append({
+                            "endpoint": endpoint,
+                            "size": size_text,
+                            "download_status": img_response.status_code,
+                            "download_url": image_url,
+                        })
+                        continue
+                    image_base64 = base64.b64encode(img_response.content).decode("utf-8")
+
+                if image_base64 == "":
+                    continue
+
+                print("[IMG_DEBUG] image ready, b64 len =", len(image_base64))
+                return jsonify({
+                    "success": True,
+                    "image": image_base64,
+                    "provider": "vectorengine",
+                    "model": SDXL_ENGINE_ID,
+                    "target_type": target_type,
+                    "target_name": target_name,
+                    "width": candidate[0],
+                    "height": candidate[1],
+                })
+
+        last_error = attempts[-1] if attempts else {}
+        return jsonify({
+            "success": False,
+            "error": str(last_error.get("reason", last_error.get("exception", last_error.get("response_preview", "图片生成失败")))),
+            "debug": {
+                "target_type": target_type,
+                "target_name": target_name,
+                "attempts": attempts,
+                "model": SDXL_ENGINE_ID,
+            }
+        }), 500
 
     except Exception as e:
 
@@ -315,7 +575,13 @@ def generate_image():
 
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "debug": {
+                "target_type": target_type,
+                "target_name": target_name,
+                "model": SDXL_ENGINE_ID,
+                "exception": str(e),
+            }
         }), 500
 
 
@@ -323,41 +589,48 @@ def generate_image():
 def test_image():
     """快速测试图片生成，返回完整调试信息"""
     test_prompt = "a simple red apple on white background"
-    size = "1024x1024"
-    target_url = "https://api.vectorengine.ai/v1/images/generations"
-    print(f"[TEST_IMAGE] POST {target_url} model={SDXL_ENGINE_ID}")
-    result = {"url": target_url, "model": SDXL_ENGINE_ID, "key_prefix": (image_key or "")[:8] + "..."}
+    result = {"endpoints": _build_image_endpoint_candidates(), "model": SDXL_ENGINE_ID, "key_prefix": (image_key or "")[:8] + "..."}
     if not image_key:
         result["error"] = "image_key 未配置"
         return jsonify(result), 500
     try:
-        resp = requests.post(
-            target_url,
-            headers={"Authorization": f"Bearer {image_key}", "Content-Type": "application/json"},
-            json={"model": SDXL_ENGINE_ID, "prompt": test_prompt, "size": size},
-            timeout=120
-        )
-        result["status"] = resp.status_code
-        result["body_preview"] = resp.text[:800]
-        if resp.status_code == 200:
+        result["attempts"] = []
+        for endpoint in _build_image_endpoint_candidates():
+            resp = requests.post(
+                endpoint,
+                headers={"Authorization": f"Bearer {image_key}", "Content-Type": "application/json"},
+                json={"model": SDXL_ENGINE_ID, "prompt": test_prompt, "size": "1024x1024"},
+                timeout=120
+            )
+            attempt = {
+                "endpoint": endpoint,
+                "status": resp.status_code,
+                "body_preview": resp.text[:800]
+            }
+            result["attempts"].append(attempt)
+            if resp.status_code != 200:
+                continue
             data = resp.json()
             items = data.get("data", [])
-            if items:
-                img_url = items[0].get("url", "")
-                result["img_url"] = img_url
-                if img_url:
-                    dl = requests.get(img_url, timeout=60)
-                    result["dl_status"] = dl.status_code
-                    result["dl_bytes"] = len(dl.content)
-                    result["success"] = dl.status_code == 200
-                else:
-                    b64 = items[0].get("b64_json", "")
-                    result["b64_len"] = len(b64)
-                    result["success"] = bool(b64)
+            if not items:
+                continue
+            img_url = str(items[0].get("url", "")).strip()
+            if img_url != "":
+                dl = requests.get(img_url, timeout=60)
+                attempt["img_url"] = img_url
+                attempt["dl_status"] = dl.status_code
+                attempt["dl_bytes"] = len(dl.content)
+                result["success"] = dl.status_code == 200
+                if dl.status_code == 200:
+                    break
             else:
-                result["error"] = "响应中没有data字段"
-        else:
-            result["error"] = f"HTTP {resp.status_code}"
+                b64 = str(items[0].get("b64_json", "")).strip()
+                attempt["b64_len"] = len(b64)
+                result["success"] = b64 != ""
+                if b64 != "":
+                    break
+        if not result.get("success", False):
+            result["error"] = "所有测试端点均失败"
     except Exception as e:
         result["error"] = str(e)
     print(f"[TEST_IMAGE] result={result}")
@@ -368,13 +641,15 @@ def test_chat():
     """快速测试AI文本生成，返回完整调试信息"""
     result = {"chat_mode": chat_mode}
     try:
-        client = OpenAI(api_key=key, base_url=provider_base_url)
+        client = OpenAI(api_key=key, base_url=API_BASE_URL)
         resp = client.chat.completions.create(
-            model=model_name,
+            model=API_MODEL_CHAT,
             messages=[{"role": "user", "content": "用一句话证明你已运行"}],
             max_tokens=50
         )
         result["text"] = resp.choices[0].message.content
+        result["base_url"] = API_BASE_URL
+        result["model"] = API_MODEL_CHAT
         result["success"] = True
     except Exception as e:
         result["error"] = str(e)

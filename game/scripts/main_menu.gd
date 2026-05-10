@@ -540,6 +540,8 @@ func if_weather_ok():
 		playerName = player_role_display
 	add_start_log("欢迎,"+playerName)
 	scene.playerName = playerName
+	if scene.has_method("prefetch_scene_image_for_setup"):
+		scene.prefetch_scene_image_for_setup(playerLocation)
 	scene.goto(playerLocation)
 	%speakerNameLabel.text = ""
 	scene.changeTextTo(%speakerNameLabel, playerName)

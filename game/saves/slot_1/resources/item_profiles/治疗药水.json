@@ -1,8 +1,0 @@
-{
-	"description": "一瓶红色的治疗药水，能够快速恢复少量生命值，是冒险者必备的补给品。",
-	"effect_type": "hp_restore",
-	"effect_value": 20,
-	"image_prompt": "A red potion bottle with a cork, glowing softly, isolated on white background, simple and clean, no text, game icon style",
-	"rarity": "uncommon",
-	"value": 50
-}

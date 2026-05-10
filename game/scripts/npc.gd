@@ -152,9 +152,11 @@ func sum_chat():
 	]
 	await scene.ask_ai(prompts, GameManager.aiMode.sum)
 
-func chatWithNpc(prompt: String):
+func chatWithNpc(prompt: String, shared_context: String = ""):
+	var base = build_base_prompt()
+	var system_content = base if shared_context == "" else base + "\n" + shared_context
 	var prompts = [
-		{"role": "system", "content": build_base_prompt()},
+		{"role": "system", "content": system_content},
 		{"role": "user", "content": prompt}
 	]
 	await scene.ask_ai(prompts, GameManager.aiMode.chat)
