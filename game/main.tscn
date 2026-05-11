@@ -482,6 +482,30 @@ layout_mode = 2
 texture = ExtResource("2_0xm2m")
 expand_mode = 1
 
+[node name="ImgModePanel" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer/backgroundImg" unique_id=-1394967288]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -226.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = 34.0
+grow_horizontal = 0
+
+[node name="SceneOnlyButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/backgroundImg/ImgModePanel" unique_id=-1394967287]
+custom_minimum_size = Vector2(96, 28)
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "只生成场景"
+
+[node name="InstantGenButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/backgroundImg/ImgModePanel" unique_id=-1394967286]
+custom_minimum_size = Vector2(82, 28)
+layout_mode = 2
+toggle_mode = true
+text = "即时生成"
+
 [node name="Panel3" parent="mainContainer/HBoxContainer/VBoxContainer" unique_id=155045949 instance=ExtResource("3_7mycd")]
 layout_mode = 2
 
@@ -521,6 +545,54 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 text = "回复文本"
 autowrap_mode = 1
+
+[node name="ForceReleaseButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer/ResponseLabel" unique_id=-1394967293]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 26)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -136.0
+offset_top = 4.0
+offset_right = -64.0
+offset_bottom = 30.0
+grow_horizontal = 0
+mouse_default_cursor_shape = 2
+text = "强制释放"
+
+[node name="OutputLengthButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer/ResponseLabel" unique_id=-1394967292]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(52, 26)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -60.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = 30.0
+grow_horizontal = 0
+mouse_default_cursor_shape = 2
+text = "设置"
+
+[node name="ContinueButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer/ResponseLabel" unique_id=-1394967291]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 26)
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -64.0
+offset_top = -30.0
+offset_right = -4.0
+offset_bottom = -4.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_default_cursor_shape = 2
+text = "继续"
 
 [node name="水平分割线" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer/npcInfosContainer" unique_id=313242973 instance=ExtResource("3_7mycd")]
 custom_minimum_size = Vector2(0, 2)

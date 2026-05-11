@@ -9,6 +9,8 @@ func _ready() -> void:
 func _on_button_down() -> void:
 	if scene == null or !scene.npcs.has(npcName):
 		return
+	if scene.has_method("_is_runtime_transition_locked") and scene._is_runtime_transition_locked():
+		return
 	if scene.has_method("request_npc_switch"):
 		scene.request_npc_switch(npcName)
 		return
@@ -26,5 +28,5 @@ func _on_button_down() -> void:
 			logs+=i
 	currentNpc.npcLog = logs
 	scene.newNpc = currentNpc
-	scene.changeStateInto(GameManager.worldState.chat)
+	scene.changeStateInto(scene.worldState.chat)
 	pass # Replace with function body.

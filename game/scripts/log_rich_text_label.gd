@@ -30,7 +30,9 @@ func _deferred_start_check() -> void:
 		set_process(true)
 		return
 	if prev_node != null:
-		prev_node.connect("tree_exited", Callable(self, "_deferred_start_check"), CONNECT_ONE_SHOT)
+		var cb = Callable(self, "_deferred_start_check")
+		if !prev_node.is_connected("tree_exited", cb):
+			prev_node.connect("tree_exited", cb, CONNECT_ONE_SHOT)
 	get_tree().create_timer(0.06).timeout.connect(_deferred_start_check, CONNECT_ONE_SHOT)
 
 func _process(_delta: float) -> void:

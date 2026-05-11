@@ -19,7 +19,7 @@ STABILITY_API_HOST ="https://api.vectorengine.cn"
 #https://api.vectorengine.cn/v1/chat/completions
 #https://api.vectorengine.ai/v1
 #https://api.vectorengine.ai
-SDXL_ENGINE_ID = "flux-schnell"
+SDXL_ENGINE_ID = "grok-3-image"
 #stable-diffusion-xl-1024-v1-0
 # 初始化 Flask 应用
 app = Flask(__name__)

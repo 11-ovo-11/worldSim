@@ -10,6 +10,8 @@ func _ready() -> void:
 func _on_button_down() -> void:
 	if scene == null:
 		return
+	if scene.has_method("_is_runtime_transition_locked") and scene._is_runtime_transition_locked():
+		return
 	if scene.has_method("request_site_switch"):
 		scene.request_site_switch(siteName)
 	else:

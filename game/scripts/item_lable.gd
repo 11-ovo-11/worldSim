@@ -13,15 +13,15 @@ var effect_value: int = 0
 @onready var image_button: TextureButton = %ItemImageButton
 @onready var quantity_label: Label = %QuantityLabel
 
-const ITEM_ICON_SIZE_NORMAL := 52.0
-const ITEM_ICON_SIZE_COMPACT := 40.0
+const ITEM_ICON_SIZE_NORMAL := 100.0
+const ITEM_ICON_SIZE_COMPACT := 100.0
 
 func _apply_compact_visual(is_compact: bool) -> void:
 	if image_button == null or quantity_label == null:
 		return
 	var icon_size = ITEM_ICON_SIZE_COMPACT if is_compact else ITEM_ICON_SIZE_NORMAL
 	image_button.custom_minimum_size = Vector2(icon_size, icon_size)
-	custom_minimum_size = Vector2(icon_size, icon_size + 16.0)
+	custom_minimum_size = Vector2(icon_size, icon_size + 20.0)
 	if is_compact:
 		quantity_label.add_theme_font_size_override("font_size", 10)
 	else:
