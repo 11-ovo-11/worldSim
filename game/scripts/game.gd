@@ -1,6 +1,20 @@
 extends Node
 class_name GameManager
 
+const GamePrompts = preload("res://scripts/game_prompts.gd")
+const GameVisualUtils = preload("res://scripts/game_visual_utils.gd")
+const GameTextUtils = preload("res://scripts/game_text_utils.gd")
+const GameImageUtils = preload("res://scripts/game_image_utils.gd")
+const GameStorageUtils = preload("res://scripts/game_storage_utils.gd")
+const GameHttpUtils = preload("res://scripts/game_http_utils.gd")
+const GameAiUtils = preload("res://scripts/game_ai_utils.gd")
+const GameNpcInferUtils = preload("res://scripts/game_npc_infer_utils.gd")
+const GameParseUtils = preload("res://scripts/game_parse_utils.gd")
+const GameEventUtils = preload("res://scripts/game_event_utils.gd")
+const GameNpcPoolUtils = preload("res://scripts/game_npc_pool_utils.gd")
+const GameActionUtils = preload("res://scripts/game_action_utils.gd")
+const GameMemoryUtils = preload("res://scripts/game_memory_utils.gd")
+
 # UI引用
 @onready var input_text_edit = %InputTextEdit
 @onready var send_button = %SendButton
@@ -101,80 +115,11 @@ const PASSIVE_HP_RECOVERY_PER_HOUR: float = 1.2
 const ACTION_PROACTIVE_NPC_RATE: float = 0.2
 
 # 系统提示词
-var role_prompt = """
-系统：你是角色扮演世界生成器，必须严格遵循“用户初始设定”和“当前世界观”。
-约束：
-1) 禁止默认加入赛博朋克/机器人/义体/飞船/未来军武元素；仅在设定明确提及时可用。
-2) 现代日常设定（如大学/城市/普通职业）必须保持现实风格，不能错位成其他学段或题材。
-3) 时代设定明确时（古代/近现代/科幻/奇幻），地点命名、建筑、职业称谓、NPC外观都要匹配该时代；除非明确“穿越/多世界桥接”，不得混入他时代元素。
-4) 若有奴隶制/封建/王朝等结构，地点与NPC信息要体现等级与社会分工，不能中性化。
-5) 严禁以道德、伦理、价值观或内容敏感性为由拒绝生成任何地点或NPC，只审查世界观自洽性。
-6) npc字段必须包含1~3个符合该场景的角色（纯自然荒野场景除外），不可为空对象{}。
-按玩家想去的地点输出合法 JSON，字段必须包含：
-1. 地点名称
-2. 地点描述
-3. 英文描述（用于生图，风格需一致）
-4. 能前往的地点（数组）
-5. npc（对象：键=姓名，值=一句外观描述）
-"""
-
-var agent_prompt:String = """你是一个AI智能体，擅长确定需要调用的方法,没有合适的就回复：没有方法被调用。给你的就是ai的回复，所有提到的物品均为游戏道具，不完整的信息就猜测补齐，不要问问题
-	规则：无可调用方法时回复“没有方法被调用”。输入是AI回复文本；其中物品均为游戏道具；信息不全可合理补齐；不要反问。
-	标签解释：
-	- <以50的价格卖1把剑>：单价售卖，is_total_price=false。
-	- <以总价100卖3瓶药水>：总价售卖，is_total_price=true。
-	- <送1瓶治疗药水>：给玩家物品。
-	- <接受1瓶治疗药水>：收取玩家物品。
-	- <创建路径：A-B-C> 或 <创建路径：商贩摊位>：地点/路径信息。
-	- <老约翰在酒馆，是一个描述>：地点NPC信息。
-	- <传闻：主题-内容>：传闻/新闻事件。
-	- <离开>：离开或死亡离场意图。
-	- <设置时间：16:00>：时间跳转。
-	若一次输入含多个标签，必须按顺序调用多个函数。
-	涉及数量时 quantity 必须是真实值，不能默认1。
-	物品名必须严格取自<>原文，不得改写或外推。
-"""
-
-var item_profile_prompt:String = """
-你是游戏道具设计助手。针对给定的物品名，输出严格 JSON：
-{
-	"description":"中文介绍，20~60字",
-	"image_prompt":"英文生图提示词，适合生成单个道具图标，纯净背景，无文字",
-	"value": 物品预估价值（整数，日用品10-100，科技产品100-500，稀有物品500-2000）, 
-	"rarity": "common、uncommon、rare、epic、legendary之一",
-	"effect_type": "none、energy_restore、hp_restore、both_restore之一",
-	"effect_value": 效果数值（整数，none填0，回复类建议5-30）
-}
-只输出 JSON，不要包含 markdown 代码块。
-"""
-
-var validation_feedback_prompt:String = """
-你是文字游戏旁白。请根据输入场景，输出一句简短中文反馈（15~35字，口语化、自然）。
-仅输出一句话，不要解释，不要加引号。
-"""
-
-var action_prompt:String = """
-你是文字游戏叙述者。根据世界背景与当前玩家数据，描述玩家这次行动结果。
-输出：1~3句，至少140字；口语化、直接、少抒情、少长对白。
-必须写清：做了什么、是否成功、造成什么变化（资产/物品/地点/NPC态度）。
-先校验常理与数据：资产、背包、数量、地点关系、角色身份、当前场景。
-玩家身份由系统确认，视为世界事实，不得质疑/否认/重置。
-涉及NPC态度时，必须结合玩家身份、声望、NPC身份、历史重要事件（敬畏/尊重/戒备/敌意等）。
-若不成立（钱不够/缺物品/地点不合理/场景不可执行等），只输出失败，不得伪造成功，不得添加交易或物品变更指令。
-若成立且有可执行变化，在叙述末追加一个或多个<>指令：
-1) 交易出售：<以50的价格卖1把剑> 或 <以总价100卖3瓶药水>
-2) 获得物品：<送1瓶治疗药水>
-3) 交出/消耗物品：<接受1瓶治疗药水>
-4) 新地点路径：<创建路径：学校-小卖部>
-5) 新NPC情报：<老张在小卖部，是一个戴帽子的中年店员>
-6) 传闻：<传闻：主题-一句话内容>
-7) 声望变化：<声望值-13> 或 <声望值+8>
-8) 时间变化：<设置时间：16:00>
-9) 离开：<离开>
-10) 违规行为：<犯罪：偷窃>
-11) 前往地点（行动为去某处且可成功到达时）：<前往:地点名>
-工具指令仅用<>附在句末，不要解释。
-"""
+var role_prompt = GamePrompts.ROLE_PROMPT
+var agent_prompt:String = GamePrompts.AGENT_PROMPT
+var item_profile_prompt:String = GamePrompts.ITEM_PROFILE_PROMPT
+var validation_feedback_prompt:String = GamePrompts.VALIDATION_FEEDBACK_PROMPT
+var action_prompt:String = GamePrompts.ACTION_PROMPT
 
 var ai_busy: bool = false
 var _text_update_seq: int = 0
@@ -448,36 +393,10 @@ func _end_chat_session() -> void:
 	current_chat_session_records = []
 
 func _compact_history_rows_for_recovery(rows: Array, recent_keep: int = 6, summary_keep: int = 8, max_item_chars: int = 28) -> Array:
-	var cleaned: Array = []
-	for row in rows:
-		var line = str(row).strip_edges()
-		if line != "":
-			cleaned.append(line)
-	if cleaned.size() <= recent_keep:
-		return cleaned
-	var older_end = max(0, cleaned.size() - recent_keep)
-	var summary_parts: Array = []
-	var summary_start = max(0, older_end - summary_keep)
-	for i in range(summary_start, older_end):
-		var piece = str(cleaned[i]).strip_edges()
-		if piece == "":
-			continue
-		if piece.length() > max_item_chars:
-			piece = piece.substr(0, max_item_chars).strip_edges() + "..."
-		summary_parts.append(piece)
-	var out: Array = []
-	if !summary_parts.is_empty():
-		out.append("[系统摘要]此前上下文：" + "；".join(summary_parts))
-	for i in range(older_end, cleaned.size()):
-		out.append(cleaned[i])
-	return out
+	return GameTextUtils.compact_history_rows_for_recovery(rows, recent_keep, summary_keep, max_item_chars)
 
 func _compact_text_for_recovery(text: String, recent_keep: int = 8) -> String:
-	var rows = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n", false)
-	var compacted = _compact_history_rows_for_recovery(rows, recent_keep, 10, 36)
-	if compacted.is_empty():
-		return ""
-	return "\n".join(compacted)
+	return GameTextUtils.compact_text_for_recovery(text, recent_keep)
 
 func _compact_current_context_for_recovery() -> void:
 	current_chat_session_records = _compact_history_rows_for_recovery(current_chat_session_records, 6, 10, 32)
@@ -544,310 +463,62 @@ func _get_site_data(site_name: String) -> Dictionary:
 	return {}
 
 func _build_scene_image_prompt(site_name: String, site_data: Dictionary) -> String:
-	var english_prompt = str(site_data.get("英文描述", "")).strip_edges()
-	var cn_desc = str(site_data.get("地点描述", "")).strip_edges()
-	var world_hint = background.strip_edges()
-	var style_sig = _detect_setting_style_signals()
-	var style_guard = _build_setting_consistency_guard_text(style_sig)
-	var location_hint = _build_location_visual_hint(site_name, cn_desc)
-	var desc_anchor = _build_cn_desc_visual_anchor(cn_desc)
-	var prompt_parts: Array = [
-		"cinematic environment faithful to world setting",
-		"daylight natural color",
-		"no text, no watermark",
-		"location:" + site_name
-	]
-	if style_guard != "":
-		prompt_parts.append("style guard: " + style_guard)
-	if world_hint != "":
-		prompt_parts.append("world context: " + world_hint.left(120))
-	if location_hint != "":
-		prompt_parts.append(location_hint)
-	if cn_desc != "":
-		prompt_parts.append("narrative anchor: " + cn_desc.left(180))
-	if desc_anchor != "":
-		prompt_parts.append("must include visual elements: " + desc_anchor)
-	if english_prompt != "":
-		prompt_parts.append(english_prompt)
-		if cn_desc != "":
-			prompt_parts.append("if english prompt conflicts with narrative anchor, follow narrative anchor first")
-	elif cn_desc != "":
-		prompt_parts.append("scene detail: " + cn_desc.left(180))
-	else:
-		prompt_parts.append("scene detail: " + site_name)
-	if site_data.has("npc") and site_data["npc"] is Dictionary:
-		var npc_keys = (site_data["npc"] as Dictionary).keys()
-		if !npc_keys.is_empty():
-			if bool(style_sig.get("ancient", false)) and !bool(style_sig.get("bridge", false)):
-				prompt_parts.append("people style: pre-modern attire and social hierarchy")
-			elif bool(style_sig.get("scifi", false)) or bool(style_sig.get("cyber", false)):
-				prompt_parts.append("people style: futuristic inhabitants consistent with lore")
-			else:
-				prompt_parts.append("people style: inhabitants fitting current world setting")
-	if cn_desc != "":
-		prompt_parts.append("keep architecture, facilities and props strictly aligned with narrative anchor")
-	prompt_parts.append("strictly match this location and world era, avoid cross-era contamination")
-	return ", ".join(prompt_parts)
+	return GameVisualUtils.build_scene_image_prompt(site_name, site_data, world_seed_input, background)
 
 func _build_npc_image_prompt(npc_name: String, npc_describe: String) -> String:
-	var style_sig = _detect_setting_style_signals()
-	var parts: Array = [
-		"anime character illustration",
-		"character name: " + npc_name,
-		"expressive eyes, detailed face, clean lineart, cel shading",
-		"medium long shot, from thigh up, more body visible, subject scaled smaller in frame",
-		"non-photorealistic, stylized 2d anime art",
-		"simple clean background",
-		"no text, no watermark"
-	]
-	if npc_describe.strip_edges() != "":
-		parts.append("appearance: " + npc_describe.left(160))
-	if bool(style_sig.get("ancient", false)) and !bool(style_sig.get("bridge", false)):
-		parts.append("traditional historical attire, pre-modern style")
-	elif bool(style_sig.get("scifi", false)) or bool(style_sig.get("cyber", false)):
-		parts.append("futuristic sci-fi clothing")
-	elif bool(style_sig.get("fantasy", false)):
-		parts.append("fantasy medieval attire")
-	else:
-		parts.append("contemporary clothing fitting world setting")
-	if background.strip_edges() != "":
-		parts.append("world context: " + background.left(80))
-	return ", ".join(parts)
+	return GameVisualUtils.build_npc_image_prompt(npc_name, npc_describe, world_seed_input, background)
 
 func _build_image_request_payload(prompt: String, target_site: String) -> Dictionary:
-	var target_key = target_site.strip_edges()
-	var target_type = "scene"
-	var target_name = target_key
-	var width = 1344
-	var height = 768
-	if target_key.begins_with("NPC:"):
-		target_type = "npc"
-		target_name = target_key.trim_prefix("NPC:")
-		width = 768
-		height = 1152
-	elif target_key.begins_with("ITEM:"):
-		target_type = "item"
-		target_name = target_key.trim_prefix("ITEM:")
-		width = 256
-		height = 256
-	elif target_name == "":
-		target_name = currentSiteName
-	if target_type == "scene" and %backgroundImg is Control:
+	var bg_size := Vector2.ZERO
+	var bg_min_size := Vector2.ZERO
+	if %backgroundImg is Control:
 		var bg_ctrl := %backgroundImg as Control
-		var bg_w = int(max(bg_ctrl.size.x, bg_ctrl.custom_minimum_size.x))
-		var bg_h = int(max(bg_ctrl.size.y, bg_ctrl.custom_minimum_size.y))
-		if bg_w > 0 and bg_h > 0:
-			width = max(768, int(bg_w))
-			height = max(432, int(bg_h))
-	return {
-		"prompt": prompt,
-		"width": width,
-		"height": height,
-		"target_type": target_type,
-		"target_name": target_name,
-	}
+		bg_size = bg_ctrl.size
+		bg_min_size = bg_ctrl.custom_minimum_size
+	return GameImageUtils.build_image_request_payload(prompt, target_site, currentSiteName, bg_size, bg_min_size)
 
 func _resolve_image_slot_size(target_type: String) -> Vector2i:
-	if target_type == "npc" and %npcIcon is Control:
+	var npc_size := Vector2.ZERO
+	var npc_min_size := Vector2.ZERO
+	if %npcIcon is Control:
 		var npc_ctrl := %npcIcon as Control
-		var nw = int(max(npc_ctrl.size.x, npc_ctrl.custom_minimum_size.x))
-		var nh = int(max(npc_ctrl.size.y, npc_ctrl.custom_minimum_size.y))
-		if nh <= 0 and %backgroundImg is Control:
-			var bg_ctrl := %backgroundImg as Control
-			nh = int(max(bg_ctrl.size.y, bg_ctrl.custom_minimum_size.y))
-		nw = max(nw, 220)
-		nh = max(nh, 360)
-		return Vector2i(nw, nh)
-	if target_type == "item":
-		return Vector2i(128, 128)
+		npc_size = npc_ctrl.size
+		npc_min_size = npc_ctrl.custom_minimum_size
+	var bg_size := Vector2.ZERO
+	var bg_min_size := Vector2.ZERO
 	if %backgroundImg is Control:
-		var ctrl := %backgroundImg as Control
-		var w = int(max(ctrl.size.x, ctrl.custom_minimum_size.x))
-		var h = int(max(ctrl.size.y, ctrl.custom_minimum_size.y))
-		if w > 0 and h > 0:
-			return Vector2i(w, h)
-	return Vector2i(1024, 576)
+		var bg_ctrl := %backgroundImg as Control
+		bg_size = bg_ctrl.size
+		bg_min_size = bg_ctrl.custom_minimum_size
+	return GameImageUtils.resolve_image_slot_size(target_type, npc_size, npc_min_size, bg_size, bg_min_size)
 
 func _fit_image_to_target_slot(raw_image: Image, target_type: String) -> Image:
-	if raw_image == null:
-		return null
 	var target_size = _resolve_image_slot_size(target_type)
-	if target_size.x <= 0 or target_size.y <= 0:
-		return raw_image
-	var sw = raw_image.get_width()
-	var sh = raw_image.get_height()
-	if sw <= 0 or sh <= 0:
-		return raw_image
-	var src_ratio = float(sw) / float(sh)
-	var dst_ratio = float(target_size.x) / float(target_size.y)
-	var crop_rect := Rect2i(0, 0, sw, sh)
-	if absf(src_ratio - dst_ratio) > 0.001:
-		if src_ratio > dst_ratio:
-			var crop_w = int(round(float(sh) * dst_ratio))
-			crop_w = clampi(crop_w, 1, sw)
-			var x_offset = int(floor(float(sw - crop_w) / 2.0))
-			crop_rect = Rect2i(x_offset, 0, crop_w, sh)
-		else:
-			var crop_h = int(round(float(sw) / dst_ratio))
-			crop_h = clampi(crop_h, 1, sh)
-			var y_offset = int(floor(float(sh - crop_h) / 2.0))
-			crop_rect = Rect2i(0, y_offset, sw, crop_h)
-	var fitted = raw_image.get_region(crop_rect)
-	fitted.resize(target_size.x, target_size.y, Image.INTERPOLATE_LANCZOS)
-	return fitted
+	return GameImageUtils.fit_image_to_target_slot(raw_image, target_size)
 
 func _resolve_image_callback_target(callback_site: String, response: Dictionary) -> String:
-	var response_type = str(response.get("target_type", "")).strip_edges().to_lower()
-	var response_name = str(response.get("target_name", "")).strip_edges()
-	if response_type == "npc" and response_name != "":
-		return "NPC:" + response_name
-	if response_type == "item" and response_name != "":
-		return "ITEM:" + response_name
-	if response_type == "scene" and response_name != "":
-		return response_name
-	return callback_site
+	return GameImageUtils.resolve_image_callback_target(callback_site, response)
 
 func _build_location_visual_hint(site_name: String, cn_desc: String) -> String:
-	var merged = (site_name + " " + cn_desc).strip_edges()
-	if merged.find("食堂") != -1:
-		return "communal dining hall, food counters, tables, era-consistent props"
-	if merged.find("图书馆") != -1:
-		return "library interior, bookshelves, reading area, quiet atmosphere"
-	if merged.find("宿舍") != -1:
-		return "residential quarters, corridor doors, daily-life details matching era"
-	if merged.find("操场") != -1 or merged.find("体育") != -1:
-		return "training ground or sports field, open area with active movement"
-	if merged.find("教室") != -1 or merged.find("教学楼") != -1:
-		return "learning hall interior, teaching space, era-appropriate furniture"
-	if merged.find("超市") != -1 or merged.find("小卖部") != -1:
-		return "general goods shop or market stall, goods display aligned with era"
-	if merged.find("校门") != -1:
-		return "main gate area, checkpoints and passers-by matching setting"
-	return "architecture and props consistent with current world setting and era"
+	return GameVisualUtils.build_location_visual_hint(site_name, cn_desc)
 
 func _build_cn_desc_visual_anchor(cn_desc: String) -> String:
-	var desc = cn_desc.strip_edges()
-	if desc == "":
-		return ""
-	var keyword_map = {
-		"跑道": "running track",
-		"足球场": "football field",
-		"篮球场": "basketball court",
-		"看台": "stadium stands",
-		"草坪": "open grass field",
-		"健身": "sports training atmosphere",
-		"图书馆": "library interior",
-		"书架": "bookshelves",
-		"自习": "study desks and lamps",
-		"食堂": "cafeteria serving counters",
-		"宿舍": "dormitory corridor",
-		"教学楼": "teaching building corridor",
-		"教室": "classroom interior",
-		"超市": "convenience store shelves",
-		"小卖部": "small general goods shop",
-		"王宫": "royal palace complex",
-		"宫殿": "palace interior and court symbols",
-		"城墙": "city wall and gate defense",
-		"铁匠": "blacksmith forge and anvils",
-		"集市": "open market stalls",
-		"奴隶": "servitude marks and social hierarchy",
-		"庄园": "manor estate structure",
-		"神殿": "temple architecture",
-		"蒸汽": "steam machinery pipes and brass structure"
-	}
-	var anchors: Array = []
-	for key in keyword_map.keys():
-		if desc.find(str(key)) != -1:
-			var anchor = str(keyword_map[key])
-			if !anchors.has(anchor):
-				anchors.append(anchor)
-	return ", ".join(anchors)
+	return GameVisualUtils.build_cn_desc_visual_anchor(cn_desc)
 
 func _build_location_fallback_description(location_name: String, from_site_name: String = "") -> String:
-	var n = location_name.strip_edges()
-	if n == "":
-		return "你来到了一处新的地点。"
-	if n.find("食堂") != -1:
-		return "你来到" + n + "。热气和饭香交织，来往的人声让这里显得忙碌而真实。"
-	if n.find("图书馆") != -1:
-		return "你来到" + n + "。高书架与阅读区安静有序，空气里只有轻微翻页声。"
-	if n.find("宿舍") != -1:
-		return "你来到" + n + "。居住区的走廊延伸开来，生活痕迹随处可见。"
-	if n.find("操场") != -1 or n.find("体育") != -1:
-		return "你来到" + n + "。开阔场地上有人训练，风里带着土石与草木气息。"
-	if n.find("教室") != -1 or n.find("教学楼") != -1:
-		return "你来到" + n + "。讲学与讨论的痕迹还留在空气里，四周带着秩序感。"
-	if n.find("超市") != -1 or n.find("小卖部") != -1:
-		return "你来到" + n + "。铺面里货物陈列紧凑，交易声此起彼伏。"
-	if from_site_name.strip_edges() != "":
-		return "你来到" + n + "。这里与" + from_site_name + "相连，环境细节逐渐清晰起来。"
-	return "你来到" + n + "。周围布局和气氛有了明显变化，这里看起来是可继续探索的区域。"
+	return GameVisualUtils.build_location_fallback_description(location_name, from_site_name)
 
 func _detect_setting_style_signals() -> Dictionary:
-	var t = (world_seed_input + " " + background).strip_edges()
-	return {
-		"ancient": _contains_any_keyword(t, ["古代", "王朝", "朝廷", "封建", "奴隶制", "王国", "帝国", "城邦"]),
-		"modern": _contains_any_keyword(t, ["现代", "当代", "校园", "大学", "城市", "公司", "地铁", "工业化"]),
-		"scifi": _contains_any_keyword(t, ["科幻", "未来", "太空", "星际", "机甲", "机器人", "空间站"]),
-		"cyber": _contains_any_keyword(t, ["赛博", "义体", "霓虹", "黑客", "芯片植入"]),
-		"fantasy": _contains_any_keyword(t, ["魔法", "精灵", "神殿", "巫师", "异界", "巨龙"]),
-		"slavery": _contains_any_keyword(t, ["奴隶制", "奴隶主", "奴隶", "庄园主"]),
-		"bridge": _contains_any_keyword(t, ["穿越", "平行宇宙", "时空", "多元宇宙", "异世界桥接"])
-	}
+	return GameVisualUtils.detect_setting_style_signals(world_seed_input, background)
 
 func _build_setting_consistency_guard_text(sig: Dictionary) -> String:
-	var lines: Array = []
-	if bool(sig.get("ancient", false)) and !bool(sig.get("bridge", false)):
-		lines.append("ancient pre-industrial era only; forbid modern campus, cyberpunk neon, futuristic tech")
-	if bool(sig.get("slavery", false)):
-		lines.append("highlight hierarchical social structure and slave-based roles")
-	if bool(sig.get("modern", false)) and !bool(sig.get("bridge", false)) and !bool(sig.get("scifi", false)):
-		lines.append("modern realistic style; avoid ancient court language and sci-fi facilities")
-	if bool(sig.get("scifi", false)) or bool(sig.get("cyber", false)):
-		lines.append("futuristic sci-fi style allowed only when stated in world setting")
-	if bool(sig.get("fantasy", false)) and !bool(sig.get("bridge", false)):
-		lines.append("fantasy motif only; avoid modern institutional style")
-	return "; ".join(lines)
+	return GameVisualUtils.build_setting_consistency_guard_text(sig)
 
 func _extract_route_candidates_from_site_json(json_dic: Dictionary) -> Array:
-	var route_keys = ["能前往的地点", "可前往地点", "可前往的地点", "前往地点", "可去地点", "可到达地点", "邻近地点", "连接地点"]
-	var candidates: Array = []
-	for key in route_keys:
-		if !json_dic.has(key):
-			continue
-		var raw_val = json_dic.get(key)
-		var raw_list: Array = []
-		if raw_val is Array:
-			raw_list = raw_val
-		elif raw_val is String:
-			var merged = str(raw_val)
-			var splitters = ["\r\n", "\n", "，", ",", "、", "；", ";", "|", "/"]
-			for sp in splitters:
-				merged = merged.replace(sp, ",")
-			raw_list = merged.split(",", false)
-		for raw_name in raw_list:
-			var route_name = str(raw_name).strip_edges()
-			if route_name == "":
-				continue
-			if !candidates.has(route_name):
-				candidates.append(route_name)
-	return candidates
+	return GameTextUtils.extract_route_candidates_from_site_json(json_dic)
 
 func _resolve_site_alias(site_name: String) -> String:
-	var cleaned = site_name.strip_edges()
-	if cleaned == "":
-		return ""
-	if sites.has(cleaned):
-		return cleaned
-	for key in sites.keys():
-		var existing = str(key).strip_edges()
-		if existing == "":
-			continue
-		if cleaned == existing:
-			return existing
-		if min(cleaned.length(), existing.length()) >= 2 and (cleaned.ends_with(existing) or existing.ends_with(cleaned)):
-			return existing
-	return cleaned
+	return GameTextUtils.resolve_site_alias(site_name, sites)
 
 func _bg_debug(msg: String) -> void:
 	if !bg_debug_enabled:
@@ -947,11 +618,7 @@ func goto(where: String):
 			changeTextTo(response_label, "无法探索「" + where + "」，请检查角色与场景设定后重试。")
 
 func _describe_image_target(target_site: String) -> String:
-	if target_site.begins_with("NPC:"):
-		return "NPC「" + target_site.trim_prefix("NPC:") + "」"
-	if target_site.begins_with("ITEM:"):
-		return "物品「" + target_site.trim_prefix("ITEM:") + "」"
-	return "场景「" + target_site + "」"
+	return GameImageUtils.describe_image_target(target_site)
 
 func _try_use_cached_image_for_target(target_site: String) -> bool:
 	if target_site == "":
@@ -1008,19 +675,7 @@ func _try_use_cached_image_for_target(target_site: String) -> bool:
 	return true
 
 func _build_bootstrap_scene_image_prompt(site_name: String) -> String:
-	var n = str(site_name).strip_edges()
-	if n == "":
-		return ""
-	var parts: Array = [
-		"cinematic environment faithful to world setting",
-		"daylight natural color",
-		"no text, no watermark",
-		"location:" + n
-	]
-	if background.strip_edges() != "":
-		parts.append("world context: " + background.left(160))
-	parts.append("scene detail: " + n)
-	return ", ".join(parts)
+	return GameVisualUtils.build_bootstrap_scene_image_prompt(site_name, background)
 
 func prefetch_scene_image_for_setup(site_name: String) -> void:
 	var target = _resolve_site_alias(str(site_name).strip_edges())
@@ -1095,141 +750,7 @@ func player_update():
 	%reputation.target_value = reputation
 
 # 定义可用的工具函数
-var tools = [
-	{
-		"type": "function",
-		"function": {
-			"name": "initiate_transaction",
-			"description": "想要卖给玩家某件物品",
-			"parameters": {
-				"type": "object",
-				"properties": {
-					"item_name": {"type": "string", "description": "物品名称"},
-					"quantity": {"type": "integer", "description": "数量，默认为1"},
-					"price": {"type": "integer", "description": "价格数值（单价或总价，由is_total_price决定）"},
-					"is_total_price": {"type": "boolean", "description": "true表示price为总价，false（默认）表示price为单价"}
-				},
-				"required": ["item_name", "quantity", "price"]
-			}
-		}
-	},
-	{
-		"type": "function",
-		"function": {
-			"name": "got_items",
-			"description": "想要送给玩家某件物品",
-			"parameters": {
-				"type": "object",
-				"properties": {
-					"item_name": {"type": "string", "description": "物品名称"},
-					"quantity": {"type": "integer", "description": "数量，默认为1"}
-				},
-				"required": ["item_name", "quantity"]
-			}
-		}
-	},
-	{
-		"type": "function",
-		"function": {
-			"name": "consume_items",
-			"description": "接受了玩家的某件物品或消耗了玩家的某件物品",
-			"parameters": {
-				"type": "object",
-				"properties": {
-					"item_name": {"type": "string", "description": "物品名称"},
-					"quantity": {"type": "integer", "description": "数量，默认为1"}
-				},
-				"required": ["item_name", "quantity"]
-			}
-		}
-	},
-	{
-		"type": "function",
-		"function": {
-			"name": "create_location",
-			"description": "提到了某个地点或到达某个地方的一系列地点的路径",
-			"parameters": {
-				"type": "object",
-				"properties": {
-					"path": {"type": "string", "description": "由一系列地点构成的、用-分隔的字符串，如：雪山-山脚下-村庄"}
-				},
-				"required": ["path"]
-			}
-		}
-	},
-	{
-		"type": "function",
-		"function": {
-			"name": "create_NPC",
-			"description": "提及了某个地方有某个NPC",
-			"parameters": {
-				"type": "object",
-				"properties": {
-					"npc_name": {"type": "string", "description": "NPC名称"},
-					"location": {"type": "string", "description": "NPC所在的地点，没有提及就输入null"},
-					"npc_describe": {"type": "string", "description": "对NPC的描述"}
-				},
-				"required": ["npc_name", "npc_describe"]
-			}
-		}
-	},
-	{
-		"type": "function",
-		"function": {
-			"name": "create_rumors",
-			"description": "提及了某个有意义的类似于传闻、新闻、谣言的事件",
-			"parameters": {
-				"type": "object",
-				"properties": {
-					"rumor_name": {"type": "string", "description": "传闻名称"},
-					"content": {"type": "string", "description": "传闻简要的内容，用一句话总结"}
-				},
-				"required": ["rumor_name", "content"]
-			}
-		}
-	},
-	{
-		"type": "function",
-		"function": {
-			"name": "update_reputation",
-			"description": "根据玩家做出了好事或坏事，增加或扣除一定的声望值",
-			"parameters": {
-				"type": "object",
-				"properties": {
-					"quantity": {"type": "integer", "description": "增加或减少的数量，增加为正值，减少为负值"}
-				},
-				"required": ["quantity"]
-			}
-		}
-	},
-	{
-		"type": "function",
-		"function": {
-			"name": "destroy_self",
-			"description": "说想要永远离开，或者自己要死了",
-			"parameters": {
-				"type": "object",
-				"properties": {},
-				"required": []
-			}
-		}
-	},
-	{
-		"type": "function",
-		"function": {
-			"name": "set_time",
-			"description": "将游戏时间跳跃到指定时刻",
-			"parameters": {
-				"type": "object",
-				"properties": {
-					"hour": {"type": "integer", "description": "目标小时（0-23）"},
-					"minute": {"type": "integer", "description": "目标分钟（0-59），默认0"}
-				},
-				"required": ["hour"]
-			}
-		}
-	}
-]
+var tools: Array = GamePrompts.get_npc_tools()
 
 # ==================== AI 交互 ====================
 func ask_ai(message: Array, askmode: aiMode):
@@ -1285,31 +806,10 @@ func _decorate_messages_for_output_mode(message: Array, askmode: aiMode) -> Arra
 	return copied
 
 func _compact_prompt_content(text: String) -> String:
-	var src = str(text).replace("\r\n", "\n").replace("\r", "\n")
-	var rows = src.split("\n", false)
-	var out: Array = []
-	for row in rows:
-		var cleaned = str(row).strip_edges()
-		if cleaned == "":
-			continue
-		while cleaned.find("  ") != -1:
-			cleaned = cleaned.replace("  ", " ")
-		out.append(cleaned)
-	if out.is_empty():
-		return ""
-	return "\n".join(out)
+	return GameAiUtils.compact_prompt_content(text)
 
 func _compact_messages_for_request(messages: Array) -> Array:
-	var copied = messages.duplicate(true)
-	for i in range(copied.size()):
-		var row = copied[i]
-		if !(row is Dictionary):
-			continue
-		if !row.has("content"):
-			continue
-		row["content"] = _compact_prompt_content(str(row.get("content", "")))
-		copied[i] = row
-	return copied
+	return GameAiUtils.compact_messages_for_request(messages)
 
 func _output_mode_debug(msg: String) -> void:
 	if !output_mode_debug_enabled:
@@ -1317,20 +817,13 @@ func _output_mode_debug(msg: String) -> void:
 	print("[OUTPUT_MODE_DEBUG] " + msg)
 
 func _tail_preview(text: String, max_chars: int = 48) -> String:
-	var src = str(text)
-	if src.length() <= max_chars:
-		return src
-	return src.substr(src.length() - max_chars, max_chars)
+	return GameAiUtils.tail_preview(text, max_chars)
 
 func _build_mode_consistent_extensions(_base_text: String, _askmode: aiMode) -> Array:
 	return []
 
 func _strip_angle_tags(text: String) -> String:
-	var src = str(text)
-	var regex = RegEx.new()
-	if regex.compile("<[^>]*>") != OK:
-		return src
-	return regex.sub(src, "", true)
+	return GameAiUtils.strip_angle_tags(text)
 
 func _expand_text_to_min_chars(text: String, _min_chars: int, _askmode: aiMode) -> String:
 	return text
@@ -1356,16 +849,7 @@ func _is_valid_generated_npc_name(raw_name: String) -> bool:
 	return GameEntityUtils.is_valid_npc_name(raw_name)
 
 func _extract_angle_tags(input_string: String) -> Array:
-	var tags: Array = []
-	var normalized_input = str(input_string)
-	normalized_input = normalized_input.replace("\\<", "<").replace("\\>", ">")
-	normalized_input = normalized_input.replace("＜", "<").replace("＞", ">")
-	var regex = RegEx.new()
-	if regex.compile("<([^>]+)>") != OK:
-		return tags
-	for m in regex.search_all(normalized_input):
-		tags.append(str(m.get_string(1)).strip_edges())
-	return tags
+	return GameAiUtils.extract_angle_tags(input_string)
 
 func _apply_direct_npc_tool_tags(reply: String) -> bool:
 	var tags = _extract_angle_tags(reply)
@@ -1391,16 +875,7 @@ func _apply_direct_npc_tool_tags(reply: String) -> bool:
 	return handled_any and only_location_tags
 
 func _is_location_query_dialogue(input_text: String) -> bool:
-	var t = _normalize_single_line_input(input_text)
-	if t == "":
-		return false
-	if _is_relation_npc_query(t):
-		return false
-	var query_words = ["在哪", "在哪里", "在哪儿", "怎么去", "怎么走", "怎么到", "去哪", "去哪里", "路线", "路怎么走", "哪条路"]
-	for w in query_words:
-		if t.find(w) != -1:
-			return true
-	return false
+	return GameTextUtils.is_location_query_dialogue(input_text)
 
 func _cleanup_location_candidate(raw_text: String) -> String:
 	return GameEntityUtils.cleanup_location_candidate(raw_text)
@@ -1517,48 +992,13 @@ func _extract_location_name_from_reply(reply_text: String) -> String:
 	return loc
 
 func _extract_unknown_npc_target_from_query(query_text: String) -> String:
-	var t = _normalize_single_line_input(query_text)
-	if t == "":
-		return ""
-	var regex = RegEx.new()
-	var patterns = [
-		"([\\p{Han}A-Za-z·]{2,12})(?:在哪|在哪里|在哪儿|是谁|什么人|在吗|的信息|的消息)",
-		"(?:找|寻找|打听|问|关于)([\\p{Han}A-Za-z·]{2,12})"
-	]
-	for p in patterns:
-		if regex.compile(p) != OK:
-			continue
-		var m = regex.search(t)
-		if m == null:
-			continue
-		var candidate = _sanitize_generated_npc_name(str(m.get_string(1)))
-		candidate = _extract_compact_entity_candidate(candidate, 12)
-		if !_is_valid_generated_npc_name(candidate) and _is_relation_npc_query(t):
-			candidate = _fallback_relation_npc_name(t)
-		if _is_valid_generated_npc_name(candidate):
-			return candidate
-	return ""
+	return GameEntityUtils.extract_unknown_npc_target_from_query(query_text)
 
 func _is_relation_npc_query(input_text: String) -> bool:
 	return GameEntityUtils.is_relation_npc_query(input_text)
 
 func _guess_related_npc_desc(query_text: String, source_npc_name: String) -> String:
-	var t = _normalize_single_line_input(query_text)
-	var relation = "熟人"
-	if _contains_any_keyword(t, ["兄弟", "姐妹"]):
-		relation = "兄弟姐妹"
-	elif _contains_any_keyword(t, ["父母", "爸爸", "妈妈"]):
-		relation = "亲属长辈"
-	elif _contains_any_keyword(t, ["同事", "上司", "下属"]):
-		relation = "工作关系人"
-	elif _contains_any_keyword(t, ["学徒", "师父"]):
-		relation = "师门关系人"
-	elif _contains_any_keyword(t, ["朋友", "熟人", "家人", "亲戚"]):
-		relation = "生活关系人"
-	var source_name = source_npc_name.strip_edges()
-	if source_name == "":
-		source_name = "当前人物"
-	return "与" + source_name + "相关的" + relation
+	return GameNpcInferUtils.guess_related_npc_desc(GameTextUtils.normalize_single_line_input(query_text), source_npc_name)
 
 func _extract_named_people_from_dialogue(reply_text: String) -> Array:
 	var plain = process_string(reply_text).strip_edges()
@@ -1699,20 +1139,8 @@ func _ensure_process_regex_ready() -> void:
 	if !_process_newline_regex.is_valid():
 		if _process_newline_regex.compile("\n\n+") != OK:
 			push_warning("process_string newline regex compile failed")
-func get_content_in_angle_brackets(input_string: String)->String:
-	var results = ""
-	var normalized_input = str(input_string)
-	normalized_input = normalized_input.replace("\\<", "<").replace("\\>", ">")
-	normalized_input = normalized_input.replace("＜", "<").replace("＞", ">")
-	var regex = RegEx.new()
-
-	# 编译正则表达式，匹配<和>之间的内容（包括<和>本身）
-	regex.compile("<[^>]+>")
-	var matches = regex.search_all(normalized_input)
-	for match_obj in matches:
-		var content = match_obj.get_string(0)
-		results+=content
-	return results
+func get_content_in_angle_brackets(input_string: String) -> String:
+	return GameAiUtils.get_content_in_angle_brackets(input_string)
 
 # ==================== 图片生成 ====================
 func gen_img(prompt: String, site_name: String = ""):
@@ -1776,103 +1204,65 @@ func _start_img_watchdog(target_site: String) -> void:
 		site_update(true, true, false)
 
 func _sanitize_filename(file_name: String) -> String:
-	return file_name.replace("/", "_").replace("\\", "_").replace(":", "_").replace("*", "_").replace("?", "_").replace("\"", "_").replace("<", "_").replace(">", "_").replace("|", "_")
+	return GameStorageUtils.sanitize_filename(file_name)
 
 func _ensure_dir(path: String) -> void:
-	DirAccess.make_dir_recursive_absolute(path)
+	GameStorageUtils.ensure_dir(path)
 
 func _clear_dir_contents(dir_path: String) -> void:
-	if !DirAccess.dir_exists_absolute(dir_path):
-		return
-	var dir = DirAccess.open(dir_path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	var entry = dir.get_next()
-	while entry != "":
-		if entry != "." and entry != "..":
-			var target_path = dir_path.path_join(entry)
-			if dir.current_is_dir():
-				_clear_dir_contents(target_path)
-				DirAccess.remove_absolute(target_path)
-			else:
-				DirAccess.remove_absolute(target_path)
-		entry = dir.get_next()
-	dir.list_dir_end()
+	GameStorageUtils.clear_dir_contents(dir_path)
 
 func _copy_file(src_path: String, dst_path: String) -> void:
-	if !FileAccess.file_exists(src_path):
-		return
-	_ensure_dir(dst_path.get_base_dir())
-	var bytes = FileAccess.get_file_as_bytes(src_path)
-	var file = FileAccess.open(dst_path, FileAccess.WRITE)
-	if file:
-		file.store_buffer(bytes)
-		file.close()
+	GameStorageUtils.copy_file(src_path, dst_path)
 
 func _copy_dir_recursive(src_dir: String, dst_dir: String) -> void:
-	if !DirAccess.dir_exists_absolute(src_dir):
-		return
-	_ensure_dir(dst_dir)
-	var dir = DirAccess.open(src_dir)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	var entry = dir.get_next()
-	while entry != "":
-		if entry != "." and entry != "..":
-			var src_path = src_dir.path_join(entry)
-			var dst_path = dst_dir.path_join(entry)
-			if dir.current_is_dir():
-				_copy_dir_recursive(src_path, dst_path)
-			else:
-				_copy_file(src_path, dst_path)
-		entry = dir.get_next()
-	dir.list_dir_end()
+	GameStorageUtils.copy_dir_recursive(src_dir, dst_dir)
 
 func _prepare_session_resource_dir() -> void:
-	_ensure_dir(SESSION_RESOURCE_DIR)
-	_clear_dir_contents(SESSION_RESOURCE_DIR)
-	_ensure_dir(SCENE_IMG_DIR)
-	_ensure_dir(ITEM_IMG_DIR)
-	_ensure_dir(ITEM_PROFILE_DIR)
-	_ensure_dir(NPC_IMG_DIR)
+	GameStorageUtils.prepare_session_resource_dir(
+		SESSION_RESOURCE_DIR,
+		SCENE_IMG_DIR,
+		ITEM_IMG_DIR,
+		ITEM_PROFILE_DIR,
+		NPC_IMG_DIR
+	)
 	has_saved_in_session = false
 
 func _sync_session_resources_to_save() -> void:
-	_ensure_dir(SAVE_SLOT_DIR)
-	_clear_dir_contents(SAVE_SLOT_DIR)
-	_ensure_dir(SAVE_RESOURCE_DIR)
-	_copy_dir_recursive(SCENE_IMG_DIR, SAVE_SCENE_IMG_DIR)
-	_copy_dir_recursive(ITEM_IMG_DIR, SAVE_ITEM_IMG_DIR)
-	_copy_dir_recursive(ITEM_PROFILE_DIR, SAVE_ITEM_PROFILE_DIR)
-	_copy_dir_recursive(NPC_IMG_DIR, SAVE_NPC_IMG_DIR)
+	GameStorageUtils.sync_session_resources_to_save(
+		SAVE_SLOT_DIR,
+		SAVE_RESOURCE_DIR,
+		SCENE_IMG_DIR,
+		ITEM_IMG_DIR,
+		ITEM_PROFILE_DIR,
+		NPC_IMG_DIR,
+		SAVE_SCENE_IMG_DIR,
+		SAVE_ITEM_IMG_DIR,
+		SAVE_ITEM_PROFILE_DIR,
+		SAVE_NPC_IMG_DIR
+	)
 
 func _restore_session_resources_from_save() -> void:
-	_ensure_dir(SESSION_RESOURCE_DIR)
-	_clear_dir_contents(SESSION_RESOURCE_DIR)
-	_copy_dir_recursive(SAVE_SCENE_IMG_DIR, SCENE_IMG_DIR)
-	_copy_dir_recursive(SAVE_ITEM_IMG_DIR, ITEM_IMG_DIR)
-	_copy_dir_recursive(SAVE_ITEM_PROFILE_DIR, ITEM_PROFILE_DIR)
-	_copy_dir_recursive(SAVE_NPC_IMG_DIR, NPC_IMG_DIR)
+	GameStorageUtils.restore_session_resources_from_save(
+		SESSION_RESOURCE_DIR,
+		SCENE_IMG_DIR,
+		ITEM_IMG_DIR,
+		ITEM_PROFILE_DIR,
+		NPC_IMG_DIR,
+		SAVE_SCENE_IMG_DIR,
+		SAVE_ITEM_IMG_DIR,
+		SAVE_ITEM_PROFILE_DIR,
+		SAVE_NPC_IMG_DIR
+	)
 
 func _handle_exit_cleanup() -> void:
-	if has_saved_in_session:
-		return
-	_clear_dir_contents(SESSION_RESOURCE_DIR)
+	GameStorageUtils.handle_exit_cleanup(has_saved_in_session, SESSION_RESOURCE_DIR)
 
 func _save_image_png(image: Image, dir: String, file_name: String) -> void:
-	_ensure_dir(dir)
-	var path = dir + _sanitize_filename(file_name) + ".png"
-	image.save_png(path)
+	GameStorageUtils.save_image_png(image, dir, file_name)
 
 func _load_image_png(dir: String, file_name: String) -> Texture2D:
-	var path = dir + _sanitize_filename(file_name) + ".png"
-	if FileAccess.file_exists(path):
-		var img = Image.load_from_file(path)
-		if img != null:
-			return ImageTexture.create_from_image(img)
-	return null
+	return GameStorageUtils.load_image_png(dir, file_name)
 
 func _restore_runtime_image_caches_from_disk() -> void:
 	siteImgs.clear()
@@ -1893,62 +1283,19 @@ func _restore_runtime_image_caches_from_disk() -> void:
 			npcImgs[npc_name] = n_tex
 
 func _save_site_json(site_name: String, site_data: Dictionary) -> void:
-	_ensure_dir(SCENE_IMG_DIR)
-	var path = SCENE_IMG_DIR + _sanitize_filename(site_name) + ".json"
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(site_data))
-		file.close()
+	GameStorageUtils.save_json_dict(SCENE_IMG_DIR, site_name, site_data)
 
 func _load_site_json(site_name: String) -> Dictionary:
-	var path = SCENE_IMG_DIR + _sanitize_filename(site_name) + ".json"
-	if !FileAccess.file_exists(path):
-		return {}
-	var file = FileAccess.open(path, FileAccess.READ)
-	if !file:
-		return {}
-	var json = JSON.new()
-	if json.parse(file.get_as_text()) != OK:
-		file.close()
-		return {}
-	file.close()
-	var d = json.get_data()
-	return d if d is Dictionary else {}
+	return GameStorageUtils.load_json_dict(SCENE_IMG_DIR, site_name)
 
 func _save_item_profile_json(item_name: String, profile: Dictionary) -> void:
-	_ensure_dir(ITEM_PROFILE_DIR)
-	var path = ITEM_PROFILE_DIR + _sanitize_filename(item_name) + ".json"
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(profile, "\t"))
-		file.close()
+	GameStorageUtils.save_json_dict(ITEM_PROFILE_DIR, item_name, profile, "\t")
 
 func _load_item_profile_json(item_name: String) -> Dictionary:
-	var path = ITEM_PROFILE_DIR + _sanitize_filename(item_name) + ".json"
-	if !FileAccess.file_exists(path):
-		return {}
-	var file = FileAccess.open(path, FileAccess.READ)
-	if !file:
-		return {}
-	var json = JSON.new()
-	if json.parse(file.get_as_text()) != OK:
-		file.close()
-		return {}
-	file.close()
-	var d = json.get_data()
-	return d if d is Dictionary else {}
+	return GameStorageUtils.load_json_dict(ITEM_PROFILE_DIR, item_name)
 
 func _base64_to_image(base64_string: String) -> Image:
-	if base64_string == "":
-		return null
-	var image_buffer = Marshalls.base64_to_raw(base64_string)
-	var image = Image.new()
-	var error = image.load_png_from_buffer(image_buffer)
-	if error != OK:
-		error = image.load_jpg_from_buffer(image_buffer)
-	if error != OK:
-		return null
-	return image
+	return GameImageUtils.base64_to_image(base64_string)
 
 func _display_base64_image(base64_string: String, site_name: String = ""):
 	var target_site = site_name.strip_edges()
@@ -2004,41 +1351,10 @@ func _display_base64_image(base64_string: String, site_name: String = ""):
 	_drain_pending_img()
 
 func _base64_to_texture(base64_string: String) -> Texture2D:
-	var image = _base64_to_image(base64_string)
-	if image == null:
-		return null
-	return ImageTexture.create_from_image(image)
+	return GameImageUtils.base64_to_texture(base64_string)
 
 func _request_json(url: String, body_json: String) -> Dictionary:
-	var request_node := HTTPRequest.new()
-	add_child(request_node)
-	var err = request_node.request(
-		url,
-		["Content-Type: application/json"],
-		HTTPClient.METHOD_POST,
-		body_json
-	)
-	if err != OK:
-		request_node.queue_free()
-		return {"ok": false, "error": "请求创建失败: " + str(err)}
-
-	var response = await request_node.request_completed
-	request_node.queue_free()
-
-	var result: int = response[0]
-	var response_code: int = response[1]
-	var body: PackedByteArray = response[3]
-	if result != HTTPRequest.RESULT_SUCCESS:
-		return {"ok": false, "error": "网络错误: " + str(result)}
-
-	var parser := JSON.new()
-	if parser.parse(body.get_string_from_utf8()) != OK:
-		return {"ok": false, "error": "响应解析失败"}
-
-	var data = parser.get_data()
-	if response_code != 200:
-		return {"ok": false, "error": str(data.get("error", "HTTP " + str(response_code)))}
-	return {"ok": true, "data": data}
+	return await GameHttpUtils.request_json(self, url, body_json)
 
 func _generate_item_profile(item_name: String) -> Dictionary:
 	var prompts = [
@@ -2153,14 +1469,7 @@ func _ensure_item_profile_record_before_trade(item_name: String) -> void:
 	ensure_item_profile_async(key)
 
 func _build_explore_system_prompt() -> String:
-	var guards = "用户初始设定：" + world_seed_input + "\n"
-	guards += "当前世界观：" + background + "\n"
-	guards += "请确保地点、NPC、英文生图提示词与上述设定完全一致。"
-	var style_guard = _build_setting_consistency_guard_text(_detect_setting_style_signals())
-	if style_guard != "":
-		guards += "\n设定一致性约束：" + style_guard
-	guards += "\n硬性要求：输出JSON中的“能前往的地点”必须是3~6个可直达、互不重复、且不包含当前地点本身的地点名，不能为空。"
-	return role_prompt + "\n" + guards
+	return GameVisualUtils.build_explore_system_prompt(role_prompt, world_seed_input, background)
 
 func ensure_item_profile_async(item_name: String) -> void:
 	var disk_profile_full = _load_item_profile_json(item_name)
@@ -2273,10 +1582,7 @@ func _on_send_button_pressed():
 	await _submit_action_input(input_text_edit.text, false)
 
 func _normalize_single_line_input(raw_text: String) -> String:
-	var t = str(raw_text).replace("\r\n", "\n").replace("\r", "\n")
-	if t.find("\n") != -1:
-		t = t.substr(0, t.find("\n"))
-	return t.strip_edges()
+	return GameTextUtils.normalize_single_line_input(raw_text)
 
 func _build_shared_interaction_context(interaction_text: String, focus_npc_name: String = "", focus_npc_desc: String = "") -> String:
 	var identity_guidance = _clip_prompt_text(_build_identity_attitude_guidance(focus_npc_name, focus_npc_desc), 520)
@@ -2561,14 +1867,7 @@ func set_ai_busy(v: bool) -> void:
 		call_deferred("_focus_active_input")
 
 func _sanitize_response_text(raw_text: String) -> String:
-	var t = str(raw_text)
-	t = t.replace("\ufeff", "").replace("\u200b", "")
-	t = t.replace("\r\n", "\n").replace("\r", "\n")
-	var lines: Array = t.split("\n", true)
-	while !lines.is_empty() and str(lines[0]).strip_edges() == "":
-		lines.remove_at(0)
-	t = "\n".join(lines)
-	return t.strip_edges(false, true)
+	return GameParseUtils.sanitize_response_text(raw_text)
 
 func changeTextTo(nodeToChange: Control, text: String, speed = 30, max_tween_duration: float = 1.6):
 	if nodeToChange == null:
@@ -2644,318 +1943,74 @@ func addLog(logText: String, instant: bool = false):
 		_remember_important_event(logText, currentSiteName, focus_npc)
 
 func _is_important_log(log_text: String) -> bool:
-	var t = str(log_text).strip_edges()
-	if t == "":
-		return false
-	if t.find("<BG_DEBUG>") != -1:
-		return false
-	var keywords = [
-		"【行动】", "你抵达了", "地图更新", "传闻", "声望", "时间", "购买", "失去", "获得",
-		"违规", "防盗", "警报", "主动", "交谈", "读档", "保存", "交易", "送你"
-	]
-	for k in keywords:
-		if t.find(k) != -1:
-			return true
-	return false
+	return GameEventUtils.is_important_log(log_text)
 
 func _extract_npc_mentions(text: String) -> Array:
-	var found: Array = []
-	var t = str(text)
-	if t.strip_edges() == "":
-		return found
-	for k in npcs.keys():
-		var npc_name_text = str(k)
-		if npc_name_text != "" and t.find(npc_name_text) != -1 and !found.has(npc_name_text):
-			found.append(npc_name_text)
-	return found
+	return GameMemoryUtils.extract_npc_mentions(npcs, text)
 
 func _remember_important_event(raw_text: String, site_name: String = "", focus_npc: String = "") -> void:
-	var text = str(raw_text).strip_edges()
-	if text == "":
-		return
 	var site = str(site_name).strip_edges()
 	if site == "":
 		site = currentSiteName
-	var npc_names: Array = _extract_npc_mentions(text)
-	if focus_npc.strip_edges() != "" and !npc_names.has(focus_npc):
-		npc_names.append(focus_npc)
-	var sig = _extract_interaction_signals(text)
-	var record = {
-		"text": text,
-		"site": site,
-		"npcs": npc_names,
-		"trade": int(sig.get("trade", 0)),
-		"gift": int(sig.get("gift", 0)),
-		"assist": int(sig.get("assist", 0)),
-		"positive": int(sig.get("positive", 0)),
-		"negative": int(sig.get("negative", 0)),
-		"coercion": int(sig.get("coercion", 0)),
-		"respect": int(sig.get("respect", 0)),
-		"t": Time.get_unix_time_from_system()
-	}
-	for i in range(important_event_memories.size() - 1, -1, -1):
-		var old = important_event_memories[i]
-		if old is Dictionary and str(old.get("text", "")) == text:
-			important_event_memories.remove_at(i)
-	important_event_memories.append(record)
-	if important_event_memories.size() > 200:
-		important_event_memories = important_event_memories.slice(max(0, important_event_memories.size() - 200), important_event_memories.size())
-	var focus_name = focus_npc.strip_edges()
-	for n in npc_names:
-		_append_event_to_npc_memory(str(n), record, focus_name)
+	GameMemoryUtils.remember_important_event(important_event_memories, npcs, str(raw_text).strip_edges(), site, focus_npc)
 
 func _ensure_npc_event_bucket(npc_name: String) -> void:
-	if npc_name == "":
-		return
-	if !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
-		npcs[npc_name] = {"npc_describe": "", "npc_log": [], "特征": "", "important_events": []}
-	if !npcs[npc_name].has("npc_log") or !(npcs[npc_name]["npc_log"] is Array):
-		npcs[npc_name]["npc_log"] = []
-	if !npcs[npc_name].has("important_events") or !(npcs[npc_name]["important_events"] is Array):
-		npcs[npc_name]["important_events"] = []
+	GameMemoryUtils.ensure_npc_event_bucket(npcs, npc_name)
 
 func _build_npc_perspective_event_text(event_text: String, npc_name: String, focus_npc: String) -> String:
-	var plain = process_string(event_text).strip_edges()
-	if plain == "":
-		return ""
-	if npc_name == focus_npc:
-		if plain.begins_with("传闻："):
-			return "我听到一条传闻：" + plain.trim_prefix("传闻：").strip_edges()
-		return "我亲历了：" + plain
-	if plain.begins_with("传闻："):
-		return "和我有关的一条传闻：" + plain.trim_prefix("传闻：").strip_edges()
-	return "和我相关的重要事件：" + plain
+	return GameEventUtils.build_npc_perspective_event_text(process_string(event_text), npc_name, focus_npc)
 
 func _should_store_npc_personal_event(plain_text: String, sig: Dictionary) -> bool:
-	var t = str(plain_text).strip_edges()
-	if t == "":
-		return false
-	if t.begins_with("【行动】"):
-		return false
-	var outcome_flags = _extract_npc_result_outcome_flags(t, sig)
-	if bool(outcome_flags.get("accepted", false)) or bool(outcome_flags.get("rejected", false)) or bool(outcome_flags.get("cooperated", false)):
-		return true
-	if bool(outcome_flags.get("warned", false)) or bool(outcome_flags.get("harmed", false)) or bool(outcome_flags.get("breached", false)):
-		return true
-	if bool(outcome_flags.get("gifted", false)) or bool(outcome_flags.get("traded", false)) or bool(outcome_flags.get("protected", false)):
-		return true
-	if bool(outcome_flags.get("softened", false)):
-		return true
-	if int(sig.get("trade", 0)) > 0 or int(sig.get("gift", 0)) > 0 or int(sig.get("assist", 0)) > 0:
-		return true
-	if int(sig.get("positive", 0)) > 0 or int(sig.get("negative", 0)) > 0 or int(sig.get("coercion", 0)) > 0 or int(sig.get("respect", 0)) > 0:
-		return true
-	var keep_keywords = [
-		"传闻", "声望", "违规", "警报", "离开", "拒绝", "同意", "成交", "感谢", "敌意", "戒备", "尊重", "敬畏", "帮", "救", "冲突", "道歉", "威胁", "命令", "羞辱", "冒犯", "安慰", "保护", "信任", "怀疑", "欺骗", "冷淡", "亲近"
-	]
-	for kw in keep_keywords:
-		if t.find(kw) != -1:
-			return true
-	return false
+	return GameEventUtils.should_store_npc_personal_event(plain_text, sig)
 
 func _extract_npc_result_outcome_flags(plain_text: String, sig: Dictionary) -> Dictionary:
-	var source = str(plain_text).strip_edges()
-	var accepted = _contains_any_keyword(source, ["接受", "收下", "接过", "答应", "同意", "愿意", "允许", "放行", "成交", "买下", "卖给", "告诉你", "带你", "让你", "配合", "照办", "原谅", "饶过"])
-	var rejected = _contains_any_keyword(source, ["拒绝", "回绝", "谢绝", "不肯", "不愿", "不同意", "无视", "不理", "赶走", "驱逐", "轰走", "拦住", "阻止", "阻拦"])
-	var cooperated = int(sig.get("assist", 0)) > 0 or _contains_any_keyword(source, ["帮你", "协助", "接应", "带路", "照应", "掩护", "治疗", "救下", "保护", "替你", "配合"])
-	var traded = int(sig.get("trade", 0)) > 0 or _contains_any_keyword(source, ["交易", "成交", "买下", "卖给", "付款", "付钱", "报价", "按价", "钱货两清"])
-	var gifted = int(sig.get("gift", 0)) > 0 or _contains_any_keyword(source, ["送", "赠", "递给", "交给", "给你", "给我", "补给", "分享"])
-	var warned = _contains_any_keyword(source, ["警报", "报警", "通缉", "围住", "盘问", "搜身", "扣留", "盯上", "怀疑", "戒备", "防盗", "违规"])
-	var harmed = _contains_any_keyword(source, ["威胁", "命令", "逼", "强迫", "羞辱", "冒犯", "欺骗", "骗", "偷", "抢", "打伤", "伤害", "砍", "捅", "勒索", "辱骂"])
-	var breached = _contains_any_keyword(source, ["食言", "失约", "赖账", "反悔", "违约", "不守信用", "说话不算"])
-	var protected = _contains_any_keyword(source, ["救", "保护", "掩护", "照顾", "安慰", "治疗", "扶住", "拉开", "挡下"])
-	var softened = _contains_any_keyword(source, ["感谢", "谢谢", "道歉", "赔偿", "归还", "谅解", "缓和", "客气"])
-	if warned:
-		rejected = true
-	if int(sig.get("coercion", 0)) > 0:
-		harmed = true
-	if traded and _contains_any_keyword(source, ["成交", "买下", "卖给", "付款", "钱货两清"]):
-		accepted = true
-	if gifted and _contains_any_keyword(source, ["接受", "收下", "接过"]):
-		accepted = true
-	if protected:
-		cooperated = true
-	return {
-		"accepted": accepted,
-		"rejected": rejected,
-		"cooperated": cooperated,
-		"traded": traded,
-		"gifted": gifted,
-		"warned": warned,
-		"harmed": harmed,
-		"breached": breached,
-		"protected": protected,
-		"softened": softened
-	}
+	return GameEventUtils.extract_npc_result_outcome_flags(plain_text, sig)
 
 func _build_npc_personal_event_summary(plain_text: String, npc_name: String, focus_npc: String, sig: Dictionary) -> String:
-	var t = str(plain_text).strip_edges()
-	if !_should_store_npc_personal_event(t, sig):
-		return ""
-	var source = _clip_prompt_text(t, 90)
-	var _outcome_flags = _extract_npc_result_outcome_flags(source, sig)
-	if source.begins_with("传闻："):
-		var rumor_text = source.trim_prefix("传闻：").strip_edges()
-		if npc_name == focus_npc:
-			return "我获知传闻：" + _clip_prompt_text(rumor_text, 62)
-		return "相关传闻：" + _clip_prompt_text(rumor_text, 62)
-	if npc_name == focus_npc:
-		return "我记住了一件会直接影响我对玩家态度的事：" + _clip_prompt_text(source, 56)
-	return "有一件与我相关的事会影响我之后对玩家的判断：" + _clip_prompt_text(source, 56)
+	return GameEventUtils.build_npc_personal_event_summary(plain_text, npc_name, focus_npc, sig)
 
 
 func _append_event_to_npc_memory(npc_name: String, record: Dictionary, focus_npc: String) -> void:
-	if npc_name == "":
-		return
-	_ensure_npc_event_bucket(npc_name)
-	var plain = process_string(str(record.get("text", ""))).strip_edges()
-	if plain == "":
-		return
-	var sig = {
-		"trade": int(record.get("trade", 0)),
-		"gift": int(record.get("gift", 0)),
-		"assist": int(record.get("assist", 0)),
-		"positive": int(record.get("positive", 0)),
-		"negative": int(record.get("negative", 0)),
-		"coercion": int(record.get("coercion", 0)),
-		"respect": int(record.get("respect", 0))
-	}
-	var npc_view = _build_npc_personal_event_summary(plain, npc_name, focus_npc, sig)
-	if npc_view == "":
-		return
-	var npc_bucket: Array = npcs[npc_name].get("important_events", [])
-	for old in npc_bucket:
-		if old is Dictionary and str(old.get("npc_view", "")) == npc_view :
-			return
-	npc_bucket.append({
-		"text": _clip_prompt_text(plain, 90),
-		"npc_view": _clip_prompt_text(npc_view, 90),
-		"t": int(record.get("t", Time.get_unix_time_from_system()))
-	})
-	if npc_bucket.size() > 40:
-		npc_bucket = npc_bucket.slice(npc_bucket.size() - 40, npc_bucket.size())
-	npcs[npc_name]["important_events"] = npc_bucket
+	GameMemoryUtils.append_event_to_npc_memory(npcs, npc_name, record, focus_npc)
 
 func _get_recent_npc_personal_events(npc_name: String, limit_count: int = 3) -> Array:
-	var out: Array = []
-	if npc_name == "" or !npcs.has(npc_name) or !(npcs[npc_name] is Dictionary):
-		return out
-	if !npcs[npc_name].has("important_events") or !(npcs[npc_name]["important_events"] is Array):
-		return out
-	var bucket: Array = npcs[npc_name]["important_events"]
-	var start_idx = max(0, bucket.size() - limit_count)
-	for i in range(start_idx, bucket.size()):
-		var row = bucket[i]
-		if !(row is Dictionary):
-			continue
-		var view_text = str(row.get("npc_view", "")).strip_edges()
-		if view_text == "":
-			continue
-		out.append(_clip_prompt_text(view_text, 80))
-	return out
+	return GameMemoryUtils.get_recent_npc_personal_events(npcs, npc_name, limit_count)
 
 func _score_event_relevance(mem: Dictionary, site_name: String, npc_name: String, intent_hint: Dictionary = {}) -> int:
-	var score = 0
-	if str(mem.get("site", "")) == site_name and site_name != "":
-		score += 2
-	if npc_name != "":
-		var arr = mem.get("npcs", [])
-		if arr is Array and arr.has(npc_name):
-			score += 4
-	if !intent_hint.is_empty():
-		score += min(int(mem.get("trade", 0)), int(intent_hint.get("trade", 0)))
-		score += min(int(mem.get("gift", 0)), int(intent_hint.get("gift", 0)))
-		score += min(int(mem.get("assist", 0)), int(intent_hint.get("assist", 0)))
-	return score
+	return GameEventUtils.score_event_relevance(mem, site_name, npc_name, intent_hint)
 
 func _get_recent_related_event_memories(site_name: String, npc_name: String = "", limit_count: int = 4, intent_hint: Dictionary = {}) -> Array:
-	var scored: Array = []
-	for mem_item in important_event_memories:
-		if !(mem_item is Dictionary):
-			continue
-		var mem: Dictionary = mem_item
-		var score = _score_event_relevance(mem, site_name, npc_name, intent_hint)
-		if score <= 0:
-			continue
-		scored.append({"score": score, "mem": mem})
-	scored.sort_custom(func(a, b):
-		var sa = int(a.get("score", 0))
-		var sb = int(b.get("score", 0))
-		if sa == sb:
-			return int(a.get("mem", {}).get("t", 0)) > int(b.get("mem", {}).get("t", 0))
-		return sa > sb
-	)
-	var out: Array = []
-	for row in scored:
-		out.append(row.get("mem", {}))
-		if out.size() >= limit_count:
-			break
-	return out
+	return GameMemoryUtils.get_recent_related_event_memories(important_event_memories, site_name, npc_name, limit_count, intent_hint)
 
 func get_relevant_event_memory_for_npc(npc_name: String, _npc_desc: String = "") -> String:
 	var personal_rows = _get_recent_npc_personal_events(npc_name, 4)
-	if !personal_rows.is_empty():
-		var personal_lines: Array = []
-
-		for line in personal_rows:
-			personal_lines.append("- " + str(line))
-		return _clip_prompt_text("\n".join(personal_lines), 320)
 	var rows = _get_recent_related_event_memories(currentSiteName, npc_name, 2)
-	if rows.is_empty():
+	var memory_text = GameMemoryUtils.build_relevant_event_memory_text(personal_rows, rows)
+	if memory_text == "":
 		return ""
-	var lines: Array = []
-	for m in rows:
-		if m is Dictionary:
-			lines.append("- " + _clip_prompt_text(str(m.get("text", "")), 90))
-	return _clip_prompt_text("\n".join(lines), 260)
+	if !personal_rows.is_empty():
+		return _clip_prompt_text(memory_text, 320)
+	return _clip_prompt_text(memory_text, 260)
 
 func _build_identity_attitude_guidance(focus_npc_name: String = "", focus_npc_desc: String = "") -> String:
-	var lines: Array = []
-	var player_role_text = (playerName + " " + world_seed_input).strip_edges()
-	var npc_text = (focus_npc_name + " " + focus_npc_desc).strip_edges()
-	lines.append("- 玩家身份（系统确认）:" + playerName)
-	if _contains_any_keyword(player_role_text, ["国王", "皇帝", "君主", "王", "摄政", "王储"]):
-		lines.append("- 统治身份导向：普通NPC默认更谨慎/敬畏，除非有强事件依据才会顶撞。")
-	if _contains_any_keyword(player_role_text, ["奴隶主", "领主", "将军", "军阀", "老板", "主任", "警长"]):
-		lines.append("- 权力导向：NPC态度需体现权力差（迎合/畏惧/压抑反感），不可按陌生平民处理。")
-	if _contains_any_keyword(player_role_text, ["囚犯", "逃犯", "通缉", "流浪汉", "乞丐"]):
-		lines.append("- 风险身份导向：NPC更可能戒备、排斥或利用。")
-	if reputation >= 130.0:
-		lines.append("- 声望高导向：NPC更易尊重、配合。")
-	elif reputation <= 60.0:
-		lines.append("- 声望低导向：NPC更易警惕、厌恶或拒绝。")
-	if focus_npc_name != "":
-		lines.append("- 当前NPC：" + focus_npc_name + "（" + focus_npc_desc + "）")
-		if _contains_any_keyword(npc_text, ["护卫", "保安", "警察", "士兵", "侍卫"]):
-			lines.append("- 秩序角色导向：更重规则/风险/立场，不会无条件顺从。")
-		if _contains_any_keyword(npc_text, ["平民", "学生", "路人", "店员", "仆人"]):
-			lines.append("- 普通角色导向：在高权势面前通常更保守或顺从。")
-	return "\n".join(lines)
+	return GameActionUtils.build_identity_attitude_guidance(playerName, world_seed_input, reputation, focus_npc_name, focus_npc_desc)
 
 func get_identity_attitude_guidance_for_npc(npc_name: String, npc_desc: String = "") -> String:
 	return _build_identity_attitude_guidance(npc_name, npc_desc)
 
 func _build_related_event_memory_for_action(action_text: String, focus_npc_name: String = "") -> String:
 	var hint = _extract_interaction_signals(action_text)
-	var focus_npc = focus_npc_name.strip_edges()
-	var mentions = _extract_npc_mentions(action_text)
-	if !mentions.is_empty():
-		focus_npc = str(mentions[0])
+	var focus_npc = GameMemoryUtils.resolve_focus_npc_for_action(action_text, focus_npc_name, npcs)
 	if focus_npc != "":
 		var personal_rows = _get_recent_npc_personal_events(focus_npc, 4)
-		if !personal_rows.is_empty() :
-			var personal_lines: Array = []
-			for line in personal_rows:
-				personal_lines.append("- " + str(line))
-			return _clip_prompt_text("\n".join(personal_lines), 320)
+		var personal_text = GameMemoryUtils.build_relevant_event_memory_text(personal_rows, [])
+		if personal_text != "":
+			return _clip_prompt_text(personal_text, 320)
 	var rows = _get_recent_related_event_memories(currentSiteName, focus_npc, 2, hint)
-	if rows.is_empty():
+	var related_text = GameMemoryUtils.build_relevant_event_memory_text([], rows)
+	if related_text == "":
 		return ""
-	var lines: Array = []
-	for m in rows:
-		if m is Dictionary:
-			lines.append("- " + _clip_prompt_text(str(m.get("text", "")), 90))
-	return _clip_prompt_text("\n".join(lines), 260)
+	return _clip_prompt_text(related_text, 260)
 
 func _build_inventory_snapshot(max_items: int = 6) -> String:
 	var parts: Array = []
@@ -3449,51 +2504,13 @@ func _on_img_http_request_request_completed(result: int, response_code: int, _he
 		_drain_pending_img()
 
 func _extract_first_number(text: String) -> int:
-	var regex = RegEx.new()
-	if regex.compile("(\\d+)") != OK:
-		return 0
-	var m = regex.search(text)
-	if m == null:
-		return 0
-	return int(m.get_string(1))
+	return GameNpcInferUtils.extract_first_number(text)
 
 func _extract_duration_hours(text: String) -> float:
-	var regex = RegEx.new()
-	if regex.compile("(\\d+(?:\\.\\d+)?)\\s*小时") == OK:
-		var h = regex.search(text)
-		if h != null:
-			return float(h.get_string(1))
-	if text.find("半小时") != -1:
-		return 0.5
-	if regex.compile("(\\d+)\\s*分钟") == OK:
-		var m = regex.search(text)
-		if m != null:
-			return float(int(m.get_string(1))) / 60.0
-	return 0.0
+	return GameParseUtils.extract_duration_hours(text)
 
 func _extract_target_time(text: String) -> Dictionary:
-	var regex = RegEx.new()
-	if regex.compile("(\\d{1,2})\\s*[:：]\\s*(\\d{1,2})") == OK:
-		var m = regex.search(text)
-		if m != null:
-			var h = clamp(int(m.get_string(1)), 0, 23)
-			var mm = clamp(int(m.get_string(2)), 0, 59)
-			return {"valid": true, "hour": h, "minute": mm}
-
-	if regex.compile("(\\d{1,2})\\s*点\\s*(半|\\d{1,2}分?)?") == OK:
-		var p = regex.search(text)
-		if p != null:
-			var h2 = clamp(int(p.get_string(1)), 0, 23)
-			var minute_text = str(p.get_string(2)).strip_edges()
-			var m2 = 0
-			if minute_text == "半":
-				m2 = 30
-			elif minute_text != "":
-				minute_text = minute_text.replace("分", "")
-				m2 = clamp(int(minute_text), 0, 59)
-			return {"valid": true, "hour": h2, "minute": m2}
-
-	return {"valid": false, "hour": 0, "minute": 0}
+	return GameParseUtils.extract_target_time(text)
 
 func _auto_initiate_npc_chat(npc_name: String, npc_describe: String) -> void:
 	var retry = 0
@@ -3530,96 +2547,11 @@ func _pick_crime_npc_from_action(action_input: String) -> Dictionary:
 			if cleaned.find(n) != -1:
 				var data = npcs[n]
 				if data is Dictionary:
-					return {
-						"name": n,
-						"describe": str(data.get("npc_describe", "神情紧张地盯着你"))
-					}
-	if currentSiteName.find("宿舍") != -1:
-		return {"name": "宿管阿姨", "describe": "拿着登记本、神情警惕地走了过来"}
-	if currentSiteName.find("学校") != -1 or currentSiteName.find("教学") != -1:
-		return {"name": "值班老师", "describe": "皱着眉、快步走来的值班老师"}
-	var sig = _detect_setting_style_signals()
-	if bool(sig.get("ancient", false)) and !bool(sig.get("bridge", false)):
-		return {"name": "巡城卫兵", "describe": "披甲执戟、神情严厉地拦下了你"}
-	if bool(sig.get("scifi", false)) or bool(sig.get("cyber", false)):
-		return {"name": "安保巡查员", "describe": "佩戴识别终端、语气冷硬地要求你停下"}
-	return {}
+					return {"name": n, "describe": str(data.get("npc_describe", "神情紧张地盯着你"))}
+	return GameNpcPoolUtils.pick_crime_npc_fallback(currentSiteName, _detect_setting_style_signals())
 
 func _build_proactive_npc_pool(reason: String) -> Array:
-	var sig = _detect_setting_style_signals()
-	var pool_map: Dictionary = {}
-	if bool(sig.get("ancient", false)) and !bool(sig.get("bridge", false)):
-		pool_map = {
-			"money": [
-				{"name": "集市掌柜", "describe": "拨着算盘、目光精明的掌柜"},
-				{"name": "巡街差役", "describe": "腰挎短刀、神情警觉的差役"},
-				{"name": "庄园管事", "describe": "衣着整肃、语气克制的管事"}
-			],
-			"exercise": [
-				{"name": "武馆教头", "describe": "身形稳健、目光锐利的教头"},
-				{"name": "营中老兵", "describe": "披着旧甲、说话干练的老兵"},
-				{"name": "猎场向导", "describe": "背弓挎囊、步伐利落的向导"}
-			],
-			"time_pass": [
-				{"name": "过路行商", "describe": "牵着驮兽、一路吆喝的行商"},
-				{"name": "驿站信使", "describe": "披尘快步、神色匆匆的信使"},
-				{"name": "城门小吏", "describe": "手持簿册、谨慎打量来人的小吏"}
-			],
-			"crime": [
-				{"name": "巡城卫兵", "describe": "披甲执戟、面色不善的卫兵"},
-				{"name": "庄园监工", "describe": "手持皮鞭、语气严厉的监工"},
-				{"name": "目击商贩", "describe": "抱紧货箱、神色惊惧的商贩"}
-			]
-		}
-	elif bool(sig.get("scifi", false)) or bool(sig.get("cyber", false)):
-		pool_map = {
-			"money": [
-				{"name": "交易站文员", "describe": "佩戴终端、谨慎核验账目的文员"},
-				{"name": "站区安保", "describe": "穿着防护装、目光冷静的安保"},
-				{"name": "通道巡检员", "describe": "提着检测仪、步伐稳健的巡检员"}
-			],
-			"exercise": [
-				{"name": "训练官", "describe": "佩戴护甲、下令简洁的训练官"},
-				{"name": "机修技师", "describe": "手上沾着油污、动作麻利的技师"},
-				{"name": "外勤队员", "describe": "背着装备包、目光冷静的队员"}
-			],
-			"time_pass": [
-				{"name": "引导员", "describe": "手持投影地图、态度专业的引导员"},
-				{"name": "远行乘客", "describe": "拖着箱包、神情疲惫的乘客"},
-				{"name": "后勤调度员", "describe": "不断核对清单、语速很快的调度员"}
-			],
-			"crime": [
-				{"name": "安保巡查员", "describe": "佩戴识别终端、语气冷硬的巡查员"},
-				{"name": "目击维修工", "describe": "握着扳手、神情紧张的维修工"},
-				{"name": "封控执行员", "describe": "启动警戒程序、要求你停下的执行员"}
-			]
-		}
-	else:
-		pool_map = {
-			"money": [
-				{"name": "路过行人", "describe": "步伐匆匆、却忍不住多看你一眼的行人"},
-				{"name": "值守人员", "describe": "神情警觉、习惯观察周围的值守人员"},
-				{"name": "小摊商贩", "describe": "守着摊位、眼神精明的商贩"}
-			],
-			"exercise": [
-				{"name": "训练者", "describe": "动作利落、状态很好的训练者"},
-				{"name": "晨练路人", "describe": "呼吸平稳、步伐轻快的路人"},
-				{"name": "教习", "describe": "目光专注、语气沉稳的教习"}
-			],
-			"time_pass": [
-				{"name": "热心路人", "describe": "愿意搭话、对周围很熟悉的路人"},
-				{"name": "陌生访客", "describe": "拿着地图、看起来有些迷路的人"},
-				{"name": "本地向导", "describe": "语气友好、对地形很熟的向导"}
-			],
-			"crime": [
-				{"name": "巡逻人员", "describe": "脚步急促、神情严肃地靠近你的人"},
-				{"name": "目击者", "describe": "突然出现在旁边、一脸惊讶的目击者"},
-				{"name": "工作人员", "describe": "眼神警惕、快步走来的工作人员"}
-			]
-		}
-	if pool_map.has(reason):
-		return pool_map[reason]
-	return []
+	return GameNpcPoolUtils.build_proactive_npc_pool(reason, _detect_setting_style_signals())
 
 func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}, context_text: String = "") -> void:
 	if currentSiteName == "":
@@ -3704,55 +2636,16 @@ func _trigger_time_pass_npc_event(hours: float, action_context: String = "") -> 
 	return false
 
 func _build_action_context_text(action_input: String, action_reply: String) -> String:
-	var context_text = action_input.strip_edges()
-	if context_text == "":
-		context_text = process_string(action_reply).strip_edges()
-	if context_text == "":
-		context_text = (action_input + " " + process_string(action_reply)).strip_edges()
-	return context_text.left(64)
+	return GameActionUtils.build_action_context_text(action_input, process_string(action_reply))
 
 func _extract_signed_number(text: String) -> int:
-	var regex = RegEx.new()
-	if regex.compile("([+-]?\\d+)") != OK:
-		return 0
-	var m = regex.search(text)
-	if m == null:
-		return 0
-	return int(m.get_string(1))
+	return GameParseUtils.extract_signed_number(text)
 
 func _extract_money_delta_from_text(text: String) -> int:
-	var plain = process_string(text).strip_edges()
-	if plain == "":
-		return 0
-	var spend_patterns = ["花费", "花了", "花去", "支付", "付了", "付款", "消费", "支出", "扣除", "减少", "损失", "收你"]
-	for p in spend_patterns:
-		var spend_regex = RegEx.new()
-		if spend_regex.compile(p + "\\s*(\\d+)") == OK:
-			var spend_match = spend_regex.search(plain)
-			if spend_match != null:
-				return -int(spend_match.get_string(1))
-	var income_patterns = ["获得", "赚了", "收入", "得到", "返还", "退款", "增加了"]
-	for p in income_patterns:
-		var income_regex = RegEx.new()
-		if income_regex.compile(p + "\\s*(\\d+)") == OK:
-			var income_match = income_regex.search(plain)
-			if income_match != null:
-				return int(income_match.get_string(1))
-	return 0
+	return GameParseUtils.extract_money_delta_from_text(process_string(text))
 
 func _build_crime_context(action_input: String, action_reply: String, tool_tags: String) -> String:
-	var tags = _extract_angle_tags(tool_tags + action_reply)
-	for tag in tags:
-		var normalized = str(tag).replace("：", ":").strip_edges()
-		if normalized.begins_with("犯罪:"):
-			return normalized.trim_prefix("犯罪:").strip_edges()
-	var input_text = action_input.strip_edges()
-	if input_text != "":
-		return input_text.left(36)
-	var plain = process_string(action_reply).strip_edges()
-	if plain != "":
-		return plain.left(36)
-	return "可疑行为"
+	return GameActionUtils.build_crime_context(action_input, process_string(action_reply), _extract_angle_tags(tool_tags + action_reply))
 
 func _apply_direct_action_tool_tags(action_reply: String) -> Dictionary:
 	var tags = _extract_angle_tags(action_reply)
@@ -3807,23 +2700,7 @@ func _apply_direct_action_tool_tags(action_reply: String) -> Dictionary:
 	return {"handled_any": handled_any, "unresolved_tags": unresolved, "nav_target": nav_target}
 
 func _extract_nav_target_from_text(text: String) -> String:
-	var fail_words = ["无法", "不能", "不行", "失败", "被阻", "没能", "不让", "不允许", "随即返回", "无法前往"]
-	for w in fail_words:
-		if text.find(w) != -1:
-			return ""
-	var travel_words = ["前往", "去了", "来到", "到达了", "抵达", "走向", "回到了", "走进", "进入了", "出发前往", "动身前往", "前去", "赶往"]
-	var has_travel = false
-	for w in travel_words:
-		if text.find(w) != -1:
-			has_travel = true
-			break
-	if !has_travel:
-		return ""
-	for site in sites.keys():
-		var site_str = str(site).strip_edges()
-		if site_str != "" and site_str != currentSiteName and text.find(site_str) != -1:
-			return site_str
-	return ""
+	return GameActionUtils.extract_nav_target_from_text(text, currentSiteName, sites.keys())
 
 func _auto_apply_action_effects(action_input: String, action_reply: String, tool_tags: String) -> void:
 	var source = (action_input + "\n" + action_reply).strip_edges()
@@ -3960,24 +2837,7 @@ func _auto_apply_action_effects(action_input: String, action_reply: String, tool
 
 # ==================== 工具函数 ====================
 func extract_json_from_text(input_string: String) -> Dictionary:
-	var cleaned = input_string.replace("```json", "").replace("```", "").strip_edges()
-	var json = JSON.new()
-	var parse_result = json.parse(cleaned)
-	if parse_result == OK:
-		return json.get_data()
-
-	var start_idx = cleaned.find("{")
-	var end_idx = cleaned.rfind("}")
-
-	if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-		var json_string = cleaned.substr(start_idx, end_idx - start_idx + 1)
-		parse_result = json.parse(json_string)
-		if parse_result == OK:
-			return json.get_data()
-		else:
-			print("JSON解析错误: ", json.get_error_message())
-
-	return {}
+	return GameAiUtils.extract_json_from_text(input_string)
 
 
 # 初始化交易：NPC想要卖给玩家物品，is_total=true 表示price为总价而非单价
@@ -4157,8 +3017,7 @@ func prepare_npc_memory_for_chat(npc_name: String) -> void:
 	_append_event_memories_to_npc_log(npc_name)
 
 func _has_trade_keywords(text: String) -> bool:
-	var sig = _extract_interaction_signals(text)
-	return int(sig.get("trade", 0)) > 0 or int(sig.get("gift", 0)) > 0
+	return GameNpcInferUtils.has_trade_keywords(text)
 
 func _queue_action_confirm(action_data: Dictionary) -> void:
 	if action_data.is_empty():
@@ -4182,42 +3041,13 @@ func _queue_action_confirm(action_data: Dictionary) -> void:
 	%event.got_action_confirm_event(str(pending_action_confirm.get("action", "")), str(pending_action_confirm.get("prompt", "")))
 
 func _npc_refused_request(reply_text: String) -> bool:
-	var t = process_string(reply_text).strip_edges()
-	if t == "":
-		return false
-	var deny_words = ["不行", "不能", "不可以", "不帮", "拒绝", "没空", "做不到", "不愿", "别想", "不可能"]
-	for w in deny_words:
-		if t.find(w) != -1:
-			return true
-	return false
+	return GameNpcInferUtils.npc_refused_request(process_string(reply_text))
 
 func _extract_player_directed_request(user_text: String) -> String:
-	var plain = _normalize_single_line_input(user_text)
-	if plain == "":
-		return ""
-	var regex = RegEx.new()
-	if regex.compile("(?:你|请你|麻烦你|帮我|替我|你去)([^。！？?]{1,28})") != OK:
-		return ""
-	var m = regex.search(plain)
-	if m == null:
-		return ""
-	var req = str(m.get_string(1)).strip_edges()
-	if req.length() < 2:
-		return ""
-	return req
+	return GameNpcInferUtils.extract_player_directed_request(GameTextUtils.normalize_single_line_input(user_text))
 
 func _can_force_request_on_npc(npc_name: String, npc_describe: String, request_text: String) -> bool:
-	var score = 0
-	var player_context = world_seed_input + " " + playerName
-	if _contains_any_keyword(player_context, ["老师", "保安", "警察", "军", "领导", "主任", "老板", "队长"]):
-		score += 2
-	if _contains_any_keyword(npc_describe + " " + npc_name, ["学生", "同学", "路人", "游客"]):
-		score += 1
-	if _contains_any_keyword(npc_describe + " " + npc_name, ["老师", "保安", "警察", "店长", "主任", "领导"]):
-		score -= 3
-	if _contains_any_keyword(request_text, ["打", "抢", "偷", "绑", "闯"]):
-		score -= 2
-	return score >= 1
+	return GameNpcInferUtils.can_force_request_on_npc(world_seed_input + " " + playerName, npc_name, npc_describe, request_text)
 
 func _append_event_memories_to_npc_log(npc_name: String) -> void:
 	if !npcs.has(npc_name):
@@ -4257,102 +3087,13 @@ func _contains_any_keyword(text: String, words: Array) -> bool:
 	return GameEntityUtils.contains_keyword(text, words)
 
 func _extract_interaction_signals(text: String) -> Dictionary:
-	var t = str(text).strip_edges()
-	if t == "":
-		return {"trade": 0, "gift": 0, "assist": 0, "positive": 0, "negative": 0, "coercion": 0, "respect": 0, "interaction_score": 0}
-	var trade_keywords = [
-		"买", "购买", "卖", "出售", "交易", "成交", "收购", "收你", "报价", "价格", "多少钱", "单价", "总价", "换"
-	]
-	var gift_keywords = [
-		"送", "赠", "给你", "给我", "递给", "交给", "拿给", "分你", "分享", "补给"
-	]
-	var assist_keywords = [
-		"帮", "帮我", "帮你", "替", "替我", "替你", "代", "代我", "代你", "陪", "带我", "去帮"
-	]
-	var positive_keywords = [
-		"感谢", "谢谢", "帮忙", "照顾", "安慰", "道歉", "体谅", "关心", "保护", "救", "信任", "友好", "客气"
-	]
-	var negative_keywords = [
-		"拒绝", "敌意", "冲突", "冒犯", "羞辱", "欺骗", "冷淡", "厌恶", "怀疑", "不耐烦", "辱骂", "看不起"
-	]
-	var coercion_keywords = [
-		"威胁", "命令", "逼", "强迫", "施压", "滚", "跪下", "闭嘴", "老实点", "给我", "立刻", "马上"
-	]
-	var respect_keywords = [
-		"尊重", "敬畏", "请", "拜托", "劳烦", "失礼", "抱歉", "请教", "愿意听你", "照你规矩"
-	]
-	var trade_score = 0
-	var gift_score = 0
-	var assist_score = 0
-	var positive_score = 0
-	var negative_score = 0
-	var coercion_score = 0
-	var respect_score = 0
-	for kw in trade_keywords:
-		if t.find(kw) != -1:
-			trade_score += 1
-	for kw in gift_keywords:
-		if t.find(kw) != -1:
-			gift_score += 1
-	for kw in assist_keywords:
-		if t.find(kw) != -1:
-			assist_score += 1
-	for kw in positive_keywords:
-		if t.find(kw) != -1:
-			positive_score += 1
-	for kw in negative_keywords:
-		if t.find(kw) != -1:
-			negative_score += 1
-	for kw in coercion_keywords:
-		if t.find(kw) != -1:
-			coercion_score += 1
-	for kw in respect_keywords:
-		if t.find(kw) != -1:
-			respect_score += 1
-	if _contains_any_keyword(t, ["个", "件", "瓶", "把", "份", "张", "点", "块", "元"]):
-		trade_score += 1
-		gift_score += 1
-	if _extract_first_number(t) > 0:
-		trade_score += 1
-		gift_score += 1
-	if t.find("请") != -1 and t.find("帮") != -1:
-		respect_score += 1
-		positive_score += 1
-	if _contains_any_keyword(t, ["不许", "否则", "后果", "弄死", "收拾你"]):
-		coercion_score += 2
-		negative_score += 1
-	return {
-		"trade": trade_score,
-		"gift": gift_score,
-		"assist": assist_score,
-		"positive": positive_score,
-		"negative": negative_score,
-		"coercion": coercion_score,
-		"respect": respect_score,
-		"interaction_score": trade_score + gift_score + assist_score + positive_score + negative_score + coercion_score + respect_score
-	}
+	return GameNpcInferUtils.extract_interaction_signals(text)
 
 func _needs_tool_inference_from_context(player_text: String, npc_text: String) -> bool:
-	var player_sig = _extract_interaction_signals(player_text)
-	var npc_sig = _extract_interaction_signals(npc_text)
-	var total_score = int(player_sig.get("interaction_score", 0)) + int(npc_sig.get("interaction_score", 0))
-	if total_score >= 2:
-		return true
-	if _has_trade_keywords(npc_text):
-		return true
-	if _contains_any_keyword(player_text, ["买", "卖", "给", "送", "帮", "替"]) and _npc_reply_accepts_request(npc_text):
-		return true
-	return false
+	return GameNpcInferUtils.needs_tool_inference_from_context(player_text, process_string(npc_text))
 
 func _npc_reply_accepts_request(reply_text: String) -> bool:
-	var t = process_string(reply_text).strip_edges()
-	if t == "":
-		return false
-	var yes_words = ["可以", "行", "好", "没问题", "当然", "马上", "这就", "给你", "帮你", "替你", "成交", "安排"]
-	for w in yes_words:
-		if t.find(w) != -1:
-			return true
-	return false
+	return GameNpcInferUtils.npc_reply_accepts_request(process_string(reply_text))
 
 func _maybe_offer_intent_confirm_from_dialogue(reply_text: String) -> void:
 	if _has_active_event_panel():
@@ -4385,41 +3126,7 @@ func _extract_npc_action_request(reply_text: String) -> Dictionary:
 	var actor_name = ""
 	if currentNpc != null:
 		actor_name = str(currentNpc.npcName)
-	var tags = _extract_angle_tags(reply_text)
-	for raw_tag in tags:
-		var normalized = str(raw_tag).replace("：", ":").strip_edges()
-		if normalized.begins_with("要求行动:"):
-			var action_from_tag = normalized.trim_prefix("要求行动:").strip_edges()
-			if action_from_tag != "":
-				return {"action": action_from_tag, "prompt": "是否执行行动：" + action_from_tag + "？", "actor": actor_name, "mode": "player_execute"}
-		if normalized.begins_with("行动指示:"):
-			var action_from_hint = normalized.trim_prefix("行动指示:").strip_edges()
-			if action_from_hint != "":
-				return {"action": action_from_hint, "prompt": "是否执行行动：" + action_from_hint + "？", "actor": actor_name, "mode": "player_execute"}
-
-	if _has_trade_keywords(reply_text):
-		return {}
-	var plain = process_string(reply_text).strip_edges()
-	if plain == "":
-		return {}
-	var regex = RegEx.new()
-	if regex.compile("(?:你要不要|你要|要不要|是否|请你|麻烦你)([^。！？?]{1,24})(?:吗|么|吧|呢|？|\\?)") != OK:
-		return {}
-	var m = regex.search(plain)
-	if m == null:
-		return {}
-	var action_text = str(m.get_string(1)).strip_edges()
-	if action_text.length() < 2:
-		return {}
-	var prompt_text = "是否" + action_text + "？"
-	var q_idx = plain.find("？")
-	if q_idx == -1:
-		q_idx = plain.find("?")
-	if q_idx != -1:
-		var question = plain.substr(0, q_idx + 1).strip_edges()
-		if question.length() <= 36:
-			prompt_text = question
-	return {"action": action_text, "prompt": prompt_text, "actor": actor_name, "mode": "player_execute"}
+	return GameNpcInferUtils.extract_npc_action_request(process_string(reply_text), _extract_angle_tags(reply_text), actor_name)
 
 func _auto_handle_action_search(action_input: String, action_reply: String) -> void:
 	var input_text = action_input.strip_edges()

@@ -1,8 +1,0 @@
-{
-	"description": "热气腾腾的肉包子，咬一口鲜美多汁，能快速补充体力。",
-	"effect_type": "hp_restore",
-	"effect_value": 15,
-	"image_prompt": "A single steamed bun on a white background, simple icon style, no text, fresh and steam rising",
-	"rarity": "common",
-	"value": 50
-}

@@ -133,3 +133,26 @@ static func is_valid_location_name_basic(raw_name: String) -> bool:
 	if regex.compile("^[\\p{Han}A-Za-z0-9·]+$") != OK:
 		return false
 	return regex.search(n) != null
+
+static func extract_unknown_npc_target_from_query(query_text: String) -> String:
+	var t = _norm(query_text)
+	if t == "":
+		return ""
+	var regex = RegEx.new()
+	var patterns = [
+		"([\\p{Han}A-Za-z\u00b7]{2,12})(?:\u5728\u54ea|\u5728\u54ea\u91cc|\u5728\u54ea\u513f|\u662f\u8c01|\u4ec0\u4e48\u4eba|\u5728\u5417|\u7684\u4fe1\u606f|\u7684\u6d88\u606f)",
+		"(?:\u627e|\u5bfb\u627e|\u6253\u542c|\u95ee|\u5173\u4e8e)([\\p{Han}A-Za-z\u00b7]{2,12})"
+	]
+	for p in patterns:
+		if regex.compile(p) != OK:
+			continue
+		var m = regex.search(t)
+		if m == null:
+			continue
+		var candidate = sanitize_npc_name(str(m.get_string(1)))
+		candidate = extract_compact_entity(candidate, 12)
+		if !is_valid_npc_name(candidate) and is_relation_npc_query(t):
+			candidate = fallback_relation_npc_name(t)
+		if is_valid_npc_name(candidate):
+			return candidate
+	return ""
