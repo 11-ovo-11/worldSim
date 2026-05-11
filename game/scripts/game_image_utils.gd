@@ -11,7 +11,7 @@ static func resolve_image_slot_size(target_type: String, npc_size: Vector2, npc_
 		nh = max(nh, 360)
 		return Vector2i(nw, nh)
 	if target_type == "item":
-		return Vector2i(128, 128)
+		return Vector2i(100, 100)
 	var w = int(max(bg_size.x, bg_min_size.x))
 	var h = int(max(bg_size.y, bg_min_size.y))
 	if w > 0 and h > 0:

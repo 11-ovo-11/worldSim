@@ -47,7 +47,15 @@ static func generate_item_texture(scene: Node, image_prompt: String) -> Texture2
 	if !req.get("ok", false):
 		return null
 	var image_data = req["data"].get("image", "")
-	return scene._base64_to_texture(image_data)
+	var image = scene._base64_to_image(image_data)
+	if image == null:
+		return null
+	var fitted = scene._fit_image_to_target_slot(image, "item")
+	if fitted == null:
+		return null
+	if fitted.get_format() != Image.FORMAT_RGBA8:
+		fitted.convert(Image.FORMAT_RGBA8)
+	return ImageTexture.create_from_image(fitted)
 
 static func generate_validation_dialogue(scene: Node, scene_context: String, fallback: String) -> String:
 	var prompts = [
@@ -189,6 +197,8 @@ static func ensure_item_profile_async(scene: Node, item_name: String) -> void:
 	if item_texture != null:
 		var item_image = (item_texture as ImageTexture).get_image()
 		if item_image != null:
+			if item_image.get_format() != Image.FORMAT_RGBA8:
+				item_image.convert(Image.FORMAT_RGBA8)
 			scene._save_image_png(item_image, scene.ITEM_IMG_DIR, item_name)
 
 	scene.itemProfiles[item_name]["description"] = item_description

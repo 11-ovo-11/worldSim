@@ -14,6 +14,22 @@ static func enqueue_image_request(scene: Node, prompt: String, target_site: Stri
 	var t = str(target_site).strip_edges()
 	if p == "" or t == "":
 		return
+	if retry_count <= 0:
+		var dedupe_key = t + "|" + p.left(220)
+		var now_ms = Time.get_ticks_msec()
+		var recent_raw = scene.get_meta("img_recent_req_map", {})
+		var recent: Dictionary = {}
+		if recent_raw is Dictionary:
+			recent = recent_raw
+		var last_ms = int(recent.get(dedupe_key, 0))
+		if last_ms > 0 and now_ms - last_ms < 45000:
+			scene._bg_debug("gen_img suppressed duplicate, target=" + t)
+			return
+		recent[dedupe_key] = now_ms
+		for key in recent.keys():
+			if now_ms - int(recent.get(key, 0)) > 180000:
+				recent.erase(key)
+		scene.set_meta("img_recent_req_map", recent)
 	if scene.inflight_img_site == t or scene._has_pending_image_target(t):
 		return
 	var req = {
@@ -77,6 +93,46 @@ static func schedule_image_retry(scene: Node, prompt: String, target_site: Strin
 	await scene.get_tree().create_timer(max(0.2, delay_sec)).timeout
 	scene._enqueue_image_request(prompt, target_site, retry_count, true)
 	scene._drain_pending_img()
+
+static func apply_scene_background_for_current_site(scene: Node) -> void:
+	var site_name = str(scene.currentSiteName).strip_edges()
+	if site_name == "":
+		return
+	var bg = scene.get_node_or_null("%backgroundImg")
+	if !(bg is TextureRect):
+		return
+	if scene.siteImgs.has(site_name) and scene.siteImgs[site_name] is Texture2D:
+		(bg as TextureRect).texture = scene.siteImgs[site_name]
+		return
+	var cached = scene._load_image_png(scene.SCENE_IMG_DIR, site_name)
+	if cached != null:
+		scene.siteImgs[site_name] = cached
+		(bg as TextureRect).texture = cached
+
+static func trigger_instant_scene_image(scene: Node, narrative_text: String) -> void:
+	var site_name = str(scene.currentSiteName).strip_edges()
+	if site_name == "":
+		return
+	var site_data = scene._get_site_data(site_name)
+	if site_data.is_empty():
+		return
+	var moment = str(narrative_text).strip_edges()
+	var dedupe_text = moment.left(220)
+	var dedupe_key = site_name + "|" + dedupe_text
+	var now_ms = Time.get_ticks_msec()
+	var last_key = str(scene.get_meta("instant_img_last_key", ""))
+	var last_ms = int(scene.get_meta("instant_img_last_ms", 0))
+	if dedupe_key == last_key and now_ms - last_ms < 30000:
+		scene._bg_debug("instant scene image deduped, site=" + site_name)
+		return
+	scene.set_meta("instant_img_last_key", dedupe_key)
+	scene.set_meta("instant_img_last_ms", now_ms)
+	var prompt = scene._build_scene_image_prompt(site_name, site_data)
+	if moment != "":
+		prompt += ", narrative moment: " + moment.left(180)
+	if prompt == "":
+		return
+	scene.gen_img(prompt, site_name)
 
 static func try_use_cached_image_for_target(scene: Node, target_site: String) -> bool:
 	if target_site == "":
@@ -143,6 +199,10 @@ static func display_base64_image(scene: Node, base64_string: String, site_name: 
 		var item_img = scene._base64_to_image(base64_string)
 		if item_img != null:
 			var fitted_item_img = scene._fit_image_to_target_slot(item_img, "item")
+			if fitted_item_img == null:
+				return
+			if fitted_item_img != null and fitted_item_img.get_format() != Image.FORMAT_RGBA8:
+				fitted_item_img.convert(Image.FORMAT_RGBA8)
 			var item_tex = ImageTexture.create_from_image(fitted_item_img)
 			if scene.itemProfiles.has(item_n):
 				scene.itemProfiles[item_n]["texture"] = item_tex

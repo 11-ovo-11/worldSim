@@ -51,14 +51,14 @@ static func setup_output_mode_controls(scene: Node) -> void:
 	var _img_mode_panel = scene.get_node_or_null("%ImgModePanel")
 	if _img_mode_panel == null:
 		return
-	var _img_btn_group := ButtonGroup.new()
-	var _btn_scene_only = scene.get_node_or_null("%SceneOnlyButton")
 	var _btn_instant = scene.get_node_or_null("%InstantGenButton")
-	if _btn_scene_only == null or _btn_instant == null:
+	if _btn_instant == null:
 		return
-	_btn_scene_only.toggle_mode = true
-	_btn_scene_only.button_pressed = true
-	_btn_scene_only.button_group = _img_btn_group
 	_btn_instant.toggle_mode = true
-	_btn_instant.button_group = _img_btn_group
-	_img_btn_group.pressed.connect(func(btn: BaseButton): scene.instant_gen_mode = (btn == _btn_instant))
+	var _apply_img_mode := func(is_instant: bool) -> void:
+		scene.instant_gen_mode = is_instant
+		_btn_instant.set_pressed_no_signal(is_instant)
+		if !is_instant:
+			GameImageRuntimeUtils.apply_scene_background_for_current_site(scene)
+	_btn_instant.toggled.connect(func(pressed: bool): _apply_img_mode.call(pressed))
+	_apply_img_mode.call(bool(scene.instant_gen_mode))

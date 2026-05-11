@@ -415,10 +415,8 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 				if scene.runtime_operation_lock or scene.currentState != scene.worldState.chat or scene.currentNpc == null:
 					return
 				await scene.npc_reply(chat_text)
-				if scene.instant_gen_mode and scene.currentNpc != null:
-					var _in = str(scene.currentNpc.npcName)
-					var _id = str(scene.currentNpc.npcDescribe)
-					scene.gen_img(scene._build_npc_image_prompt(_in, _id), "NPC:" + _in)
+				if scene.instant_gen_mode:
+					GameImageRuntimeUtils.trigger_instant_scene_image(scene, chat_text)
 			scene.aiMode.action:
 				var action_reply = scene._enforce_output_min_length(str(data.get("text", "")), scene.aiMode.action)
 				action_reply = scene._enforce_action_narration_richness(action_reply)
@@ -426,10 +424,8 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 					scene._set_event_flow_lock(true)
 					scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【旁白】")
 					scene.changeTextTo(scene.response_label, scene.process_string(action_reply))
-					if scene.instant_gen_mode and scene.currentSiteName != "":
-						var _isd = scene._get_site_data(scene.currentSiteName)
-						if !_isd.is_empty():
-							scene.gen_img(scene._build_scene_image_prompt(scene.currentSiteName, _isd), scene.currentSiteName)
+					if scene.instant_gen_mode:
+						GameImageRuntimeUtils.trigger_instant_scene_image(scene, action_reply)
 					var tool_tags = scene.get_content_in_angle_brackets(action_reply)
 					var direct_tag_result = scene._apply_direct_action_tool_tags(action_reply)
 					var handled_direct = bool(direct_tag_result.get("handled_any", false))

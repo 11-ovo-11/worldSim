@@ -74,6 +74,7 @@ IMAGE_API_FALLBACK_HOSTS = [
 
 IMAGE_REQUEST_TIMEOUT_SECONDS = float(os.getenv("IMAGE_REQUEST_TIMEOUT_SECONDS", "60"))
 IMAGE_PREFLIGHT_TTL_SECONDS = int(os.getenv("IMAGE_PREFLIGHT_TTL_SECONDS", "30"))
+IMAGE_PREFLIGHT_ENABLED = str(os.getenv("IMAGE_PREFLIGHT_ENABLED", "0")).strip().lower() in ["1", "true", "yes", "on"]
 _IMAGE_PREFLIGHT_CACHE = {
     "checked_at": 0.0,
     "ok": False,
@@ -441,22 +442,23 @@ def generate_image():
         return jsonify({"success": False, "error": "未配置 image_key",
                         "debug": {"exception": "image_key is empty"}}), 500
 
-    preflight = _ensure_image_preflight(False)
-    if not preflight.get("ok", False):
-        reason = str(preflight.get("reason", "图片试生成失败")).strip()
-        print(f"[IMG_DEBUG] preflight failed: {reason}")
-        return jsonify({
-            "success": False,
-            "error": "图片试生成失败：" + (reason if reason != "" else "未知原因"),
-            "debug": {
-                "stage": "preflight",
-                "cached": bool(preflight.get("cached", False)),
-                "cache_age": int(preflight.get("cache_age", 0)),
-                "endpoint": str(preflight.get("endpoint", "")),
-                "attempts": preflight.get("debug", {}).get("attempts", []),
-                "model": SDXL_ENGINE_ID,
-            }
-        }), 503
+    if IMAGE_PREFLIGHT_ENABLED:
+        preflight = _ensure_image_preflight(False)
+        if not preflight.get("ok", False):
+            reason = str(preflight.get("reason", "图片试生成失败")).strip()
+            print(f"[IMG_DEBUG] preflight failed: {reason}")
+            return jsonify({
+                "success": False,
+                "error": "图片试生成失败：" + (reason if reason != "" else "未知原因"),
+                "debug": {
+                    "stage": "preflight",
+                    "cached": bool(preflight.get("cached", False)),
+                    "cache_age": int(preflight.get("cache_age", 0)),
+                    "endpoint": str(preflight.get("endpoint", "")),
+                    "attempts": preflight.get("debug", {}).get("attempts", []),
+                    "model": SDXL_ENGINE_ID,
+                }
+            }), 503
 
     endpoints = _build_image_endpoint_candidates()
     sizes = _build_image_size_candidates(target_type, width, height)

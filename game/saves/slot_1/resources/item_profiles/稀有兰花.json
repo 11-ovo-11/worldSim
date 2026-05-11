@@ -1,8 +1,0 @@
-{
-	"description": "一株散发着幽蓝光芒的稀有兰花，花瓣晶莹剔透，据说能恢复精力与生命力。",
-	"effect_type": "both_restore",
-	"effect_value": 20,
-	"image_prompt": "A rare orchid with glowing blue petals, translucent, isolated on white background, game icon style",
-	"rarity": "rare",
-	"value": 800
-}
