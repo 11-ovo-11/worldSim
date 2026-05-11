@@ -55,9 +55,15 @@ static func setup_output_mode_controls(scene: Node) -> void:
 	if _btn_instant == null:
 		return
 	_btn_instant.toggle_mode = true
+	scene.set_meta("last_img_mode", bool(scene.instant_gen_mode))
 	var _apply_img_mode := func(is_instant: bool) -> void:
+		var last_mode = bool(scene.get_meta("last_img_mode", bool(scene.instant_gen_mode)))
+		var mode_changed = is_instant != last_mode
 		scene.instant_gen_mode = is_instant
 		_btn_instant.set_pressed_no_signal(is_instant)
+		if mode_changed:
+			scene.addLog("<图片模式切换：" + ("即时生成" if is_instant else "只生成场景") + ">")
+		scene.set_meta("last_img_mode", is_instant)
 		if !is_instant:
 			GameImageRuntimeUtils.apply_scene_background_for_current_site(scene)
 	_btn_instant.toggled.connect(func(pressed: bool): _apply_img_mode.call(pressed))

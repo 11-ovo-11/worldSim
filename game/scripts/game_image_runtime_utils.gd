@@ -15,7 +15,7 @@ static func enqueue_image_request(scene: Node, prompt: String, target_site: Stri
 	if p == "" or t == "":
 		return
 	if retry_count <= 0:
-		var dedupe_key = t + "|" + p.left(220)
+		var dedupe_key = t + "|" + p
 		var now_ms = Time.get_ticks_msec()
 		var recent_raw = scene.get_meta("img_recent_req_map", {})
 		var recent: Dictionary = {}
@@ -47,6 +47,12 @@ static func dispatch_image_request(scene: Node, req: Dictionary) -> int:
 	var target_site = str(req.get("target_site", "")).strip_edges()
 	if prompt == "" or target_site == "":
 		return ERR_INVALID_PARAMETER
+	var retry_count = int(req.get("retry_count", 0))
+	var start_log = "<图片生成请求：" + scene._describe_image_target(target_site)
+	if retry_count > 0:
+		start_log += "（重试" + str(retry_count) + "）"
+	start_log += ">"
+	scene.addLog(start_log)
 	scene._bg_debug("gen_img start, site=" + target_site + ", prompt=" + prompt.left(80))
 	var headers = ["Content-Type: application/json"]
 	var image_json_data = JSON.stringify(scene._build_image_request_payload(prompt, target_site))
@@ -122,7 +128,7 @@ static func trigger_instant_scene_image(scene: Node, narrative_text: String) -> 
 	var now_ms = Time.get_ticks_msec()
 	var last_key = str(scene.get_meta("instant_img_last_key", ""))
 	var last_ms = int(scene.get_meta("instant_img_last_ms", 0))
-	if dedupe_key == last_key and now_ms - last_ms < 30000:
+	if dedupe_key == last_key and now_ms - last_ms < 2500:
 		scene._bg_debug("instant scene image deduped, site=" + site_name)
 		return
 	scene.set_meta("instant_img_last_key", dedupe_key)
@@ -132,7 +138,28 @@ static func trigger_instant_scene_image(scene: Node, narrative_text: String) -> 
 		prompt += ", narrative moment: " + moment.left(180)
 	if prompt == "":
 		return
-	scene.gen_img(prompt, site_name)
+	if str(scene.inflight_img_site).strip_edges() != "":
+		scene.addLog("<即时生成已取消：上一张图片仍在生成中>")
+		scene._bg_debug("instant scene image canceled (inflight=" + str(scene.inflight_img_site) + ")")
+		return
+	var req = {
+		"prompt": prompt,
+		"target_site": site_name,
+		"retry_count": 0,
+		"instant_scene": true
+	}
+	var kept_queue: Array = []
+	var replaced_count = 0
+	for pending in scene.pending_img_queue:
+		if pending is Dictionary and str((pending as Dictionary).get("target_site", "")) == site_name:
+			replaced_count += 1
+			continue
+		kept_queue.append(pending)
+	scene.pending_img_queue = kept_queue
+	scene.pending_img_queue.append(req)
+	if replaced_count > 0:
+		scene.addLog("<即时生成更新：已替换" + str(replaced_count) + "个旧背景请求>")
+	scene._drain_pending_img()
 
 static func try_use_cached_image_for_target(scene: Node, target_site: String) -> bool:
 	if target_site == "":

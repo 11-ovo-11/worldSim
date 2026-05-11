@@ -14,20 +14,38 @@ var effect_value: int = 0
 @onready var quantity_label: Label = %QuantityLabel
 
 const ITEM_ICON_SIZE_NORMAL := 100.0
-const ITEM_ICON_SIZE_COMPACT := 100.0
+const ITEM_ICON_SIZE_COMPACT := 84.0
+const ITEM_ICON_SIZE_MIN := 40.0
+const ITEM_LABEL_EXTRA_HEIGHT := 20.0
+
+func _resolve_icon_size(preferred: float) -> float:
+	var icon_size = preferred
+	var parent_node = get_parent()
+	if parent_node is Control:
+		var parent_width = float((parent_node as Control).size.x)
+		if parent_width > 1.0:
+			icon_size = min(icon_size, parent_width - 8.0)
+	return clamp(icon_size, ITEM_ICON_SIZE_MIN, ITEM_ICON_SIZE_NORMAL)
 
 func _apply_compact_visual(is_compact: bool) -> void:
 	if image_button == null or quantity_label == null:
 		return
-	var icon_size = ITEM_ICON_SIZE_COMPACT if is_compact else ITEM_ICON_SIZE_NORMAL
+	var preferred = ITEM_ICON_SIZE_COMPACT if is_compact else ITEM_ICON_SIZE_NORMAL
+	var icon_size = _resolve_icon_size(preferred)
+	image_button.ignore_texture_size = true
 	image_button.custom_minimum_size = Vector2(icon_size, icon_size)
-	custom_minimum_size = Vector2(icon_size, icon_size + 20.0)
+	custom_minimum_size = Vector2(icon_size, icon_size + ITEM_LABEL_EXTRA_HEIGHT)
 	if is_compact:
 		quantity_label.add_theme_font_size_override("font_size", 10)
 	else:
 		quantity_label.add_theme_font_size_override("font_size", 12)
 
 func _ready() -> void:
+	if !resized.is_connected(_refresh_view):
+		resized.connect(_refresh_view)
+	var parent_node = get_parent()
+	if parent_node is Control and !(parent_node as Control).resized.is_connected(_refresh_view):
+		(parent_node as Control).resized.connect(_refresh_view)
 	_refresh_view()
 
 func setup(item_name_value: String, quantity: int, texture: Texture2D, description: String, effect_type_value: String = "none", effect_value_num: int = 0) -> void:
