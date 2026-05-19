@@ -140,6 +140,8 @@ func start_chat() -> void:
 		{"role": "system", "content": build_base_prompt()},
 		{"role": "user", "content": opener}
 	]
+	if scene != null:
+		scene.set_meta("chat_request_npc_name", npcName)
 	scene.ask_ai(prompts, GameManager.aiMode.chat)
 
 func sum_chat():
@@ -159,4 +161,6 @@ func chatWithNpc(prompt: String, shared_context: String = ""):
 		{"role": "system", "content": system_content},
 		{"role": "user", "content": prompt}
 	]
+	if scene != null:
+		scene.set_meta("chat_request_npc_name", npcName)
 	await scene.ask_ai(prompts, GameManager.aiMode.chat)

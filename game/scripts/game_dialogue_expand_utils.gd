@@ -104,31 +104,42 @@ static func _is_nonhuman_actor(scene: Node) -> bool:
 			return false
 	return true
 
-static func try_create_location_from_dialogue(scene: Node, reply: String) -> bool:
+static func _collect_location_candidate(scene: Node, reply: String) -> Dictionary:
 	if scene.last_dialogue_input == "":
-		return false
+		return {}
 	if _is_nonhuman_actor(scene):
-		return false
+		return {}
 	if !scene._is_location_query_dialogue(scene.last_dialogue_input):
-		return false
+		return {}
 	var fail_words = ["不知道", "不清楚", "没听说", "找不到", "不在这", "不确定", "没去过", "不认识路", "不晓得"]
 	var has_location_clue = reply_has_location_clue(scene, reply)
 	for w in fail_words:
 		if reply.find(w) != -1 and !has_location_clue:
-			return false
+			return {}
 	var target = extract_location_target_from_dialogue(scene, scene.last_dialogue_input)
 	if target == "":
-		return false
+		return {}
 	target = GameEntityUtils.extract_compact_entity(target, 16)
 	if scene._looks_like_person_reference(GameEntityUtils.cleanup_location_candidate(target)):
-		return false
+		return {}
 	if !GameEntityUtils.is_valid_location_name_basic(target):
-		return false
+		return {}
 	if scene._resolve_site_alias(target) == scene.currentSiteName:
-		return false
+		return {}
 	if !has_location_clue:
+		return {}
+	return {
+		"kind": "location",
+		"name": target,
+		"path": scene.currentSiteName + "-" + target,
+		"context": scene.last_dialogue_input + "\n" + scene.process_string(reply).left(80)
+	}
+
+static func try_create_location_from_dialogue(scene: Node, reply: String) -> bool:
+	var cand = _collect_location_candidate(scene, reply)
+	if cand.is_empty():
 		return false
-	scene.create_location(scene.currentSiteName + "-" + target)
+	scene.create_location(str(cand.get("path", "")))
 	return true
 
 static func extract_location_name_from_reply(scene: Node, reply_text: String) -> String:
@@ -187,24 +198,24 @@ static func extract_named_people_from_dialogue(scene: Node, reply_text: String) 
 				names.append(n)
 	return names
 
-static func maybe_create_related_npc_from_dialogue(scene: Node, reply: String) -> void:
+static func _collect_related_npc_candidates(scene: Node, reply: String) -> Array:
 	if scene.currentNpc == null:
-		return
+		return []
 	if _is_nonhuman_actor(scene):
-		return
+		return []
 	if scene.last_dialogue_input == "" or !scene._is_relation_npc_query(scene.last_dialogue_input):
-		return
+		return []
 	var fail_words = ["没有", "不知道", "不清楚", "记不清", "不认识", "没听说", "不方便说"]
 	for w in fail_words:
 		if reply.find(w) != -1:
-			return
+			return []
 	var names = extract_named_people_from_dialogue(scene, reply)
 	if names.is_empty():
 		var fallback_name = GameEntityUtils.fallback_relation_npc_name(scene.last_dialogue_input)
 		if !GameEntityUtils.is_bad_npc_name(fallback_name):
 			names.append(fallback_name)
 	if names.is_empty():
-		return
+		return []
 	var guessed_desc = GameNpcInferUtils.guess_related_npc_desc(GameTextUtils.normalize_single_line_input(scene.last_dialogue_input), str(scene.currentNpc.npcName))
 	var reply_hint = scene.process_string(reply).strip_edges()
 	if reply_hint.length() > 30:
@@ -214,7 +225,8 @@ static func maybe_create_related_npc_from_dialogue(scene: Node, reply: String) -
 	var loc = extract_location_name_from_reply(scene, reply)
 	if loc == "":
 		loc = scene.currentSiteName
-	var created = 0
+	var result: Array = []
+	var added = 0
 	for raw_name in names:
 		var npc_name = GameEntityUtils.sanitize_npc_name(str(raw_name))
 		npc_name = GameEntityUtils.extract_compact_entity(npc_name, 12)
@@ -224,41 +236,133 @@ static func maybe_create_related_npc_from_dialogue(scene: Node, reply: String) -
 			continue
 		if npc_name == "" or scene.npcs.has(npc_name) or scene.dead_npc_names.has(npc_name):
 			continue
+		var loc_to_create = ""
 		if loc != "" and !scene._looks_like_person_reference(GameEntityUtils.cleanup_location_candidate(loc)) and GameEntityUtils.is_valid_location_name_basic(loc) and !scene.sites.has(loc):
-			scene.create_location(scene.currentSiteName + "-" + loc)
-		scene.create_NPC(npc_name, loc, guessed_desc)
-		created += 1
-		if created >= 2:
+			loc_to_create = loc
+		result.append({
+			"kind": "npc",
+			"name": npc_name,
+			"location": loc,
+			"desc": guessed_desc,
+			"loc_to_create": loc_to_create,
+			"context": scene.last_dialogue_input + "\n" + reply.left(80)
+		})
+		added += 1
+		if added >= 2:
 			break
+	return result
 
-static func maybe_create_unknown_npc_from_dialogue(scene: Node, reply: String) -> void:
+static func maybe_create_related_npc_from_dialogue(scene: Node, reply: String) -> void:
+	for cand in _collect_related_npc_candidates(scene, reply):
+		_create_entity_from_candidate(scene, cand)
+
+static func _collect_unknown_npc_candidate(scene: Node, reply: String) -> Dictionary:
 	if scene.last_dialogue_input == "":
-		return
+		return {}
 	if _is_nonhuman_actor(scene):
-		return
+		return {}
 	var target_name = GameEntityUtils.extract_unknown_npc_target_from_query(scene.last_dialogue_input)
 	if target_name == "":
-		return
+		return {}
 	if scene.npcs.has(target_name) or scene.dead_npc_names.has(target_name):
-		return
+		return {}
 	var fail_words = ["不知道", "不清楚", "没听说", "没有这个人", "不认识", "没见过"]
 	for w in fail_words:
 		if reply.find(w) != -1:
-			return
+			return {}
 	var loc = extract_location_name_from_reply(scene, reply)
 	if loc == "":
 		loc = scene.currentSiteName
 	if loc == "":
-		return
-	if loc != "" and !scene._looks_like_person_reference(GameEntityUtils.cleanup_location_candidate(loc)) and GameEntityUtils.is_valid_location_name_basic(loc) and !scene.sites.has(loc):
-		scene.create_location(scene.currentSiteName + "-" + loc)
+		return {}
 	var source_hint = str(scene.last_dialogue_input).strip_edges()
 	if source_hint.length() > 36:
 		source_hint = source_hint.left(36)
 	var desc = "在" + loc + "活动，与你打听的人物相关"
 	if source_hint != "":
 		desc += "（线索：" + source_hint + "）"
-	scene.create_NPC(target_name, loc, desc)
+	var loc_to_create = ""
+	if !scene._looks_like_person_reference(GameEntityUtils.cleanup_location_candidate(loc)) and GameEntityUtils.is_valid_location_name_basic(loc) and !scene.sites.has(loc):
+		loc_to_create = loc
+	return {
+		"kind": "npc",
+		"name": target_name,
+		"location": loc,
+		"desc": desc,
+		"loc_to_create": loc_to_create,
+		"context": scene.last_dialogue_input + "\n" + reply.left(80)
+	}
+
+static func maybe_create_unknown_npc_from_dialogue(scene: Node, reply: String) -> void:
+	var cand = _collect_unknown_npc_candidate(scene, reply)
+	if !cand.is_empty():
+		_create_entity_from_candidate(scene, cand)
+
+static func _create_entity_from_candidate(scene: Node, cand: Dictionary) -> void:
+	var kind = str(cand.get("kind", ""))
+	var ctx = str(cand.get("context", "")).strip_edges()
+	if kind == "location":
+		var path = str(cand.get("path", ""))
+		if path != "":
+			scene.create_location(path)
+	elif kind == "npc":
+		var npc_name = str(cand.get("name", ""))
+		var loc = str(cand.get("location", ""))
+		var desc = str(cand.get("desc", ""))
+		var loc_to_create = str(cand.get("loc_to_create", ""))
+		if ctx != "":
+			scene._track_pending_entity("npc", npc_name, {"context": ctx})
+		if loc_to_create != "":
+			scene.create_location(scene.currentSiteName + "-" + loc_to_create)
+		scene.create_NPC(npc_name, loc, desc)
+
+static func validate_and_create_entity_candidates(scene: Node, candidates: Array, full_context: String) -> void:
+	if candidates.is_empty():
+		return
+	var confident: Array = []
+	var need_ai: Array = []
+	for cand in candidates:
+		var kind = str(cand.get("kind", ""))
+		var name = str(cand.get("name", ""))
+		var ctx = str(cand.get("context", full_context))
+		var inferred = GameEntityUtils.infer_entity_kind(name, ctx)
+		if inferred == kind:
+			confident.append(cand)
+		elif inferred == "unknown":
+			need_ai.append(cand)
+	for cand in confident:
+		_create_entity_from_candidate(scene, cand)
+	if need_ai.is_empty():
+		return
+	var lines: Array = []
+	lines.append("对话上下文：" + full_context.left(150))
+	lines.append("")
+	lines.append("请逐行判断（每行只回复是或否）：")
+	for i in range(need_ai.size()):
+		var cand = need_ai[i]
+		var type_label = "人物" if str(cand.get("kind", "")) == "npc" else "地点"
+		lines.append(str(i + 1) + ". 「" + str(cand.get("name", "")) + "」在上述对话中是否为" + type_label + "？")
+	var prompts = [
+		{"role": "system", "content": GamePrompts.ENTITY_VALIDATE_PROMPT},
+		{"role": "user", "content": "\n".join(lines)}
+	]
+	scene.last_entity_validation_response = ""
+	await scene.ask_ai(prompts, scene.aiMode.validate_entity)
+	var val_text = str(scene.last_entity_validation_response).strip_edges()
+	if val_text == "":
+		for cand in need_ai:
+			_create_entity_from_candidate(scene, cand)
+		return
+	var answers = val_text.replace("\r\n", "\n").replace("\r", "\n").split("\n", false)
+	for i in range(need_ai.size()):
+		if i >= answers.size():
+			_create_entity_from_candidate(scene, need_ai[i])
+			continue
+		var ans = str(answers[i]).strip_edges()
+		if ans.find("是") != -1 and ans.find("否") == -1:
+			_create_entity_from_candidate(scene, need_ai[i])
+		else:
+			print("[实体验证] 跳过「", str(need_ai[i].get("name", "")), "」（AI判定非", str(need_ai[i].get("kind", "")), "）")
 
 static func npc_reply(scene: Node, reply: String) -> void:
 	if scene.currentNpc == null or !is_instance_valid(scene.currentNpc):
@@ -274,10 +378,18 @@ static func npc_reply(scene: Node, reply: String) -> void:
 	scene.currentNpc.currentChat += active_npc_name + ":" + reply + "\n"
 	scene._remember_important_event("<对话>" + active_npc_name + "：" + scene.process_string(reply), scene.currentSiteName, active_npc_name)
 	var direct_location_only = apply_direct_npc_tool_tags(scene, reply)
+	var entity_candidates: Array = []
 	if !direct_location_only:
-		try_create_location_from_dialogue(scene, reply)
-	maybe_create_related_npc_from_dialogue(scene, reply)
-	maybe_create_unknown_npc_from_dialogue(scene, reply)
+		var location_cand = _collect_location_candidate(scene, reply)
+		if !location_cand.is_empty():
+			entity_candidates.append(location_cand)
+	for npc_cand in _collect_related_npc_candidates(scene, reply):
+		entity_candidates.append(npc_cand)
+	var unknown_cand = _collect_unknown_npc_candidate(scene, reply)
+	if !unknown_cand.is_empty():
+		entity_candidates.append(unknown_cand)
+	var full_context = (str(scene.last_dialogue_input) + "\n" + scene.process_string(reply)).strip_edges()
+	await validate_and_create_entity_candidates(scene, entity_candidates, full_context)
 	var tools_texts = scene.get_content_in_angle_brackets(reply)
 	print("提取出的工具信息：", tools_texts)
 	if tools_texts != "" and !direct_location_only:
@@ -288,7 +400,7 @@ static func npc_reply(scene: Node, reply: String) -> void:
 		await scene.ask_ai(prompts, scene.aiMode.tools)
 	elif tools_texts == "" and scene._needs_tool_inference_from_context(scene.last_dialogue_input, reply):
 		var infer_prompts = [
-			{"role": "system", "content": scene.agent_prompt + "\n若输入没有<>标签，也要从语义中尽力提取买卖、赠送、交付、协助执行等可执行方法；如果确实没有再回复没有方法被调用。"},
+			{"role": "system", "content": scene.agent_prompt + "\n若输入没有<>标签，也要从语义中尽力提取买卖、赠送、交付、协助执行等可执行方法；如果玩家明确提出购买/出售而NPC回复未明确拒绝，应优先生成initiate_transaction（允许合理猜测数量/价格）；如果确实没有再回复没有方法被调用。"},
 			{"role": "user", "content": "玩家输入：" + scene.last_dialogue_input + "\nNPC回复：" + reply}
 		]
 		await scene.ask_ai(infer_prompts, scene.aiMode.tools)

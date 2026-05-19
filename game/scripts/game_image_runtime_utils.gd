@@ -45,10 +45,11 @@ static func enqueue_image_request(scene: Node, prompt: String, target_site: Stri
 static func dispatch_image_request(scene: Node, req: Dictionary) -> int:
 	var prompt = str(req.get("prompt", "")).strip_edges()
 	var target_site = str(req.get("target_site", "")).strip_edges()
+	var is_instant_scene = bool(req.get("instant_scene", false))
 	if prompt == "" or target_site == "":
 		return ERR_INVALID_PARAMETER
 	var retry_count = int(req.get("retry_count", 0))
-	var start_log = "<图片生成请求：" + scene._describe_image_target(target_site)
+	var start_log = "<" + ("即时场景图请求：" if is_instant_scene else "图片生成请求：") + scene._describe_image_target(target_site)
 	if retry_count > 0:
 		start_log += "（重试" + str(retry_count) + "）"
 	start_log += ">"
@@ -118,9 +119,11 @@ static func apply_scene_background_for_current_site(scene: Node) -> void:
 static func trigger_instant_scene_image(scene: Node, narrative_text: String) -> void:
 	var site_name = str(scene.currentSiteName).strip_edges()
 	if site_name == "":
+		scene.addLog("<即时生成取消：当前地点为空>")
 		return
 	var site_data = scene._get_site_data(site_name)
 	if site_data.is_empty():
+		scene.addLog("<即时生成取消：地点数据为空（" + site_name + "）>")
 		return
 	var moment = str(narrative_text).strip_edges()
 	var dedupe_text = moment.left(220)
@@ -130,6 +133,7 @@ static func trigger_instant_scene_image(scene: Node, narrative_text: String) -> 
 	var last_ms = int(scene.get_meta("instant_img_last_ms", 0))
 	if dedupe_key == last_key and now_ms - last_ms < 2500:
 		scene._bg_debug("instant scene image deduped, site=" + site_name)
+		scene.addLog("<即时生成去重：同一内容短时间重复触发>")
 		return
 	scene.set_meta("instant_img_last_key", dedupe_key)
 	scene.set_meta("instant_img_last_ms", now_ms)
@@ -137,6 +141,7 @@ static func trigger_instant_scene_image(scene: Node, narrative_text: String) -> 
 	if moment != "":
 		prompt += ", narrative moment: " + moment.left(180)
 	if prompt == "":
+		scene.addLog("<即时生成取消：生成提示词为空>")
 		return
 	if str(scene.inflight_img_site).strip_edges() != "":
 		scene.addLog("<即时生成已取消：上一张图片仍在生成中>")
@@ -159,6 +164,8 @@ static func trigger_instant_scene_image(scene: Node, narrative_text: String) -> 
 	scene.pending_img_queue.append(req)
 	if replaced_count > 0:
 		scene.addLog("<即时生成更新：已替换" + str(replaced_count) + "个旧背景请求>")
+	scene.addLog("<即时生成排队：" + site_name + "，文本片段=" + moment.left(28) + "...>")
+	scene._bg_debug("instant scene image queued, site=" + site_name + ", prompt_len=" + str(prompt.length()) + ", queue_size=" + str(scene.pending_img_queue.size()))
 	scene._drain_pending_img()
 
 static func try_use_cached_image_for_target(scene: Node, target_site: String) -> bool:

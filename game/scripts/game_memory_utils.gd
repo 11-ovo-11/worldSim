@@ -68,29 +68,49 @@ static func append_event_to_npc_memory(npcs: Dictionary, npc_name: String, recor
 		if old is Dictionary and str(old.get("npc_view", "")) == npc_view:
 			return
 	npc_bucket.append({
-		"text": plain.left(90),
-		"npc_view": npc_view.left(90),
+		"text": plain.left(220),
+		"npc_view": npc_view.left(180),
 		"t": int(record.get("t", Time.get_unix_time_from_system()))
 	})
 	if npc_bucket.size() > 40:
 		npc_bucket = npc_bucket.slice(npc_bucket.size() - 40, npc_bucket.size())
 	npcs[npc_name]["important_events"] = npc_bucket
 
+static func refine_important_event_text(raw_text: String) -> String:
+	var t = str(raw_text).strip_edges()
+	if t == "":
+		return ""
+	t = t.replace("\r\n", "\n").replace("\r", "\n")
+	var compact_lines: Array = []
+	for line in t.split("\n", false):
+		var one = str(line).strip_edges()
+		if one == "":
+			continue
+		compact_lines.append(one)
+	t = "；".join(compact_lines)
+	t = t.replace("<对话>", "").replace("<行动结果>", "").replace("<NPC情报>", "").replace("<", "").replace(">", "")
+	if t.length() > 260:
+		t = t.left(260)
+	return t.strip_edges()
+
 # plain_text: already processed via process_string before calling this
 static func remember_important_event(important_event_memories: Array, npcs: Dictionary, plain_text: String, site_name: String, focus_npc: String) -> void:
-	if plain_text == "":
+	var refined_text = refine_important_event_text(plain_text)
+	if refined_text == "":
 		return
 	var npc_names: Array = []
 	for k in npcs.keys():
 		var npc_name_text = str(k)
-		if npc_name_text != "" and plain_text.find(npc_name_text) != -1 and !npc_names.has(npc_name_text):
+		if npc_name_text != "" and refined_text.find(npc_name_text) != -1 and !npc_names.has(npc_name_text):
 			npc_names.append(npc_name_text)
 	var focus_clean = focus_npc.strip_edges()
 	if focus_clean != "" and !npc_names.has(focus_clean):
 		npc_names.append(focus_clean)
-	var sig = GameNpcInferUtils.extract_interaction_signals(plain_text)
+	var sig = GameNpcInferUtils.extract_interaction_signals(refined_text)
+	if !GameEventUtils.should_store_npc_personal_event(refined_text, sig):
+		return
 	var record = {
-		"text": plain_text,
+		"text": refined_text,
 		"site": site_name,
 		"npcs": npc_names,
 		"trade": int(sig.get("trade", 0)),

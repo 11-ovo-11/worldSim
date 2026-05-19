@@ -86,8 +86,22 @@ func _effect_display_text() -> String:
 			return "使用效果：健康+" + str(effect_value)
 		"both_restore":
 			return "使用效果：体力与健康恢复"
+		"money_gain":
+			return "使用效果：资产+" + str(effect_value)
+		"money_loss":
+			return "使用效果：资产-" + str(effect_value)
+		"reputation_gain":
+			return "使用效果：声望+" + str(effect_value)
+		"reputation_loss":
+			return "使用效果：声望-" + str(effect_value)
+		"time_advance":
+			return "使用效果：时间推进" + str(effect_value) + "分钟"
+		"npc_affinity":
+			return "使用效果：对话对象关系提升"
+		"rumor_trigger":
+			return "使用效果：触发新线索"
 		_:
-			return "使用效果：无"
+			return "使用效果：状态恢复"
 
 func _refresh_view() -> void:
 	if quantity_label == null or image_button == null:
@@ -109,34 +123,51 @@ func _on_item_image_button_pressed() -> void:
 	var popup := AcceptDialog.new()
 	popup.title = item_name
 	popup.dialog_autowrap = true
-	popup.size = Vector2i(520, 620)
+	popup.size = Vector2i(560, 420)
 	popup.ok_button_text = "关闭"
+	popup.min_size = Vector2i(520, 380)
+
+	var frame := MarginContainer.new()
+	frame.add_theme_constant_override("margin_left", 18)
+	frame.add_theme_constant_override("margin_right", 18)
+	frame.add_theme_constant_override("margin_top", 14)
+	frame.add_theme_constant_override("margin_bottom", 14)
+	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	var center := CenterContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 	var content := VBoxContainer.new()
-	content.custom_minimum_size = Vector2(480, 0)
-	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 12)
+	content.custom_minimum_size = Vector2(460, 0)
+	content.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	content.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	content.alignment = BoxContainer.ALIGNMENT_CENTER
+	content.add_theme_constant_override("separation", 10)
 
 	if item_texture != null:
 		var img := TextureRect.new()
 		img.texture = item_texture
-		img.custom_minimum_size = Vector2(240, 240)
+		img.custom_minimum_size = Vector2(180, 180)
 		img.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		img.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		img.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		img.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		content.add_child(img)
 
 	var desc := RichTextLabel.new()
 	desc.fit_content = true
-	desc.scroll_active = true
-	desc.custom_minimum_size = Vector2(0, 240)
+	desc.scroll_active = false
+	desc.custom_minimum_size = Vector2(0, 130)
+	desc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	desc.bbcode_enabled = true
 	desc.text = item_description + "\n\n" + _effect_display_text()
 	content.add_child(desc)
 
 	var use_button := Button.new()
 	use_button.text = "使用"
+	use_button.custom_minimum_size = Vector2(0, 36)
 	use_button.disabled = item_num <= 0
 	use_button.pressed.connect(func():
 		var scene = get_tree().current_scene
@@ -147,6 +178,8 @@ func _on_item_image_button_pressed() -> void:
 	)
 	content.add_child(use_button)
 
-	popup.add_child(content)
+	center.add_child(content)
+	frame.add_child(center)
+	popup.add_child(frame)
 	get_tree().current_scene.add_child(popup)
 	popup.popup_centered()

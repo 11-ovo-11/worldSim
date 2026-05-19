@@ -414,9 +414,18 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 				var chat_text = scene._enforce_output_min_length(str(data.get("text", "")), scene.aiMode.chat)
 				if scene.runtime_operation_lock or scene.currentState != scene.worldState.chat or scene.currentNpc == null:
 					return
+				var req_npc = str(scene.get_meta("chat_request_npc_name", "")).strip_edges()
+				var active_npc = str(scene.currentNpc.npcName).strip_edges()
+				if req_npc != "" and active_npc != "" and req_npc != active_npc:
+					scene.addLog("<已忽略过期对话响应：来源=" + req_npc + "，当前=" + active_npc + ">")
+					return
 				await scene.npc_reply(chat_text)
-				if scene.instant_gen_mode:
+				if scene._is_instant_gen_active():
+					scene.addLog("<即时生成触发：来源=对话输出>")
+					scene._bg_debug("instant trigger from chat, site=" + str(scene.currentSiteName) + ", text_len=" + str(chat_text.length()))
 					GameImageRuntimeUtils.trigger_instant_scene_image(scene, chat_text)
+				else:
+					scene._bg_debug("instant skipped from chat (mode disabled)")
 			scene.aiMode.action:
 				var action_reply = scene._enforce_output_min_length(str(data.get("text", "")), scene.aiMode.action)
 				action_reply = scene._enforce_action_narration_richness(action_reply)
@@ -424,8 +433,12 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 					scene._set_event_flow_lock(true)
 					scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【旁白】")
 					scene.changeTextTo(scene.response_label, scene.process_string(action_reply))
-					if scene.instant_gen_mode:
+					if scene._is_instant_gen_active():
+						scene.addLog("<即时生成触发：来源=行动输出>")
+						scene._bg_debug("instant trigger from action, site=" + str(scene.currentSiteName) + ", text_len=" + str(action_reply.length()))
 						GameImageRuntimeUtils.trigger_instant_scene_image(scene, action_reply)
+					else:
+						scene._bg_debug("instant skipped from action (mode disabled)")
 					var tool_tags = scene.get_content_in_angle_brackets(action_reply)
 					var direct_tag_result = scene._apply_direct_action_tool_tags(action_reply)
 					var handled_direct = bool(direct_tag_result.get("handled_any", false))
@@ -481,5 +494,9 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 							await scene.handle_npc_instruction(parsed)
 						elif parsed is Dictionary and parsed.has("function"):
 							await scene.handle_npc_instruction([parsed])
+			scene.aiMode.validate_entity:
+				scene.last_entity_validation_response = str(data.get("text", "")).strip_edges()
+			scene.aiMode.refine_event:
+				scene.last_event_refine_response = str(data.get("text", "")).strip_edges()
 	else:
 		scene.changeTextTo(scene.response_label, "响应格式错误")

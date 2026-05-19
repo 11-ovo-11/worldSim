@@ -71,11 +71,32 @@ static func consume_items(scene: Node, item_name: String, quantity: int) -> void
 static func create_location(scene: Node, path: String) -> void:
 	var raw_sites = path.split("-", false)
 	var new_sites: Array = []
+	var site_modifiers: Dictionary = {}
 	for site_name in raw_sites:
-		var cleaned = scene._resolve_site_alias(str(site_name).strip_edges())
-		cleaned = scene._extract_compact_entity_candidate(cleaned, 16)
-		if cleaned != "" and scene._is_valid_generated_location_name(cleaned) and !new_sites.has(cleaned):
-			new_sites.append(cleaned)
+		var raw_piece = str(site_name).strip_edges()
+		if raw_piece == "":
+			continue
+		var cleaned = scene._resolve_site_alias(raw_piece)
+		var split = scene._split_entity_with_modifier(cleaned, 16)
+		var core_name = scene._extract_compact_entity_candidate(str(split.get("name", "")), 16)
+		var modifier = str(split.get("modifier", "")).strip_edges()
+		if core_name == "":
+			continue
+		var inferred_kind = scene._infer_entity_kind(core_name, path + " " + modifier)
+		if inferred_kind == "npc" and scene._is_valid_generated_npc_name(core_name):
+			var npc_desc = "在" + str(scene.currentSiteName) + "活动"
+			if modifier != "":
+				npc_desc += "（" + modifier + "）"
+			scene._track_pending_entity("npc", core_name, {"location": str(scene.currentSiteName), "desc": npc_desc, "modifier": modifier, "source": "path_reclass"})
+			scene.create_NPC(core_name, str(scene.currentSiteName), npc_desc)
+			continue
+		if !scene._is_valid_generated_location_name(core_name):
+			continue
+		if !new_sites.has(core_name):
+			new_sites.append(core_name)
+		if modifier != "":
+			site_modifiers[core_name] = modifier
+		scene._track_pending_entity("location", core_name, {"from": str(scene.currentSiteName), "modifier": modifier, "source": "path"})
 	if new_sites.is_empty():
 		return
 	if !scene.sites.has(scene.currentSiteName):
@@ -91,12 +112,23 @@ static func create_location(scene: Node, path: String) -> void:
 		var from_site = str(chain[i])
 		var to_site = str(chain[i + 1])
 		if !scene.sites.has(from_site):
-			scene.sites[from_site] = {"能前往的地点": [], "npc": {}}
+			scene.sites[from_site] = {"能前往的地点": [], "npc": {}, "地点名称": from_site, "地点描述": "", "英文描述": ""}
 		elif !scene.sites[from_site].has("能前往的地点"):
 			scene.sites[from_site]["能前往的地点"] = []
 		if !scene.sites[from_site]["能前往的地点"].has(to_site):
 			scene.sites[from_site]["能前往的地点"].append(to_site)
 			scene._save_site_json(from_site, scene.sites[from_site])
+		if !scene.sites.has(to_site) or !(scene.sites[to_site] is Dictionary):
+			scene.sites[to_site] = {"能前往的地点": [], "npc": {}, "地点名称": to_site, "地点描述": "", "英文描述": ""}
+		if site_modifiers.has(to_site):
+			var mod = str(site_modifiers[to_site]).strip_edges()
+			if mod != "":
+				var old_desc = str(scene.sites[to_site].get("地点描述", "")).strip_edges()
+				if old_desc == "":
+					scene.sites[to_site]["地点描述"] = "这里" + mod
+				elif old_desc.find(mod) == -1:
+					scene.sites[to_site]["地点描述"] = old_desc + "（" + mod + "）"
+			scene._save_site_json(to_site, scene.sites[to_site])
 	if chain.size() == 2:
 		scene.addLog("<地图更新：发现了" + str(chain[1]) + ">")
 	else:
@@ -113,39 +145,132 @@ static func create_location(scene: Node, path: String) -> void:
 		scene.get_node("%site_buttons").add_child(new_site_button)
 
 static func create_NPC(scene: Node, npc_name: String, location: String, npc_describe: String) -> void:
-	npc_name = scene._sanitize_generated_npc_name(npc_name)
+	var npc_split = scene._split_entity_with_modifier(npc_name, 12)
+	var npc_modifier = str(npc_split.get("modifier", "")).strip_edges()
+	npc_name = scene._sanitize_generated_npc_name(str(npc_split.get("name", "")))
 	npc_name = scene._extract_compact_entity_candidate(npc_name, 12)
+	var name_kind = scene._infer_entity_kind(npc_name, npc_describe + " " + location + " " + npc_modifier)
+	if name_kind == "location" and scene._is_valid_generated_location_name(npc_name):
+		scene._track_pending_entity("location", npc_name, {"from": str(scene.currentSiteName), "modifier": npc_modifier, "source": "npc_reclass"})
+		scene.create_location(str(scene.currentSiteName) + "-" + npc_name)
+		return
 	if !scene._is_valid_generated_npc_name(npc_name) and scene._is_relation_npc_query(scene.last_dialogue_input):
 		npc_name = scene._fallback_relation_npc_name(scene.last_dialogue_input)
 	npc_name = scene._extract_compact_entity_candidate(npc_name, 12)
 	if !scene._is_valid_generated_npc_name(npc_name):
+		if scene._is_valid_generated_location_name(npc_name):
+			scene._track_pending_entity("location", npc_name, {"from": str(scene.currentSiteName), "modifier": npc_modifier, "source": "npc_invalid_reclass"})
+			scene.create_location(str(scene.currentSiteName) + "-" + npc_name)
 		return
 	if npc_name == "" or scene.dead_npc_names.has(npc_name):
 		return
 	var location_text = "世界某处"
+	var location_modifier = ""
 	if location != "":
-		location = scene._extract_compact_entity_candidate(location, 16)
+		var loc_split = scene._split_entity_with_modifier(location, 16)
+		location_modifier = str(loc_split.get("modifier", "")).strip_edges()
+		location = scene._extract_compact_entity_candidate(str(loc_split.get("name", "")), 16)
+		if scene._infer_entity_kind(location, npc_describe + " " + location_modifier) == "npc":
+			location = scene.currentSiteName
 		if !scene._is_valid_generated_location_name(location):
 			location = scene.currentSiteName
 		location_text = location
+	if location == "":
+		location = scene.currentSiteName
+		location_text = location
+	var pending_row: Dictionary = {}
+	if scene.pending_entity_records.has("npcs") and scene.pending_entity_records["npcs"] is Dictionary:
+		var npc_pending: Dictionary = scene.pending_entity_records["npcs"]
+		if npc_pending.has(npc_name) and npc_pending[npc_name] is Dictionary:
+			pending_row = npc_pending[npc_name]
+	if location == "" and !pending_row.is_empty():
+		var pending_loc = str(pending_row.get("location", "")).strip_edges()
+		if pending_loc != "":
+			location = pending_loc
+			location_text = pending_loc
+	var final_desc = str(npc_describe).strip_edges()
+	if final_desc == "" and !pending_row.is_empty():
+		final_desc = str(pending_row.get("desc", "")).strip_edges()
+	if final_desc == "":
+		final_desc = "正在此地活动"
+	var world_seed_hint = str(scene.world_seed_input).strip_edges()
+	if world_seed_hint != "":
+		var era_hint = world_seed_hint
+		if era_hint.length() > 42:
+			era_hint = era_hint.left(42)
+		if final_desc.find(era_hint) == -1:
+			final_desc += "（时代背景：" + era_hint + "）"
+	if location != "" and scene.sites.has(location) and scene.sites[location] is Dictionary:
+		var site_desc_hint = str(scene.sites[location].get("地点描述", "")).strip_edges()
+		if site_desc_hint != "":
+			if site_desc_hint.length() > 36:
+				site_desc_hint = site_desc_hint.left(36)
+			if final_desc.find(site_desc_hint) == -1:
+				final_desc += "（活动地点特征：" + site_desc_hint + "）"
+	if scene.has_method("_get_recent_related_event_memories"):
+		var related_events = scene._get_recent_related_event_memories(location, npc_name, 2, {})
+		if related_events is Array and !related_events.is_empty():
+			var event_text = ""
+			for row in related_events:
+				if row is Dictionary:
+					event_text = str(row.get("text", "")).strip_edges()
+					if event_text != "":
+						break
+			if event_text != "":
+				if event_text.length() > 44:
+					event_text = event_text.left(44)
+				if final_desc.find(event_text) == -1:
+					final_desc += "（关联事件：" + event_text + "）"
+	var pending_context = str(pending_row.get("context", "")).strip_edges()
+	if pending_context != "":
+		var ctx_snippet = pending_context.replace("\n", "；").strip_edges()
+		if ctx_snippet.length() > 48:
+			ctx_snippet = ctx_snippet.left(48)
+		if ctx_snippet != "" and final_desc.find(ctx_snippet) == -1:
+			final_desc += "（线索：" + ctx_snippet + "）"
+	if npc_modifier != "" and final_desc.find(npc_modifier) == -1:
+		final_desc += "（" + npc_modifier + "）"
+	if location_modifier != "" and final_desc.find(location_modifier) == -1:
+		final_desc += "（" + location_modifier + "）"
+	scene._track_pending_entity("npc", npc_name, {"location": location, "desc": final_desc, "modifier": npc_modifier, "source": "create_npc"})
 	if !scene.npcs.has(npc_name) or !(scene.npcs[npc_name] is Dictionary):
-		scene.npcs[npc_name] = {"npc_describe": npc_describe, "npc_log": [], "特征": "", "important_events": []}
+		scene.npcs[npc_name] = {"npc_describe": final_desc, "npc_log": [], "特征": "", "important_events": []}
 	else:
 		if !scene.npcs[npc_name].has("npc_describe") or str(scene.npcs[npc_name].get("npc_describe", "")).strip_edges() == "":
-			scene.npcs[npc_name]["npc_describe"] = npc_describe
+			scene.npcs[npc_name]["npc_describe"] = final_desc
 		if !scene.npcs[npc_name].has("npc_log") or !(scene.npcs[npc_name]["npc_log"] is Array):
 			scene.npcs[npc_name]["npc_log"] = []
 		if !scene.npcs[npc_name].has("important_events") or !(scene.npcs[npc_name]["important_events"] is Array):
 			scene.npcs[npc_name]["important_events"] = []
+		if str(scene.npcs[npc_name].get("npc_describe", "")).find(final_desc) == -1:
+			scene.npcs[npc_name]["npc_describe"] = final_desc
 	if location != "":
 		if !scene.sites.has(location) or !(scene.sites[location] is Dictionary):
 			scene.sites[location] = {"能前往的地点": [], "npc": {}, "地点名称": location, "地点描述": "", "英文描述": ""}
 		if !scene.sites[location].has("npc") or !(scene.sites[location]["npc"] is Dictionary):
 			scene.sites[location]["npc"] = {}
-		scene.sites[location]["npc"][npc_name] = npc_describe
-		if location == scene.currentSiteName:
-			scene.site_update()
-	var heard_text = "你听说" + location_text + "有位" + str(npc_describe) + "：" + str(npc_name)
+		scene.sites[location]["npc"][npc_name] = final_desc
+		if location_modifier != "":
+			var site_desc = str(scene.sites[location].get("地点描述", "")).strip_edges()
+			if site_desc == "":
+				scene.sites[location]["地点描述"] = "这里" + location_modifier
+			elif site_desc.find(location_modifier) == -1:
+				scene.sites[location]["地点描述"] = site_desc + "（" + location_modifier + "）"
+		scene._save_site_json(location, scene.sites[location])
+		if location == scene.currentSiteName and !bool(scene.get_meta("hydrating_pending_entities", false)):
+			if scene.currentState == scene.worldState.chat:
+				var already_has_btn = false
+				for btn in scene.get_node("%npc_buttons").get_children():
+					if btn.has_method("get") and str(btn.get("npcName")).strip_edges() == npc_name:
+						already_has_btn = true
+						break
+				if !already_has_btn and !scene.dead_npc_names.has(npc_name):
+					var new_btn = load("res://fabs/npc_button.tscn").instantiate()
+					new_btn.set("npcName", npc_name)
+					scene.get_node("%npc_buttons").add_child(new_btn)
+			else:
+				scene.site_update()
+	var heard_text = "你听说" + location_text + "有位" + str(final_desc) + "：" + str(npc_name)
 	scene.addLog("<" + heard_text + ">")
 	var source_npc = ""
 	if scene.currentNpc != null:
@@ -155,7 +280,7 @@ static func create_NPC(scene: Node, npc_name: String, location: String, npc_desc
 		memory_text += "（消息来源：" + source_npc + "）"
 	scene._remember_important_event(memory_text, location, source_npc)
 	var target_log: Array = scene.npcs[npc_name]["npc_log"]
-	var target_note = "系统记录：有人在" + location_text + "提及了你的信息【" + str(npc_describe) + "】。"
+	var target_note = "系统记录：有人在" + location_text + "提及了你的信息【" + str(final_desc) + "】。"
 	if !target_log.has(target_note):
 		target_log.append(target_note)
 	scene.npcs[npc_name]["npc_log"] = target_log
@@ -366,6 +491,35 @@ static func add_item(scene: Node, itemToAdd, itemNum) -> void:
 	)
 	scene.ensure_item_profile_async(itemToAdd)
 
+static func _resolve_item_effect_fallback(item_name: String, profile: Dictionary) -> Dictionary:
+	var effect_type = str(profile.get("effect_type", "")).strip_edges().to_lower()
+	var effect_value = int(profile.get("effect_value", 0))
+	if effect_type == "none":
+		effect_type = ""
+	if effect_type != "" and (effect_value > 0 or effect_type == "rumor_trigger"):
+		return {"effect_type": effect_type, "effect_value": effect_value}
+	var n = str(item_name).strip_edges()
+	var val = max(6, int(round(max(1, int(profile.get("value", 50))) / 12.0)))
+	if n.find("药") != -1 or n.find("绷带") != -1:
+		return {"effect_type": "hp_restore", "effect_value": clamp(val, 8, 28)}
+	if n.find("奶") != -1 or n.find("茶") != -1 or n.find("咖啡") != -1 or n.find("水") != -1 or n.find("饮") != -1:
+		return {"effect_type": "energy_restore", "effect_value": clamp(val, 8, 24)}
+	if n.find("券") != -1 or n.find("卡") != -1 or n.find("金币") != -1:
+		return {"effect_type": "money_gain", "effect_value": clamp(val * 2, 10, 120)}
+	if n.find("情报") != -1 or n.find("信") != -1 or n.find("地图") != -1:
+		return {"effect_type": "rumor_trigger", "effect_value": 1}
+	return {"effect_type": "both_restore", "effect_value": clamp(val, 6, 20)}
+
+static func request_item_use_ai_feedback(scene: Node, scene_context: String, fallback: String) -> void:
+	var line = await scene._generate_validation_dialogue(scene_context, fallback)
+	if str(line).strip_edges() == "":
+		line = fallback
+	if str(line).strip_edges() == "":
+		return
+	scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【旁白】")
+	scene.changeTextTo(scene.response_label, str(line))
+	scene.addLog("<道具反馈：" + str(line) + ">")
+
 static func use_item(scene: Node, item_name: String) -> Dictionary:
 	if !scene.itemProfiles.has(item_name):
 		return {"ok": false, "message": "你不知道这个物品的用途。"}
@@ -373,22 +527,80 @@ static func use_item(scene: Node, item_name: String) -> Dictionary:
 	if !consume_result.get("success", false):
 		return {"ok": false, "message": "背包里没有可用的" + str(item_name) + "。"}
 	var profile: Dictionary = scene.itemProfiles.get(item_name, {})
-	var effect_type = str(profile.get("effect_type", "none"))
-	var effect_value = int(profile.get("effect_value", 0))
+	var resolved_effect = _resolve_item_effect_fallback(item_name, profile)
+	var effect_type = str(resolved_effect.get("effect_type", "both_restore"))
+	var effect_value = int(resolved_effect.get("effect_value", 8))
+	scene.itemProfiles[item_name]["effect_type"] = effect_type
+	scene.itemProfiles[item_name]["effect_value"] = effect_value
+	var disk_profile = scene._load_item_profile_json(item_name)
+	if !disk_profile.is_empty():
+		disk_profile["effect_type"] = effect_type
+		disk_profile["effect_value"] = effect_value
+		scene._save_item_profile_json(item_name, disk_profile)
 	var msg = "你使用了" + str(item_name) + "。"
+	var effect_summary = ""
+	var target_name = str(scene.playerName).strip_edges()
+	if target_name == "":
+		target_name = "你自己"
+	if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
+		target_name = str(scene.currentNpc.npcName).strip_edges()
+		if target_name == "":
+			target_name = "对话对象"
 	match effect_type:
 		"energy_restore":
 			scene.energy = clamp(scene.energy + effect_value, 0.0, 100.0)
-			msg = "你使用了" + str(item_name) + "，体力+" + str(effect_value)
+			effect_summary = "体力+" + str(effect_value)
+			msg = "你对" + target_name + "使用了" + str(item_name) + "，" + effect_summary
 		"hp_restore":
 			scene.hp = clamp(scene.hp + effect_value, 0.0, 100.0)
-			msg = "你使用了" + str(item_name) + "，健康+" + str(effect_value)
+			effect_summary = "健康+" + str(effect_value)
+			msg = "你对" + target_name + "使用了" + str(item_name) + "，" + effect_summary
 		"both_restore":
 			scene.energy = clamp(scene.energy + effect_value, 0.0, 100.0)
 			scene.hp = clamp(scene.hp + int(round(effect_value * 0.6)), 0.0, 100.0)
-			msg = "你使用了" + str(item_name) + "，体力与健康都恢复了一些"
+			effect_summary = "体力与健康恢复"
+			msg = "你对" + target_name + "使用了" + str(item_name) + "，体力与健康都恢复了一些"
+		"money_gain":
+			scene.money += max(1, effect_value)
+			effect_summary = "资产+" + str(max(1, effect_value))
+			msg = "你使用了" + str(item_name) + "，" + effect_summary
+		"money_loss":
+			var cost = min(scene.money, max(1, effect_value))
+			scene.money -= cost
+			effect_summary = "资产-" + str(cost)
+			msg = "你使用了" + str(item_name) + "，" + effect_summary
+		"reputation_gain":
+			scene.reputation = clamp(scene.reputation + max(1, effect_value), 0.0, 100.0)
+			effect_summary = "声望+" + str(max(1, effect_value))
+			msg = "你使用了" + str(item_name) + "，" + effect_summary
+		"reputation_loss":
+			scene.reputation = clamp(scene.reputation - max(1, effect_value), 0.0, 100.0)
+			effect_summary = "声望-" + str(max(1, effect_value))
+			msg = "你使用了" + str(item_name) + "，" + effect_summary
+		"time_advance":
+			var mins = max(5, effect_value)
+			scene.advance_time_minutes(float(mins), true)
+			effect_summary = "时间推进" + str(mins) + "分钟"
+			msg = "你使用了" + str(item_name) + "，" + effect_summary
+		"npc_affinity":
+			effect_summary = "关系升温"
+			if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
+				scene._remember_important_event("<道具影响>你对" + target_name + "使用了「" + str(item_name) + "」，对方态度有所软化。", scene.currentSiteName, target_name)
+				msg = "你对" + target_name + "使用了" + str(item_name) + "，对方态度明显缓和"
+			else:
+				msg = "你使用了" + str(item_name) + "，心态更加稳定"
+		"rumor_trigger":
+			var rumor_title = "关于" + str(item_name) + "的新线索"
+			var rumor_content = "有人提到「" + str(item_name) + "」与" + str(scene.currentSiteName) + "有关。"
+			scene.rumors[rumor_title] = rumor_content
+			effect_summary = "触发新线索"
+			msg = "你使用了" + str(item_name) + "，获得了一条新的传闻"
 		_:
-			msg = "你使用了" + str(item_name) + "，似乎没有明显效果。"
+			scene.energy = clamp(scene.energy + max(6, effect_value), 0.0, 100.0)
+			effect_summary = "体力恢复"
+			msg = "你使用了" + str(item_name) + "，状态有所恢复"
 	scene.player_update()
 	scene.addLog("<" + msg + ">")
+	var feedback_context = "玩家在地点「" + str(scene.currentSiteName) + "」使用道具「" + str(item_name) + "」，作用对象是「" + target_name + "」，效果为：" + effect_summary + "。请用15~35字给一句自然的结果反馈。"
+	scene.call_deferred("_request_item_use_ai_feedback", feedback_context, msg)
 	return {"ok": true, "message": msg}

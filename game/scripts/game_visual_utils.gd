@@ -156,8 +156,9 @@ static func build_scene_image_prompt(site_name: String, site_data: Dictionary, w
 	prompt_parts.append("strictly match this location and world era, avoid cross-era contamination")
 	return ", ".join(prompt_parts)
 
-static func build_npc_image_prompt(npc_name: String, npc_describe: String, world_seed_input: String, background: String) -> String:
+static func build_npc_image_prompt(npc_name: String, npc_describe: String, world_seed_input: String, background: String, npc_location: String = "", location_desc: String = "") -> String:
 	var style_sig = detect_setting_style_signals(world_seed_input, background)
+	var style_text = (world_seed_input + " " + background + " " + npc_describe + " " + npc_location + " " + location_desc).strip_edges()
 	var parts: Array = [
 		"anime character illustration",
 		"character name: " + npc_name,
@@ -165,10 +166,18 @@ static func build_npc_image_prompt(npc_name: String, npc_describe: String, world
 		"medium long shot, from thigh up, more body visible, subject scaled smaller in frame",
 		"non-photorealistic, stylized 2d anime art",
 		"simple clean background",
-		"no text, no watermark"
+		"no text, no watermark",
+		"safe character depiction, no sexualization, age-appropriate body proportions"
 	]
 	if npc_describe.strip_edges() != "":
 		parts.append("appearance: " + npc_describe.left(160))
+	if npc_location.strip_edges() != "":
+		parts.append("current location: " + npc_location.left(40))
+	if location_desc.strip_edges() != "":
+		parts.append("location atmosphere: " + location_desc.left(100))
+	if contains_any_keyword(style_text, ["女子高中", "女高中", "高中女生", "女校", "少女", "校园"]):
+		parts.append("teen schoolgirl silhouette, slim natural limbs, modest chest, no exaggerated curves, conservative school uniform")
+		parts.append("avoid thick thighs, oversized breasts, overly muscular arms")
 	if bool(style_sig.get("ancient", false)) and !bool(style_sig.get("bridge", false)):
 		parts.append("traditional historical attire, pre-modern style")
 	elif bool(style_sig.get("scifi", false)) or bool(style_sig.get("cyber", false)):

@@ -15,7 +15,7 @@ static func extract_interaction_signals(text: String) -> Dictionary:
 	if t == "":
 		return {"trade": 0, "gift": 0, "assist": 0, "positive": 0, "negative": 0, "coercion": 0, "respect": 0, "interaction_score": 0}
 	var trade_keywords = [
-		"买", "购买", "卖", "出售", "交易", "成交", "收购", "收你", "报价", "价格", "多少钱", "单价", "总价", "换"
+		"买", "购买", "卖", "出售", "交易", "成交", "收购", "收你", "报价", "价格", "多少钱", "单价", "总价", "换", "来一", "来个", "来杯", "点一", "点个", "想买", "要买", "给我来"
 	]
 	var gift_keywords = [
 		"送", "赠", "给你", "给我", "递给", "交给", "拿给", "分你", "分享", "补给"
@@ -164,7 +164,11 @@ static func needs_tool_inference_from_context(player_text: String, plain_npc_tex
 	var player_sig = extract_interaction_signals(player_text)
 	var npc_sig = extract_interaction_signals(plain_npc_text)
 	var total_score = int(player_sig.get("interaction_score", 0)) + int(npc_sig.get("interaction_score", 0))
+	var player_has_trade = has_trade_keywords(player_text)
+	var npc_refused = npc_refused_request(plain_npc_text)
 	if total_score >= 2:
+		return true
+	if player_has_trade and !npc_refused:
 		return true
 	if has_trade_keywords(plain_npc_text):
 		return true

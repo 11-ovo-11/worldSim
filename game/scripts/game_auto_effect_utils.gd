@@ -1,6 +1,41 @@
 extends RefCounted
 class_name GameAutoEffectUtils
 
+static func _looks_like_pending_trade(source: String) -> bool:
+	var t = source.strip_edges()
+	if t == "":
+		return false
+	var markers = [
+		"是否购买", "要不要买", "买吗", "报价", "每件", "总价", "成交吗", "卖你", "卖给你"
+	]
+	for m in markers:
+		if t.find(m) != -1:
+			return true
+	return false
+
+static func _extract_direct_buy_intent(action_input: String, action_reply: String) -> Dictionary:
+	var source = str(action_input).strip_edges()
+	if source == "":
+		source = str(action_reply).strip_edges()
+	if source == "":
+		return {"ok": false, "item": "", "quantity": 0}
+	var regex = RegEx.new()
+	if regex.compile("(?:买|购买|买了|购入|来|点)\\s*(\\d+)?\\s*(?:个|件|杯|瓶|份|把|盒|张)?\\s*([\\u4e00-\\u9fa5A-Za-z0-9《》·_-]{1,18})") != OK:
+		return {"ok": false, "item": "", "quantity": 0}
+	var m = regex.search(source)
+	if m == null:
+		return {"ok": false, "item": "", "quantity": 0}
+	var qty = int(str(m.get_string(1)).strip_edges())
+	if qty <= 0:
+		qty = 1
+	var item_name = str(m.get_string(2)).strip_edges()
+	if item_name == "":
+		return {"ok": false, "item": "", "quantity": 0}
+	var bad_tokens = ["东西", "一点", "一些", "一个", "一份", "点", "来"]
+	if bad_tokens.has(item_name):
+		return {"ok": false, "item": "", "quantity": 0}
+	return {"ok": true, "item": item_name, "quantity": qty}
+
 static func auto_apply_action_effects(scene: Node, action_input: String, action_reply: String, tool_tags: String) -> void:
 	var source = (action_input + "\n" + action_reply).strip_edges()
 	if source == "":
@@ -38,17 +73,41 @@ static func auto_apply_action_effects(scene: Node, action_input: String, action_
 			changed = true
 
 	if scene.currentState != scene.worldState.chat and !has_money_tool and !money_changed:
+		if _looks_like_pending_trade(source):
+			has_money_tool = true
+	if scene.currentState != scene.worldState.chat and !has_money_tool and !money_changed:
 		var inferred_money_delta = scene._extract_money_delta_from_text(source)
 		if inferred_money_delta != 0:
-			var before_money = scene.money
-			scene.money = max(0, scene.money + inferred_money_delta)
-			var real_delta = scene.money - before_money
-			if real_delta != 0:
-				if real_delta < 0:
-					scene.addLog("<行动花费" + str(abs(real_delta)) + "，当前资产" + str(scene.money) + ">")
+			if inferred_money_delta < 0:
+				var buy_intent = _extract_direct_buy_intent(action_input, action_reply)
+				var inferred_cost = abs(inferred_money_delta)
+				if bool(buy_intent.get("ok", false)):
+					var item_name = str(buy_intent.get("item", "")).strip_edges()
+					var quantity = max(1, int(buy_intent.get("quantity", 1)))
+					if inferred_cost > 0 and scene.money >= inferred_cost and item_name != "":
+						scene.money -= inferred_cost
+						scene.add_item(item_name, quantity)
+						scene.addLog("<直接购买：获得" + item_name + "X" + str(quantity) + "，花费" + str(inferred_cost) + "，当前资产" + str(scene.money) + ">")
+						money_changed = true
+						changed = true
+					elif inferred_cost > 0 and item_name != "":
+						scene.addLog("<资产不足，无法完成直接购买：" + item_name + "X" + str(quantity) + ">")
 				else:
-					scene.addLog("<行动获得" + str(real_delta) + "，当前资产" + str(scene.money) + ">")
-				changed = true
+					var before_money = scene.money
+					scene.money = max(0, scene.money + inferred_money_delta)
+					var real_delta = scene.money - before_money
+					if real_delta != 0:
+						scene.addLog("<行动花费" + str(abs(real_delta)) + "，当前资产" + str(scene.money) + ">")
+						money_changed = true
+						changed = true
+			else:
+				var before_money2 = scene.money
+				scene.money = max(0, scene.money + inferred_money_delta)
+				var real_delta2 = scene.money - before_money2
+				if real_delta2 != 0:
+					scene.addLog("<行动获得" + str(real_delta2) + "，当前资产" + str(scene.money) + ">")
+					money_changed = true
+					changed = true
 
 	if source.find("锻炼") != -1 or source.find("训练") != -1 or source.find("健身") != -1 or source.find("跑步") != -1:
 		var hours = scene._extract_duration_hours(source)

@@ -483,6 +483,7 @@ texture = ExtResource("2_0xm2m")
 expand_mode = 1
 
 [node name="ImgModePanel" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer/backgroundImg" unique_id=-1394967288]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
@@ -494,6 +495,7 @@ offset_bottom = 34.0
 grow_horizontal = 0
 
 [node name="InstantGenButton" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer/backgroundImg/ImgModePanel" unique_id=-1394967286]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(96, 28)
 layout_mode = 2
 toggle_mode = true

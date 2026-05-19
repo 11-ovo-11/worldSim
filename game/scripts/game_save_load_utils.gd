@@ -61,6 +61,7 @@ static func save_game(scene: Node) -> void:
 		"important_event_memories": scene.important_event_memories,
 		"current_chat_session_npc": scene.current_chat_session_npc,
 		"current_chat_session_records": scene.current_chat_session_records,
+		"pending_entity_records": scene.pending_entity_records,
 		"dead_npc_names": scene.dead_npc_names,
 		"dialogue_min_chars": scene.dialogue_min_chars,
 		"action_narration_min_chars": scene.action_narration_min_chars
@@ -116,6 +117,11 @@ static func load_game(scene: Node) -> bool:
 			var rec = str(row).strip_edges()
 			if rec != "":
 				scene.current_chat_session_records.append(rec)
+	var loaded_pending = data.get("pending_entity_records", {"npcs": {}, "locations": {}})
+	if loaded_pending is Dictionary:
+		scene.pending_entity_records = loaded_pending
+	else:
+		scene.pending_entity_records = {"npcs": {}, "locations": {}}
 	if scene.current_chat_session_npc == "" or !scene.npcs.has(scene.current_chat_session_npc):
 		scene.current_chat_session_npc = ""
 		scene.current_chat_session_records = []

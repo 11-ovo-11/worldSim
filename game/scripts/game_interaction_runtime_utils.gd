@@ -14,6 +14,10 @@ static func change_state_into(scene: Node, stateToChange) -> void:
 			if scene.currentNpc != null:
 				scene.currentNpc.queue_free()
 			scene.currentNpc = scene.newNpc
+			scene.set_meta("npc_profile_open", false)
+			scene.set_meta("npc_profile_prev_npc", "")
+			scene.set_meta("npc_profile_prev_speaker", "")
+			scene.set_meta("npc_profile_prev_text", "")
 			if scene.get_node("%npcIcon") is TextureRect:
 				(scene.get_node("%npcIcon") as TextureRect).texture = null
 			scene._start_chat_session(str(scene.currentNpc.npcName))
@@ -34,7 +38,8 @@ static func change_state_into(scene: Node, stateToChange) -> void:
 					if scene.get_node("%npcIcon") is TextureRect:
 						(scene.get_node("%npcIcon") as TextureRect).texture = _cached_npc
 				else:
-					var _np = scene._build_npc_image_prompt(_cn, _cd)
+					var _loc_hint = scene._infer_npc_location_for_prompt(_cn)
+					var _np = scene._build_npc_image_prompt(_cn, _cd, _loc_hint)
 					if _np != "":
 						scene.gen_img(_np, "NPC:" + _cn)
 		scene.worldState.explore:
@@ -230,11 +235,42 @@ static func on_npc_icon_gui_input(scene: Node, event: InputEvent) -> void:
 		return
 	if scene.currentState != scene.worldState.chat or scene.currentNpc == null:
 		return
+	if bool(scene.get_meta("npc_profile_open", false)):
+		var active_npc = str(scene.currentNpc.npcName).strip_edges()
+		var prev_npc = str(scene.get_meta("npc_profile_prev_npc", "")).strip_edges()
+		var prev_speaker = str(scene.get_meta("npc_profile_prev_speaker", active_npc))
+		var prev_text = str(scene.get_meta("npc_profile_prev_text", "")).strip_edges()
+		if prev_npc != "" and prev_npc != active_npc:
+			prev_speaker = active_npc
+			prev_text = ""
+		if prev_text == "":
+			prev_text = str(scene.currentNpc.currentChat).strip_edges()
+			if prev_text.find("\n") != -1:
+				var rows = prev_text.split("\n", false)
+				prev_text = str(rows[rows.size() - 1]).strip_edges()
+			if prev_text == "":
+				prev_text = "你正在与" + active_npc + "交谈。"
+		scene.changeTextTo(scene.get_node("%speakerNameLabel"), prev_speaker)
+		scene.changeTextTo(scene.response_label, prev_text)
+		scene.set_meta("npc_profile_open", false)
+		scene.set_meta("npc_profile_prev_npc", "")
+		scene.set_meta("npc_profile_prev_speaker", "")
+		scene.set_meta("npc_profile_prev_text", "")
+		scene.addLog("<关闭人物档案，已返回对话输出>")
+		return
 	scene._show_current_npc_profile()
 
 static func show_current_npc_profile(scene: Node) -> void:
 	if scene.currentNpc == null:
 		return
+	var speaker_node = scene.get_node_or_null("%speakerNameLabel")
+	if speaker_node != null and speaker_node is Label:
+		scene.set_meta("npc_profile_prev_speaker", str((speaker_node as Label).text))
+	else:
+		scene.set_meta("npc_profile_prev_speaker", str(scene.currentNpc.npcName))
+	scene.set_meta("npc_profile_prev_npc", str(scene.currentNpc.npcName))
+	scene.set_meta("npc_profile_prev_text", str(scene.response_label.text))
+	scene.set_meta("npc_profile_open", true)
 	var npc_name = str(scene.currentNpc.npcName)
 	var desc = str(scene.currentNpc.npcDescribe).strip_edges()
 	if desc == "":
@@ -283,6 +319,10 @@ static func request_site_switch(scene: Node, site_name: String) -> void:
 static func start_chat_with_existing_npc(scene: Node, npc_name: String) -> void:
 	if !scene.npcs.has(npc_name) or !(scene.npcs[npc_name] is Dictionary):
 		return
+	scene.set_meta("npc_profile_open", false)
+	scene.set_meta("npc_profile_prev_npc", "")
+	scene.set_meta("npc_profile_prev_speaker", "")
+	scene.set_meta("npc_profile_prev_text", "")
 	scene._end_chat_session()
 	if scene.get_node("%npcIcon") is TextureRect:
 		(scene.get_node("%npcIcon") as TextureRect).texture = null
@@ -297,7 +337,8 @@ static func start_chat_with_existing_npc(scene: Node, npc_name: String) -> void:
 	if !has_portrait and !bool(scene.npcs[npc_name].get("portrait_generating", false)):
 		scene.npcs[npc_name]["portrait_generating"] = true
 		var desc_for_img = str(scene.npcs[npc_name].get("npc_describe", ""))
-		var nprompt = scene._build_npc_image_prompt(npc_name, desc_for_img)
+		var loc_hint = scene._infer_npc_location_for_prompt(npc_name)
+		var nprompt = scene._build_npc_image_prompt(npc_name, desc_for_img, loc_hint)
 		if nprompt != "":
 			scene.gen_img(nprompt, "NPC:" + npc_name)
 	scene.prepare_npc_memory_for_chat(npc_name)

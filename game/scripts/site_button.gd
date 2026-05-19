@@ -5,7 +5,7 @@ var scene:GameManager
 func _ready() -> void:
 	text = siteName
 	scene = get_tree().current_scene
-	if !scene.sites.has(siteName)||!scene.sites[siteName].has("地点描述"):
+	if !scene.sites.has(siteName) or str(scene.sites[siteName].get("地点描述", "")).strip_edges() == "":
 		text = text+"\n(未探索)"
 func _on_button_down() -> void:
 	if scene == null:

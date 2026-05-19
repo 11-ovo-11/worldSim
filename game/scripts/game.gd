@@ -35,7 +35,7 @@ const GameFlowRuntimeUtils = preload("res://scripts/game_flow_runtime_utils.gd")
 @onready var load_button = %LoadButton
 
 enum worldState {explore, chat}
-enum aiMode {init_background,init_env,explore, chat, sum, tools, action}
+enum aiMode {init_background,init_env,explore, chat, sum, tools, action, validate_entity, refine_event}
 
 var chat_url = "http://127.0.0.1:5000/chat"
 var agent_url = "http://127.0.0.1:5000/agent"
@@ -88,6 +88,12 @@ var dialogue_min_chars_spin: SpinBox
 var action_min_chars_spin: SpinBox
 var timeout_seconds_spin: SpinBox
 var img_watchdog_seq: int = 0
+var pending_entity_records: Dictionary = {"npcs": {}, "locations": {}}
+var last_entity_validation_response: String = ""
+var last_event_refine_response: String = ""
+var pending_event_refine_queue: Array = []
+var event_refine_inflight: bool = false
+var event_refine_cache: Dictionary = {}
 
 var sites: Dictionary
 var npcs: Dictionary
@@ -283,8 +289,44 @@ func _get_site_data(site_name: String) -> Dictionary:
 func _build_scene_image_prompt(site_name: String, site_data: Dictionary) -> String:
 	return GameVisualUtils.build_scene_image_prompt(site_name, site_data, world_seed_input, background)
 
-func _build_npc_image_prompt(npc_name: String, npc_describe: String) -> String:
-	return GameVisualUtils.build_npc_image_prompt(npc_name, npc_describe, world_seed_input, background)
+func _infer_npc_location_for_prompt(npc_name: String) -> String:
+	var target_name = str(npc_name).strip_edges()
+	if target_name == "":
+		return str(currentSiteName).strip_edges()
+	for site_name in sites.keys():
+		if !(sites[site_name] is Dictionary):
+			continue
+		var site_dic: Dictionary = sites[site_name]
+		if site_dic.has("npc") and site_dic["npc"] is Dictionary and (site_dic["npc"] as Dictionary).has(target_name):
+			return str(site_name).strip_edges()
+	return str(currentSiteName).strip_edges()
+
+func _build_npc_image_prompt(npc_name: String, npc_describe: String, npc_location: String = "") -> String:
+	var resolved_location = str(npc_location).strip_edges()
+	if resolved_location == "":
+		resolved_location = _infer_npc_location_for_prompt(npc_name)
+	var location_desc = ""
+	if resolved_location != "" and sites.has(resolved_location) and sites[resolved_location] is Dictionary:
+		location_desc = str((sites[resolved_location] as Dictionary).get("地点描述", "")).strip_edges()
+	return GameVisualUtils.build_npc_image_prompt(npc_name, npc_describe, world_seed_input, background, resolved_location, location_desc)
+
+func _get_instant_gen_button() -> BaseButton:
+	var btn = get_node_or_null("%InstantGenButton")
+	if btn is BaseButton:
+		return btn
+	btn = get_node_or_null("mainContainer/HBoxContainer/VBoxContainer/backgroundImg/ImgModePanel/InstantGenButton")
+	if btn is BaseButton:
+		return btn
+	return null
+
+func _is_instant_gen_active() -> bool:
+	var btn = _get_instant_gen_button()
+	if btn != null:
+		var pressed = bool(btn.button_pressed)
+		if instant_gen_mode != pressed:
+			instant_gen_mode = pressed
+		return pressed
+	return bool(instant_gen_mode)
 
 func _build_image_request_payload(prompt: String, target_site: String) -> Dictionary:
 	var bg_size := Vector2.ZERO
@@ -373,6 +415,14 @@ func prefetch_scene_image_for_setup(site_name: String) -> void:
 
 func site_update(show_description: bool = true, unlock_after: bool = true, add_arrival_log: bool = true):
 	var site_data = _get_site_data(currentSiteName)
+	if site_data.is_empty():
+		if unlock_after:
+			_set_site_loading_lock(false)
+		return
+	set_meta("hydrating_pending_entities", true)
+	_consume_pending_entities_for_site(currentSiteName)
+	set_meta("hydrating_pending_entities", false)
+	site_data = _get_site_data(currentSiteName)
 	if site_data.is_empty():
 		if unlock_after:
 			_set_site_loading_lock(false)
@@ -516,6 +566,12 @@ func _looks_like_action_or_dialogue_phrase(text: String) -> bool:
 func _extract_compact_entity_candidate(raw_text: String, max_len: int = 14) -> String:
 	return GameEntityUtils.extract_compact_entity(raw_text, max_len)
 
+func _split_entity_with_modifier(raw_text: String, max_len: int = 14) -> Dictionary:
+	return GameEntityUtils.split_entity_with_modifier(raw_text, max_len)
+
+func _infer_entity_kind(name_text: String, context_text: String = "") -> String:
+	return GameEntityUtils.infer_entity_kind(name_text, context_text)
+
 func _is_valid_generated_location_name(raw_name: String) -> bool:
 	if _looks_like_person_reference(GameEntityUtils.cleanup_location_candidate(raw_name)):
 		return false
@@ -568,6 +624,88 @@ func _is_relation_npc_query(input_text: String) -> bool:
 
 func _guess_related_npc_desc(query_text: String, source_npc_name: String) -> String:
 	return GameNpcInferUtils.guess_related_npc_desc(GameTextUtils.normalize_single_line_input(query_text), source_npc_name)
+
+func _track_pending_entity(kind: String, entity_name: String, info: Dictionary = {}) -> void:
+	var k = str(kind).strip_edges()
+	var n = str(entity_name).strip_edges()
+	if k == "" or n == "":
+		return
+	if !pending_entity_records.has("npcs") or !(pending_entity_records["npcs"] is Dictionary):
+		pending_entity_records["npcs"] = {}
+	if !pending_entity_records.has("locations") or !(pending_entity_records["locations"] is Dictionary):
+		pending_entity_records["locations"] = {}
+	var bucket = pending_entity_records.get(k + "s", {})
+	if !(bucket is Dictionary):
+		bucket = {}
+	var row: Dictionary = {}
+	if bucket.has(n) and bucket[n] is Dictionary:
+		row = bucket[n]
+	for key in info.keys():
+		var info_key = str(key)
+		if info_key == "context":
+			var old_ctx = str(row.get("context", "")).strip_edges()
+			var new_ctx = str(info[key]).strip_edges()
+			if new_ctx == "":
+				continue
+			if old_ctx == "":
+				row["context"] = new_ctx
+			elif old_ctx.find(new_ctx) == -1:
+				row["context"] = (old_ctx + "；" + new_ctx).left(240)
+		else:
+			row[info_key] = info[key]
+	row["name"] = n
+	bucket[n] = row
+	pending_entity_records[k + "s"] = bucket
+
+func _consume_pending_entities_for_site(site_name: String) -> void:
+	var site = str(site_name).strip_edges()
+	if site == "":
+		return
+	if pending_entity_records.has("locations") and pending_entity_records["locations"] is Dictionary:
+		var loc_map: Dictionary = pending_entity_records["locations"]
+		var consumed_loc: Array = []
+		for loc_name in loc_map.keys():
+			var lrow = loc_map[loc_name]
+			if !(lrow is Dictionary):
+				continue
+			var from_site = str(lrow.get("from", "")).strip_edges()
+			if from_site == "" or from_site != site:
+				continue
+			consumed_loc.append(loc_name)
+			var already_connected = sites.has(site) and (sites[site].get("能前往的地点", []) as Array).has(str(loc_name))
+			if already_connected:
+				continue
+			create_location(site + "-" + str(loc_name))
+		for lk in consumed_loc:
+			loc_map.erase(lk)
+		pending_entity_records["locations"] = loc_map
+	if !pending_entity_records.has("npcs") or !(pending_entity_records["npcs"] is Dictionary):
+		return
+	var npc_map: Dictionary = pending_entity_records["npcs"]
+	if npc_map.is_empty():
+		return
+	var consumed: Array = []
+	for npc_name in npc_map.keys():
+		var row = npc_map[npc_name]
+		if !(row is Dictionary):
+			continue
+		var home = str(row.get("location", "")).strip_edges()
+		if home == "" or home != site:
+			continue
+		var already_at_site = npcs.has(str(npc_name)) and sites.has(site) and (sites[site].get("npc", {}) as Dictionary).has(str(npc_name))
+		consumed.append(npc_name)
+		if already_at_site:
+			continue
+		var desc = str(row.get("desc", "")).strip_edges()
+		var modifier = str(row.get("modifier", "")).strip_edges()
+		if modifier != "" and desc.find(modifier) == -1:
+			desc = (desc + "（" + modifier + "）").strip_edges()
+		if desc == "":
+			desc = "在此地活动"
+		create_NPC(str(npc_name), site, desc)
+	for key in consumed:
+		npc_map.erase(key)
+	pending_entity_records["npcs"] = npc_map
 
 func _extract_named_people_from_dialogue(reply_text: String) -> Array:
 	return GameDialogueExpandUtils.extract_named_people_from_dialogue(self, reply_text)
@@ -762,6 +900,9 @@ func _generate_item_texture(image_prompt: String) -> Texture2D:
 func _generate_validation_dialogue(scene_context: String, fallback: String) -> String:
 	return await GameItemProfileUtils.generate_validation_dialogue(self, scene_context, fallback)
 
+func _request_item_use_ai_feedback(scene_context: String, fallback: String) -> void:
+	await GameEntityRuntimeUtils.request_item_use_ai_feedback(self, scene_context, fallback)
+
 func _build_ultra_fast_item_prompt(base_prompt: String) -> String:
 	return GameItemProfileUtils.build_ultra_fast_item_prompt(base_prompt)
 
@@ -878,7 +1019,61 @@ func _remember_important_event(raw_text: String, site_name: String = "", focus_n
 	var site = str(site_name).strip_edges()
 	if site == "":
 		site = currentSiteName
-	GameMemoryUtils.remember_important_event(important_event_memories, npcs, str(raw_text).strip_edges(), site, focus_npc)
+	var plain = GameMemoryUtils.refine_important_event_text(str(raw_text).strip_edges())
+	if plain == "":
+		return
+	var sig = _extract_interaction_signals(plain)
+	if !_should_store_npc_personal_event(plain, sig):
+		return
+	if plain.length() < 70:
+		GameMemoryUtils.remember_important_event(important_event_memories, npcs, plain, site, focus_npc)
+		return
+	_enqueue_important_event_refine({"raw_text": plain, "site": site, "focus_npc": str(focus_npc).strip_edges()})
+
+func _enqueue_important_event_refine(job: Dictionary) -> void:
+	if job.is_empty():
+		return
+	if pending_event_refine_queue.size() > 60:
+		pending_event_refine_queue.pop_front()
+	pending_event_refine_queue.append(job)
+	if !event_refine_inflight:
+		call_deferred("_drain_event_refine_queue")
+
+func _build_event_refine_prompt(raw_event_text: String) -> Array:
+	var user_text = "请将下面事件精练为1句话，保留关键人物、地点、结果，不要虚构，不要套话，不超过60字：\n" + raw_event_text.left(360)
+	return [
+		{"role": "system", "content": "你是事件记录助手。只输出精练后的事件一句话，不要解释。"},
+		{"role": "user", "content": user_text}
+	]
+
+func _drain_event_refine_queue() -> void:
+	if event_refine_inflight:
+		return
+	event_refine_inflight = true
+	while !pending_event_refine_queue.is_empty():
+		var job = pending_event_refine_queue.pop_front()
+		if !(job is Dictionary):
+			continue
+		var raw_text = str(job.get("raw_text", "")).strip_edges()
+		if raw_text == "":
+			continue
+		var site = str(job.get("site", currentSiteName)).strip_edges()
+		if site == "":
+			site = currentSiteName
+		var focus = str(job.get("focus_npc", "")).strip_edges()
+		var cache_key = raw_text.left(180)
+		var final_text = str(event_refine_cache.get(cache_key, "")).strip_edges()
+		if final_text == "":
+			last_event_refine_response = ""
+			await ask_ai(_build_event_refine_prompt(raw_text), aiMode.refine_event)
+			var ai_text = GameMemoryUtils.refine_important_event_text(last_event_refine_response)
+			if ai_text != "":
+				final_text = ai_text
+				event_refine_cache[cache_key] = final_text
+		if final_text == "":
+			final_text = raw_text
+		GameMemoryUtils.remember_important_event(important_event_memories, npcs, final_text, site, focus)
+	event_refine_inflight = false
 
 func _ensure_npc_event_bucket(npc_name: String) -> void:
 	GameMemoryUtils.ensure_npc_event_bucket(npcs, npc_name)

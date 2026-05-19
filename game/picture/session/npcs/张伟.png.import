@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b88kdxes2teuf"
-path="res://.godot/imported/玛格丽特·布莱克伍德.png-9eefef373f33ced6dc5af832e5c2a4e0.ctex"
+uid="uid://dhd2xavkatkb3"
+path="res://.godot/imported/张伟.png-ff7aa4ceed2502913829832c79a6cb49.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/玛格丽特·布莱克伍德.png"
-dest_files=["res://.godot/imported/玛格丽特·布莱克伍德.png-9eefef373f33ced6dc5af832e5c2a4e0.ctex"]
+source_file="res://picture/session/npcs/张伟.png"
+dest_files=["res://.godot/imported/张伟.png-ff7aa4ceed2502913829832c79a6cb49.ctex"]
 
 [params]
 

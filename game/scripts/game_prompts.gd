@@ -42,15 +42,21 @@ const ITEM_PROFILE_PROMPT := """
 	"image_prompt":"英文生图提示词，适合生成单个道具图标，纯净背景，无文字",
 	"value": 物品预估价值（整数，日用品10-100，科技产品100-500，稀有物品500-2000）, 
 	"rarity": "common、uncommon、rare、epic、legendary之一",
-	"effect_type": "none、energy_restore、hp_restore、both_restore之一",
-	"effect_value": 效果数值（整数，none填0，回复类建议5-30）
+	"effect_type": "energy_restore、hp_restore、both_restore、money_gain、money_loss、reputation_gain、reputation_loss、time_advance、npc_affinity、rumor_trigger之一",
+	"effect_value": 效果数值（整数，建议5-30；time_advance代表推进分钟数）
 }
+要求：effect_type不得为none，不要输出“无效果”道具。
 只输出 JSON，不要包含 markdown 代码块。
 """
 
 const VALIDATION_FEEDBACK_PROMPT := """
 你是文字游戏旁白。请根据输入场景，输出一句简短中文反馈（15~35字，口语化、自然）。
 仅输出一句话，不要解释，不要加引号。
+"""
+
+const ENTITY_VALIDATE_PROMPT := """
+你是游戏实体类型验证器。根据提供的对话上下文，逐一判断每个候选名称在该对话中是否确实指代其标注的类型（人物/地点）。
+只按编号顺序逐行回复"是"或"否"，不要解释，不要其他内容。
 """
 
 const ACTION_PROMPT := """

@@ -39,6 +39,30 @@ static func extract_compact_entity(raw_text: String, max_len: int = 14) -> Strin
 		candidate = candidate.substr(0, max_len)
 	return candidate
 
+static func split_entity_with_modifier(raw_text: String, max_len: int = 14) -> Dictionary:
+	var source = str(raw_text).strip_edges()
+	if source == "":
+		return {"name": "", "modifier": ""}
+	var compact = extract_compact_entity(source, max_len)
+	if compact == "":
+		return {"name": "", "modifier": source}
+	var cleaned_source = source.replace("：", "").replace(":", "").replace("，", "").replace("。", "").strip_edges()
+	var idx = cleaned_source.find(compact)
+	if idx == -1:
+		return {"name": compact, "modifier": ""}
+	var prefix = cleaned_source.substr(0, idx).strip_edges()
+	var suffix_start = idx + compact.length()
+	var suffix = ""
+	if suffix_start < cleaned_source.length():
+		suffix = cleaned_source.substr(suffix_start).strip_edges()
+	var modifier_parts: Array = []
+	if prefix != "":
+		modifier_parts.append(prefix)
+	if suffix != "":
+		modifier_parts.append(suffix)
+	var modifier = "，".join(modifier_parts).strip_edges()
+	return {"name": compact, "modifier": modifier}
+
 static func cleanup_location_candidate(raw_text: String) -> String:
 	var t = str(raw_text).strip_edges()
 	t = t.replace("？", "").replace("?", "").replace("。", "").replace("，", "")
@@ -121,6 +145,19 @@ static func is_valid_npc_name(raw_name: String) -> bool:
 		return false
 	return regex.search(n) != null
 
+static func is_location_query_hint(text: String) -> bool:
+	var t = _norm(text)
+	var loc_query_words = ["在哪", "在哪里", "在哪儿", "怎么去", "怎么走", "怎么到", "路线", "路怎么走", "哪条路", "去哪", "去哪里"]
+	for w in loc_query_words:
+		if t.find(w) != -1:
+			return true
+	var loc_hints = ["路", "街", "巷", "楼", "馆", "店", "食堂", "图书馆", "宿舍", "广场", "操场"]
+	var t_prefix = t.substr(0, min(8, t.length()))
+	for h in loc_hints:
+		if t_prefix.find(h) != -1:
+			return true
+	return false
+
 static func is_valid_location_name_basic(raw_name: String) -> bool:
 	var n = cleanup_location_candidate(raw_name)
 	if n == "":
@@ -134,14 +171,54 @@ static func is_valid_location_name_basic(raw_name: String) -> bool:
 		return false
 	return regex.search(n) != null
 
+static func is_location_like_name(name_text: String) -> bool:
+	var n = cleanup_location_candidate(name_text)
+	if n == "":
+		return false
+	var location_hints = ["路", "街", "巷", "城", "村", "镇", "市", "区", "县", "楼", "馆", "店", "室", "场", "站", "校", "院", "寺", "庙", "桥", "港", "河", "湖", "山", "岛", "广场", "食堂", "图书馆", "宿舍"]
+	for hint in location_hints:
+		if n.find(hint) != -1:
+			return true
+	return false
+
+static func is_npc_like_name(name_text: String) -> bool:
+	var n = sanitize_npc_name(name_text)
+	if n == "":
+		return false
+	var person_hints = ["老板", "店员", "同学", "老师", "保安", "医生", "护士", "司机", "警官", "师傅", "阿姨", "叔", "哥", "姐", "先生", "女士"]
+	for hint in person_hints:
+		if n.find(hint) != -1:
+			return true
+	return false
+
+static func infer_entity_kind(name_text: String, context_text: String = "") -> String:
+	var n = str(name_text).strip_edges()
+	var c = _norm(context_text)
+	if n == "":
+		return "unknown"
+	if is_location_like_name(n) and !is_npc_like_name(n):
+		return "location"
+	if is_npc_like_name(n) and !is_location_like_name(n):
+		return "npc"
+	var location_ctx = ["地点", "位置", "路线", "前往", "到达", "在哪", "在哪里", "位于", "去", "路上"]
+	var npc_ctx = ["人物", "npc", "他说", "她说", "这个人", "打听", "谁", "身份", "特征"]
+	if contains_keyword(c, location_ctx) and !contains_keyword(c, npc_ctx):
+		return "location"
+	if contains_keyword(c, npc_ctx) and !contains_keyword(c, location_ctx):
+		return "npc"
+	return "unknown"
+
 static func extract_unknown_npc_target_from_query(query_text: String) -> String:
 	var t = _norm(query_text)
 	if t == "":
 		return ""
+	if is_location_query_hint(t):
+		return ""
 	var regex = RegEx.new()
 	var patterns = [
 		"([\\p{Han}A-Za-z\u00b7]{2,12})(?:\u5728\u54ea|\u5728\u54ea\u91cc|\u5728\u54ea\u513f|\u662f\u8c01|\u4ec0\u4e48\u4eba|\u5728\u5417|\u7684\u4fe1\u606f|\u7684\u6d88\u606f)",
-		"(?:\u627e|\u5bfb\u627e|\u6253\u542c|\u95ee|\u5173\u4e8e)([\\p{Han}A-Za-z\u00b7]{2,12})"
+		"(?:\u5bfb\u627e|\u6253\u542c|\u95ee\u4e0b|\u5173\u4e8e)([\\p{Han}A-Za-z\u00b7]{2,12})",
+		"(?:\u627e)([\\p{Han}A-Za-z\u00b7]{2,10})(?:\u8fd9\u4e2a\u4eba|\u8fd9\u4e2a\u4eba|\u5417|\u5462|\u8bf7\u6d4b|\u5417\uff1f)"
 	]
 	for p in patterns:
 		if regex.compile(p) != OK:
@@ -151,6 +228,8 @@ static func extract_unknown_npc_target_from_query(query_text: String) -> String:
 			continue
 		var candidate = sanitize_npc_name(str(m.get_string(1)))
 		candidate = extract_compact_entity(candidate, 12)
+		if is_location_like_name(candidate):
+			continue
 		if !is_valid_npc_name(candidate) and is_relation_npc_query(t):
 			candidate = fallback_relation_npc_name(t)
 		if is_valid_npc_name(candidate):
