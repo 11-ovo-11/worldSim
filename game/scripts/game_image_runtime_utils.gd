@@ -116,6 +116,30 @@ static func apply_scene_background_for_current_site(scene: Node) -> void:
 		scene.siteImgs[site_name] = cached
 		(bg as TextureRect).texture = cached
 
+static func _build_dialogue_npc_style_anchor(scene: Node) -> String:
+	if scene == null or scene.currentNpc == null:
+		return ""
+	var npc_name = str(scene.currentNpc.npcName).strip_edges()
+	if npc_name == "":
+		return ""
+	var npc_desc = str(scene.currentNpc.npcDescribe).strip_edges()
+	if npc_desc == "" and scene.npcs.has(npc_name) and scene.npcs[npc_name] is Dictionary:
+		npc_desc = str((scene.npcs[npc_name] as Dictionary).get("npc_describe", "")).strip_edges()
+	var style_anchor = ""
+	if scene.has_method("_build_npc_image_prompt"):
+		var loc_hint = str(scene.currentSiteName).strip_edges()
+		style_anchor = str(scene._build_npc_image_prompt(npc_name, npc_desc, loc_hint)).strip_edges()
+	var parts: Array = [
+		"character consistency reference",
+		"dialogue focus npc: " + npc_name,
+		"keep the same face traits, hairstyle, outfit silhouette and anime rendering style as this npc"
+	]
+	if npc_desc != "":
+		parts.append("npc appearance: " + npc_desc.left(140))
+	if style_anchor != "":
+		parts.append("npc style anchor: " + style_anchor.left(220))
+	return ", ".join(parts)
+
 static func trigger_instant_scene_image(scene: Node, narrative_text: String) -> void:
 	var site_name = str(scene.currentSiteName).strip_edges()
 	if site_name == "":
@@ -127,7 +151,10 @@ static func trigger_instant_scene_image(scene: Node, narrative_text: String) -> 
 		return
 	var moment = str(narrative_text).strip_edges()
 	var dedupe_text = moment.left(220)
-	var dedupe_key = site_name + "|" + dedupe_text
+	var dialogue_npc = ""
+	if scene.currentNpc != null:
+		dialogue_npc = str(scene.currentNpc.npcName).strip_edges()
+	var dedupe_key = site_name + "|" + dialogue_npc + "|" + dedupe_text
 	var now_ms = Time.get_ticks_msec()
 	var last_key = str(scene.get_meta("instant_img_last_key", ""))
 	var last_ms = int(scene.get_meta("instant_img_last_ms", 0))
@@ -138,6 +165,9 @@ static func trigger_instant_scene_image(scene: Node, narrative_text: String) -> 
 	scene.set_meta("instant_img_last_key", dedupe_key)
 	scene.set_meta("instant_img_last_ms", now_ms)
 	var prompt = scene._build_scene_image_prompt(site_name, site_data)
+	var npc_style_anchor = _build_dialogue_npc_style_anchor(scene)
+	if npc_style_anchor != "":
+		prompt += ", " + npc_style_anchor
 	if moment != "":
 		prompt += ", narrative moment: " + moment.left(180)
 	if prompt == "":

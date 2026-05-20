@@ -1,0 +1,53 @@
+[gd_scene format=3]
+
+[node name="ItemDetailPopup" type="AcceptDialog"]
+initial_position = 1
+title = "物品详情"
+size = Vector2i(360, 280)
+min_size = Vector2i(320, 240)
+unresizable = true
+ok_button_text = "关闭"
+dialog_autowrap = true
+
+[node name="PanelMargin" type="MarginContainer" parent="."]
+layout_mode = 2
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 360.0
+offset_bottom = 240.0
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="Content" type="VBoxContainer" parent="PanelMargin"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="ItemPreview" type="TextureRect" parent="PanelMargin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(108, 108)
+layout_mode = 2
+size_flags_horizontal = 4
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1
+
+[node name="ItemDesc" type="RichTextLabel" parent="PanelMargin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+bbcode_enabled = true
+
+[node name="UseButton" type="Button" parent="PanelMargin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+text = "使用"

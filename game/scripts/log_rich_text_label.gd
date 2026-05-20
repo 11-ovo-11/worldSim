@@ -20,6 +20,8 @@ func _ready() -> void:
 func _deferred_start_check() -> void:
 	if expanded:
 		return
+	if !is_inside_tree() or get_tree() == null:
+		return
 	var prev_node = get_previous_node()
 	if prev_node == null:
 		can_expand = true
@@ -33,7 +35,10 @@ func _deferred_start_check() -> void:
 		var cb = Callable(self, "_deferred_start_check")
 		if !prev_node.is_connected("tree_exited", cb):
 			prev_node.connect("tree_exited", cb, CONNECT_ONE_SHOT)
-	get_tree().create_timer(0.06).timeout.connect(_deferred_start_check, CONNECT_ONE_SHOT)
+	var tree = get_tree()
+	if tree == null:
+		return
+	tree.create_timer(0.06).timeout.connect(_deferred_start_check, CONNECT_ONE_SHOT)
 
 func _process(_delta: float) -> void:
 	if expanded:

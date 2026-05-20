@@ -2,6 +2,7 @@ extends VBoxContainer
 class_name item
 
 const DEFAULT_ITEM_TEXTURE := preload("res://icon.svg")
+const ITEM_DETAIL_POPUP_SCENE := preload("res://fabs/item_detail_popup.tscn")
 
 var item_name: String = ""
 var item_num: int = 0
@@ -120,66 +121,25 @@ func _refresh_view() -> void:
 	image_button.texture_hover = display_texture
 
 func _on_item_image_button_pressed() -> void:
-	var popup := AcceptDialog.new()
+	var popup = ITEM_DETAIL_POPUP_SCENE.instantiate() as AcceptDialog
+	if popup == null:
+		return
 	popup.title = item_name
-	popup.dialog_autowrap = true
-	popup.size = Vector2i(560, 420)
-	popup.ok_button_text = "关闭"
-	popup.min_size = Vector2i(520, 380)
-
-	var frame := MarginContainer.new()
-	frame.add_theme_constant_override("margin_left", 18)
-	frame.add_theme_constant_override("margin_right", 18)
-	frame.add_theme_constant_override("margin_top", 14)
-	frame.add_theme_constant_override("margin_bottom", 14)
-	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	var center := CenterContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	var content := VBoxContainer.new()
-	content.custom_minimum_size = Vector2(460, 0)
-	content.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	content.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	content.alignment = BoxContainer.ALIGNMENT_CENTER
-	content.add_theme_constant_override("separation", 10)
-
-	if item_texture != null:
-		var img := TextureRect.new()
-		img.texture = item_texture
-		img.custom_minimum_size = Vector2(180, 180)
-		img.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-		img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		img.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		img.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		content.add_child(img)
-
-	var desc := RichTextLabel.new()
-	desc.fit_content = true
-	desc.scroll_active = false
-	desc.custom_minimum_size = Vector2(0, 130)
-	desc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	desc.bbcode_enabled = true
-	desc.text = item_description + "\n\n" + _effect_display_text()
-	content.add_child(desc)
-
-	var use_button := Button.new()
-	use_button.text = "使用"
-	use_button.custom_minimum_size = Vector2(0, 36)
-	use_button.disabled = item_num <= 0
-	use_button.pressed.connect(func():
-		var scene = get_tree().current_scene
-		if scene != null and scene.has_method("use_item"):
-			scene.use_item(item_name)
-		popup.hide()
-		popup.queue_free()
-	)
-	content.add_child(use_button)
-
-	center.add_child(content)
-	frame.add_child(center)
-	popup.add_child(frame)
+	var preview = popup.get_node_or_null("%ItemPreview") as TextureRect
+	if preview != null:
+		preview.texture = item_texture if item_texture != null else DEFAULT_ITEM_TEXTURE
+	var desc = popup.get_node_or_null("%ItemDesc") as RichTextLabel
+	if desc != null:
+		desc.text = item_description + "\n\n" + _effect_display_text()
+	var use_button = popup.get_node_or_null("%UseButton") as Button
+	if use_button != null:
+		use_button.disabled = item_num <= 0
+		use_button.pressed.connect(func():
+			var scene = get_tree().current_scene
+			if scene != null and scene.has_method("use_item"):
+				scene.use_item(item_name)
+			popup.hide()
+			popup.queue_free()
+		)
 	get_tree().current_scene.add_child(popup)
 	popup.popup_centered()

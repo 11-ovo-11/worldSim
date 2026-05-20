@@ -513,8 +513,21 @@ func ask_ai(message: Array, askmode: aiMode):
 			HTTPClient.METHOD_POST,
 			json_string
 		)
+	elif err == 44:
+		var tree = get_tree()
+		if tree != null:
+			await tree.create_timer(0.12).timeout
+		err = http_request.request(
+			url,
+			["Content-Type: application/json"],
+			HTTPClient.METHOD_POST,
+			json_string
+		)
 	if err != OK:
-		changeTextTo(response_label, "请求失败: " + str(err))
+		if err == 44:
+			changeTextTo(response_label, "请求失败：网络请求通道暂不可用(44)，请重试")
+		else:
+			changeTextTo(response_label, "请求失败: " + str(err))
 		if askmode == aiMode.init_env and has_node("mainMenu") and $mainMenu.has_method("if_weather_failed"):
 			$mainMenu.if_weather_failed("环境生成请求失败，已使用默认天气。")
 		set_ai_busy(false)

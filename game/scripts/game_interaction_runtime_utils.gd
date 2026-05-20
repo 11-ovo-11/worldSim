@@ -124,6 +124,21 @@ static func update_item_trade_price(scene: Node, item_name: String, per_unit_pri
 static func _normalize_single_line_input(raw_text: String) -> String:
 	return GameTextUtils.normalize_single_line_input(raw_text)
 
+static func _is_action_explicitly_targeting_current_npc(scene: Node, action_text: String) -> bool:
+	if scene == null or scene.currentNpc == null:
+		return false
+	var t = _normalize_single_line_input(action_text)
+	if t == "":
+		return false
+	var npc_name = str(scene.currentNpc.npcName).strip_edges()
+	if npc_name != "" and t.find(npc_name) != -1:
+		return true
+	var actor_markers = ["让他", "让她", "让对方", "叫他", "叫她", "请他", "请她", "跟他说", "跟她说", "问他", "问她"]
+	for marker in actor_markers:
+		if t.find(marker) != -1:
+			return true
+	return false
+
 static func on_send_button_pressed(scene: Node) -> void:
 	if scene._is_runtime_transition_locked():
 		return
@@ -181,7 +196,8 @@ static func submit_action_input(scene: Node, raw_input: String, bypass_lock_chec
 	scene.changeTextTo(scene.response_label, user_input)
 	var focus_npc_name = ""
 	var focus_npc_desc = ""
-	if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
+	var explicitly_target_npc = _is_action_explicitly_targeting_current_npc(scene, user_input)
+	if explicitly_target_npc and scene.currentState == scene.worldState.chat and scene.currentNpc != null:
 		focus_npc_name = str(scene.currentNpc.npcName)
 		focus_npc_desc = str(scene.currentNpc.npcDescribe)
 	if focus_npc_name != "":

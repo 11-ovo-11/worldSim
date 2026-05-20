@@ -203,14 +203,19 @@ static func _collect_related_npc_candidates(scene: Node, reply: String) -> Array
 		return []
 	if _is_nonhuman_actor(scene):
 		return []
-	if scene.last_dialogue_input == "" or !scene._is_relation_npc_query(scene.last_dialogue_input):
+	if scene.last_dialogue_input == "":
 		return []
+	var relation_query = scene._is_relation_npc_query(scene.last_dialogue_input)
 	var fail_words = ["没有", "不知道", "不清楚", "记不清", "不认识", "没听说", "不方便说"]
 	for w in fail_words:
 		if reply.find(w) != -1:
 			return []
 	var names = extract_named_people_from_dialogue(scene, reply)
-	if names.is_empty():
+	var loc = extract_location_name_from_reply(scene, reply)
+	if !relation_query:
+		if names.is_empty() or loc == "":
+			return []
+	if names.is_empty() and relation_query:
 		var fallback_name = GameEntityUtils.fallback_relation_npc_name(scene.last_dialogue_input)
 		if !GameEntityUtils.is_bad_npc_name(fallback_name):
 			names.append(fallback_name)
@@ -222,7 +227,6 @@ static func _collect_related_npc_candidates(scene: Node, reply: String) -> Array
 		reply_hint = reply_hint.left(30)
 	if reply_hint != "":
 		guessed_desc += "（线索：" + reply_hint + "）"
-	var loc = extract_location_name_from_reply(scene, reply)
 	if loc == "":
 		loc = scene.currentSiteName
 	var result: Array = []
@@ -234,8 +238,13 @@ static func _collect_related_npc_candidates(scene: Node, reply: String) -> Array
 			npc_name = GameEntityUtils.fallback_relation_npc_name(scene.last_dialogue_input)
 		if !GameEntityUtils.is_valid_npc_name(npc_name):
 			continue
-		if npc_name == "" or scene.npcs.has(npc_name) or scene.dead_npc_names.has(npc_name):
+		if npc_name == "" or scene.dead_npc_names.has(npc_name):
 			continue
+		var desc_to_use = guessed_desc
+		if scene.npcs.has(npc_name) and scene.npcs[npc_name] is Dictionary:
+			var existed_desc = str((scene.npcs[npc_name] as Dictionary).get("npc_describe", "")).strip_edges()
+			if existed_desc != "":
+				desc_to_use = existed_desc
 		var loc_to_create = ""
 		if loc != "" and !scene._looks_like_person_reference(GameEntityUtils.cleanup_location_candidate(loc)) and GameEntityUtils.is_valid_location_name_basic(loc) and !scene.sites.has(loc):
 			loc_to_create = loc
@@ -243,7 +252,7 @@ static func _collect_related_npc_candidates(scene: Node, reply: String) -> Array
 			"kind": "npc",
 			"name": npc_name,
 			"location": loc,
-			"desc": guessed_desc,
+			"desc": desc_to_use,
 			"loc_to_create": loc_to_create,
 			"context": scene.last_dialogue_input + "\n" + reply.left(80)
 		})
@@ -308,6 +317,10 @@ static func _create_entity_from_candidate(scene: Node, cand: Dictionary) -> void
 	elif kind == "npc":
 		var npc_name = str(cand.get("name", ""))
 		var loc = str(cand.get("location", ""))
+		if loc in ["这里", "这儿", "当前地点", "当前"]:
+			loc = str(scene.currentSiteName)
+		if loc == "":
+			loc = str(scene.currentSiteName)
 		var desc = str(cand.get("desc", ""))
 		var loc_to_create = str(cand.get("loc_to_create", ""))
 		if ctx != "":
