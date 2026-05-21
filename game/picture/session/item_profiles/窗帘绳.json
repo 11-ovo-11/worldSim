@@ -1,8 +1,0 @@
-{
-	"description": "一条看似普通的窗帘绳，但在合适的人手中，或许能成为意想不到的礼物或工具。",
-	"effect_type": "npc_affinity",
-	"effect_value": 10,
-	"image_prompt": "A simple curtain cord, coiled, with a small metal end, isolated on white background, minimalistic style.",
-	"rarity": "common",
-	"value": 20
-}

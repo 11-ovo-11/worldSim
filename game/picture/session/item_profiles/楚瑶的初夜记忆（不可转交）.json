@@ -1,8 +1,0 @@
-{
-	"description": "储存着楚瑶最私密记忆的水晶，使用后可大幅提升与楚瑶的羁绊，不可交易。",
-	"effect_type": "npc_affinity",
-	"effect_value": 30,
-	"image_prompt": "a glowing crystal orb containing a faint silhouette of a woman, pure background, no text, icon style",
-	"rarity": "epic",
-	"value": 1500
-}
