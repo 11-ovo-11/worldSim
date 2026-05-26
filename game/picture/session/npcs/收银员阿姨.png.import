@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dpkayknd08b50"
-path="res://.godot/imported/顾芷萝.png-dc70cce6d6433bac691222f4738d6a3f.ctex"
+uid="uid://b6rv1bvjbvy26"
+path="res://.godot/imported/收银员阿姨.png-848ba4da80d152e0cadd357f8e049c56.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/顾芷萝.png"
-dest_files=["res://.godot/imported/顾芷萝.png-dc70cce6d6433bac691222f4738d6a3f.ctex"]
+source_file="res://picture/session/npcs/收银员阿姨.png"
+dest_files=["res://.godot/imported/收银员阿姨.png-848ba4da80d152e0cadd357f8e049c56.ctex"]
 
 [params]
 

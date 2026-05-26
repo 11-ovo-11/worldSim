@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cbvqnklcbd2t4"
-path="res://.godot/imported/楚瑶.png-63cc0e983708626785a9b7eec22bf072.ctex"
+uid="uid://chn6kipg7q0ck"
+path="res://.godot/imported/小卖部.png-3f08756d6b35032b9a549baf157b8934.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/楚瑶.png"
-dest_files=["res://.godot/imported/楚瑶.png-63cc0e983708626785a9b7eec22bf072.ctex"]
+source_file="res://picture/session/scenes/小卖部.png"
+dest_files=["res://.godot/imported/小卖部.png-3f08756d6b35032b9a549baf157b8934.ctex"]
 
 [params]
 

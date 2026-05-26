@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d342vnbg6gcwg"
-path="res://.godot/imported/人均长发并身材窈窕纤细且温柔漂亮的女子大学.png-e4050d67ca5503c5e64a7079adca563c.ctex"
+uid="uid://bfyxok0gcfr07"
+path="res://.godot/imported/薯片.png-a309d36edd0c3cc04b9cd511d6b0fecb.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/scenes/人均长发并身材窈窕纤细且温柔漂亮的女子大学.png"
-dest_files=["res://.godot/imported/人均长发并身材窈窕纤细且温柔漂亮的女子大学.png-e4050d67ca5503c5e64a7079adca563c.ctex"]
+source_file="res://picture/session/items/薯片.png"
+dest_files=["res://.godot/imported/薯片.png-a309d36edd0c3cc04b9cd511d6b0fecb.ctex"]
 
 [params]
 

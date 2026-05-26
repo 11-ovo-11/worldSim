@@ -68,7 +68,10 @@ static func force_exit_chat_runtime(scene: Node) -> void:
 	scene.last_action_input = ""
 	scene.last_crime_event_context = ""
 	scene._end_chat_session()
-	scene.clear_children(scene.get_node("%event"))
+	var event_node = scene.get_node("%event")
+	if event_node != null:
+		event_node.set("pending_events", [])
+		scene.clear_children(event_node)
 	scene._set_event_flow_lock(false)
 	scene.refresh_interaction_locks()
 
@@ -605,7 +608,10 @@ static func force_release_runtime(scene: Node, show_notice: bool = true, compact
 	if scene.http_request.get_http_client_status() == HTTPClient.STATUS_REQUESTING and scene.http_request.has_method("cancel_request"):
 		scene.http_request.cancel_request()
 	scene._clear_active_text_tweens(true)
-	scene.clear_children(scene.get_node("%event"))
+	var event_node = scene.get_node("%event")
+	if event_node != null:
+		event_node.set("pending_events", [])
+		scene.clear_children(event_node)
 	scene.pending_action_confirm = {}
 	scene.site_loading_lock = false
 	scene.event_flow_lock = false

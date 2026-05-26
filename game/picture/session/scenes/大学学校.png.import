@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://de6srcl04s722"
-path="res://.godot/imported/苏清漪.png-23384627bbb0b99076f4c5443006e7ee.ctex"
+uid="uid://d03wix1la52ym"
+path="res://.godot/imported/大学学校.png-25dcc2188c0145aa1c9c7af484bf03e2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/苏清漪.png"
-dest_files=["res://.godot/imported/苏清漪.png-23384627bbb0b99076f4c5443006e7ee.ctex"]
+source_file="res://picture/session/scenes/大学学校.png"
+dest_files=["res://.godot/imported/大学学校.png-25dcc2188c0145aa1c9c7af484bf03e2.ctex"]
 
 [params]
 

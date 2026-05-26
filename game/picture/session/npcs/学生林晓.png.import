@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://rispbfpgwyer"
-path="res://.godot/imported/叶柔音.png-d3e5102b812c168455b6f784dcf6e3dc.ctex"
+uid="uid://bvodhc1olc33k"
+path="res://.godot/imported/学生林晓.png-5eb9b17c0c6f5e85829b77195a3e0bb2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/叶柔音.png"
-dest_files=["res://.godot/imported/叶柔音.png-d3e5102b812c168455b6f784dcf6e3dc.ctex"]
+source_file="res://picture/session/npcs/学生林晓.png"
+dest_files=["res://.godot/imported/学生林晓.png-5eb9b17c0c6f5e85829b77195a3e0bb2.ctex"]
 
 [params]
 
