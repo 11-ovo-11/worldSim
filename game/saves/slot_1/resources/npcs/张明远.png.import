@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bfyxok0gcfr07"
-path="res://.godot/imported/薯片.png-a309d36edd0c3cc04b9cd511d6b0fecb.ctex"
+uid="uid://cy1wm5q3cpdo5"
+path="res://.godot/imported/张明远.png-eb40ccc5a4120507695ca43f329ea522.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://picture/session/items/薯片.png"
-dest_files=["res://.godot/imported/薯片.png-a309d36edd0c3cc04b9cd511d6b0fecb.ctex"]
+source_file="res://saves/slot_1/resources/npcs/张明远.png"
+dest_files=["res://.godot/imported/张明远.png-eb40ccc5a4120507695ca43f329ea522.ctex"]
 
 [params]
 

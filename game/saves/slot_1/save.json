@@ -1,120 +1,250 @@
 {
 	"action_narration_min_chars": 90,
-	"background": "# 世界观设定：现代综合性大学\n\n## 世界概览\n晨光大学是一座坐落于南方省会城市郊区的综合性本科院校，汇聚着两万多名从高考炼狱中突围而来的年轻人。这里既是知识圣殿也是迷惘熔炉——学生们在阶梯教室的灯光下追逐绩点，在深夜宿舍的床帘后刷着短视频，在社团活动的喧嚣中寻找存在感，却在毕业前夕突然发现，四年的答卷换不回一个确定的未来。\n\n## 人群状态\n大多数学生活在“被衡量”的焦虑中：绩点、证书、实习、考研、恋爱、人脉——每一项都被量化成砝码，压在内心的天平上。他们信仰“努力就能改变”，却恐惧“内卷无终局”“沉没成本”“毕业即失业”。少数人沉溺于游戏与恋爱麻醉自己，更多人则在图书馆的占座暗战和实验室的熬夜实验中，试图用勤奋对抗未知的坍塌。\n\n## 环境与天气\n校园坐落在亚热带季风气候区，夏季闷热潮湿，雷阵雨总在下午四点半准时砸向食堂屋顶；冬季湿冷刺骨，图书馆的暖气片旁永远挤满人。校区依丘陵地形而建，教学区与宿舍区之间横亘着那条著名的“晨光坡”，晨跑的学生和赶课的情侣每天在此气喘吁吁。梧桐大道落叶纷飞时的浪漫，与食堂二楼的麻辣香锅油烟味，构成了这座微型社会的永恒底色。",
-	"current_chat_session_npc": "学生林晓",
-	"current_chat_session_records": [
-		"[对话回复]学生林晓：（抬头推了推眼镜，有些疑惑地看着对方）啊？你是在叫我吗？我正准备去教学楼上课呢。"
-	],
-	"current_site": "大学学校",
+	"background": "# 世界观：青城大学\n\n## 世界概览\n青城大学是一所坐落于东南沿海城市的省属重点大学，校园依山傍海，以“自由、严谨、求真”为校训。表面的平静下涌动着学业竞争、社团暗流、未来迷茫与情感纠葛——这所容纳两万名师生的象牙塔既是知识的圣殿，也是年轻人撕扯青春、寻找自我的微观战场。\n\n## 人群状态\n大部分学生过着“宿舍-食堂-教室-图书馆”四点一线的生活，在绩点、证书、实习的标尺下焦虑地奔跑。主流思想是“卷赢才有出路”，少数人试图在社团、恋爱或创业中另辟蹊径。他们信仰努力能改变命运，恐惧毕业即失业、考研失败，或是在平庸中消耗掉最好的四年。\n\n## 环境与天气\n校园地形起伏，老校区遍布法国梧桐与红砖教学楼，新校区则是玻璃幕墙的现代建筑。气候属于亚热带海洋性季风气候——夏天漫长湿热，台风频发常导致停课，潮湿的雨季里被褥与键盘一起发霉；冬天湿冷刺骨，但少有降雪。海雾笼罩时，整座校园像蒙了一层纱，适合发生暧昧与偶遇。",
+	"current_chat_session_npc": "",
+	"current_chat_session_records": [],
+	"current_site": "小卖部",
 	"dead_npc_names": [],
 	"dialogue_min_chars": 90,
 	"env_dic": {
 		"current_humidity": 78.0,
-		"current_temperature": 22.0,
+		"current_temperature": 20.0,
 		"current_weather": "cloudy",
-		"current_wind_speed": 8.0,
+		"current_wind_speed": 12.0,
 		"humidity_range": [
-			50.0,
-			100.0
+			55.0,
+			95.0
 		],
 		"temperature_range": [
-			-5.0,
-			40.0
+			0.0,
+			38.0
 		],
 		"weather_duration_base": {
 			"cloudy": 120.0,
 			"overcast": 90.0,
-			"rain": 80.0,
-			"snow": 60.0,
-			"sunny": 180.0,
-			"thunder": 40.0
+			"rain": 45.0,
+			"snow": 10.0,
+			"sunny": 150.0,
+			"thunder": 30.0
 		},
 		"weather_transition_probability": {
 			"cloudy": {
-				"cloudy": 0.55,
-				"overcast": 0.15,
-				"rain": 0.04,
-				"snow": 0.005,
+				"cloudy": 0.4,
+				"overcast": 0.2,
+				"rain": 0.1,
+				"snow": 0.0,
 				"sunny": 0.25,
-				"thunder": 0.005
+				"thunder": 0.05
 			},
 			"overcast": {
-				"cloudy": 0.2,
-				"overcast": 0.5,
+				"cloudy": 0.25,
+				"overcast": 0.35,
 				"rain": 0.2,
-				"snow": 0.03,
-				"sunny": 0.05,
-				"thunder": 0.02
+				"snow": 0.0,
+				"sunny": 0.1,
+				"thunder": 0.1
 			},
 			"rain": {
 				"cloudy": 0.15,
 				"overcast": 0.2,
 				"rain": 0.4,
-				"snow": 0.05,
+				"snow": 0.0,
 				"sunny": 0.1,
-				"thunder": 0.1
+				"thunder": 0.15
 			},
 			"snow": {
-				"cloudy": 0.2,
-				"overcast": 0.2,
+				"cloudy": 0.3,
+				"overcast": 0.3,
 				"rain": 0.1,
-				"snow": 0.25,
+				"snow": 0.1,
 				"sunny": 0.2,
-				"thunder": 0.05
+				"thunder": 0.0
 			},
 			"sunny": {
 				"cloudy": 0.3,
-				"overcast": 0.07,
-				"rain": 0.02,
-				"snow": 0.01,
-				"sunny": 0.6,
-				"thunder": 0.0
+				"overcast": 0.1,
+				"rain": 0.05,
+				"snow": 0.0,
+				"sunny": 0.5,
+				"thunder": 0.05
 			},
 			"thunder": {
 				"cloudy": 0.1,
 				"overcast": 0.15,
-				"rain": 0.3,
+				"rain": 0.2,
 				"snow": 0.0,
 				"sunny": 0.05,
-				"thunder": 0.4
+				"thunder": 0.5
 			}
 		},
 		"wind_range": [
 			0.0,
-			30.0
+			80.0
 		]
 	},
-	"important_event_memories": [],
+	"important_event_memories": [
+		{
+			"assist": 0,
+			"coercion": 0,
+			"gift": 1,
+			"negative": 0,
+			"npcs": [
+				"张明远"
+			],
+			"positive": 0,
+			"respect": 0,
+			"site": "大学学校",
+			"t": 1779807758.887,
+			"text": "你开始与张明远交谈",
+			"trade": 1
+		},
+		{
+			"assist": 0,
+			"coercion": 0,
+			"gift": 1,
+			"negative": 0,
+			"npcs": [
+				"张明远"
+			],
+			"positive": 0,
+			"respect": 0,
+			"site": "大学学校",
+			"t": 1779807771.552,
+			"text": "张明远通宵攻读数学习题后从图书馆出来，准备回宿舍洗把脸。",
+			"trade": 1
+		},
+		{
+			"assist": 0,
+			"coercion": 0,
+			"gift": 1,
+			"negative": 0,
+			"npcs": [
+				"张明远"
+			],
+			"positive": 0,
+			"respect": 0,
+			"site": "大学学校",
+			"t": 1779807834.89,
+			"text": "张明远指出晨光便利在食堂旁，并表示自己要回宿舍。",
+			"trade": 1
+		},
+		{
+			"assist": 0,
+			"coercion": 0,
+			"gift": 0,
+			"negative": 0,
+			"npcs": [
+				"张明远"
+			],
+			"positive": 0,
+			"respect": 0,
+			"site": "大学学校",
+			"t": 1779807852.55,
+			"text": "地图更新：发现了小卖部",
+			"trade": 1
+		},
+		{
+			"assist": 0,
+			"coercion": 0,
+			"gift": 0,
+			"negative": 0,
+			"npcs": [
+				"张明远"
+			],
+			"positive": 0,
+			"respect": 0,
+			"site": "小卖部",
+			"t": 1779807852.572,
+			"text": "你抵达了小卖部",
+			"trade": 1
+		}
+	],
 	"items": [],
 	"logs": [
 		"你抵达了大学学校",
-		"你开始与学生林晓交谈"
+		"你开始与张明远交谈",
+		"<地图更新：发现了小卖部>",
+		"你抵达了大学学校",
+		"<地图更新：发现了小卖部>",
+		"你抵达了小卖部",
+		"<游戏已保存>"
 	],
-	"nowtime": 519.400000000001,
+	"nowtime": 533.400000000004,
 	"npcs": {
-		"保安张叔": {
+		"张明远": {
+			"important_events": [
+				{
+					"npc_view": "我记住了一件会直接影响我对玩家态度的事：你开始与张明远交谈",
+					"t": 1779807758,
+					"text": "你开始与张明远交谈"
+				},
+				{
+					"npc_view": "我记住了一件会直接影响我对玩家态度的事：张明远通宵攻读数学习题后从图书馆出来，准备回宿舍洗把脸。",
+					"t": 1779807771,
+					"text": "张明远通宵攻读数学习题后从图书馆出来，准备回宿舍洗把脸。"
+				},
+				{
+					"npc_view": "我记住了一件会直接影响我对玩家态度的事：地图更新：发现了小卖部",
+					"t": 1779807825,
+					"text": "地图更新：发现了小卖部"
+				},
+				{
+					"npc_view": "我记住了一件会直接影响我对玩家态度的事：张明远指出晨光便利在食堂旁，并表示自己要回宿舍。",
+					"t": 1779807834,
+					"text": "张明远指出晨光便利在食堂旁，并表示自己要回宿舍。"
+				},
+				{
+					"npc_view": "我记住了一件会直接影响我对玩家态度的事：你抵达了小卖部",
+					"t": 1779807852,
+					"text": "你抵达了小卖部"
+				}
+			],
+			"npc_describe": "戴黑框眼镜的瘦高男生，抱着厚厚一摞专业书，神情疲惫但目光坚毅。",
+			"npc_log": [
+				"他突然颠了颠怀里的书，用下巴压住，告诉我去小卖部的路：往前走经过自动售货机右拐，食堂旁边那个\"晨光便利\"就是，还建议我现在去人少，买完东西可以顺路绕到教学楼。"
+			],
+			"portrait_generating": false,
+			"特征": ""
+		},
+		"林学长": {
 			"important_events": [],
-			"npc_describe": "一名穿着深蓝色制服、头发花白的中年男子，正坐在门卫室里看着进出的人。",
+			"npc_describe": "穿着印有学生会logo的白色T恤，手里拿着两瓶冰红茶，正和身边的同学聊着社团招新的事。",
 			"npc_log": [],
 			"特征": ""
 		},
-		"外卖小哥": {
+		"王教授": {
 			"important_events": [],
-			"npc_describe": "一个穿着黄色外卖服、骑着电动车在门口停下的年轻男子。",
+			"npc_describe": "五十岁上下的中年男性，头发花白，夹着公文包步履匆匆，眉头微皱，似乎正思考学术问题。",
 			"npc_log": [],
 			"特征": ""
 		},
-		"学生林晓": {
+		"陈悦": {
 			"important_events": [],
-			"npc_describe": "一名背着双肩包、戴着黑框眼镜的女生，正低头看着手机慢慢走过校门。",
+			"npc_describe": "扎马尾的女生，穿着青城大学志愿者马甲，正笑着给新生指路。",
 			"npc_log": [],
-			"portrait_generating": true,
+			"特征": ""
+		},
+		"陈阿姨": {
+			"important_events": [],
+			"npc_describe": "穿着印有“青大后勤”的蓝色围裙，花白头发，戴着老花镜，正在熟练地扫描商品条形码。",
+			"npc_log": [],
 			"特征": ""
 		}
 	},
 	"pending_entity_records": {
 		"locations": {
-
+			"大学学校": {
+				"from": "大学学校",
+				"modifier": "",
+				"name": "大学学校",
+				"source": "path"
+			},
+			"小卖部": {
+				"from": "大学学校",
+				"modifier": "",
+				"name": "小卖部",
+				"source": "path"
+			}
 		},
 		"npcs": {
 
@@ -133,24 +263,45 @@
 	"sites": {
 		"大学学校": {
 			"npc": {
-				"保安张叔": "一名穿着深蓝色制服、头发花白的中年男子，正坐在门卫室里看着进出的人。",
-				"外卖小哥": "一个穿着黄色外卖服、骑着电动车在门口停下的年轻男子。",
-				"学生林晓": "一名背着双肩包、戴着黑框眼镜的女生，正低头看着手机慢慢走过校门。"
+				"张明远": "戴黑框眼镜的瘦高男生，抱着厚厚一摞专业书，神情疲惫但目光坚毅。",
+				"王教授": "五十岁上下的中年男性，头发花白，夹着公文包步履匆匆，眉头微皱，似乎正思考学术问题。",
+				"陈悦": "扎马尾的女生，穿着青城大学志愿者马甲，正笑着给新生指路。"
 			},
 			"别名": [
-				"晨光大学正门"
+				"青城大学主校区"
 			],
 			"地点名称": "大学学校",
-			"地点描述": "晨光大学的正门，一座现代风格的拱形校门，上方镶嵌着校名，门前是一片开阔的广场，两侧种着高大的梧桐树，常有学生在此拍照或等人。",
+			"地点描述": "青城大学的核心区域，坐落于山海之间，红砖教学楼与法国梧桐相映成趣。入口处立着刻有校训‘自由、严谨、求真’的巨石，广场上学生三五成群，或匆忙赶课，或低声交谈。空气里弥漫着亚热带湿润的气息，远处海雾若隐若现。",
 			"能前往的地点": [
 				"图书馆",
 				"第二食堂",
-				"教学楼A座",
-				"晨光坡",
-				"体育馆",
-				"行政楼"
+				"逸夫教学楼",
+				"南区宿舍楼",
+				"体育场",
+				"学生活动中心",
+				"小卖部"
 			],
-			"英文描述": "A modern arched main gate of Chenguang University with the university name inlaid above, fronting a spacious plaza lined with tall plane trees. Students are taking photos or waiting, with a security booth nearby."
+			"英文描述": "The main campus of Qingcheng University, nestled between mountains and sea, with red-brick teaching buildings and French plane trees lining the paths. At the entrance stands a boulder engraved with the motto 'Freedom, Rigour, Truth'. Students hurry across the square or chat in small groups. The air is humid with subtropical moisture, and sea mist drifts in the distance."
+		},
+		"小卖部": {
+			"npc": {
+				"林学长": "穿着印有学生会logo的白色T恤，手里拿着两瓶冰红茶，正和身边的同学聊着社团招新的事。",
+				"陈阿姨": "穿着印有“青大后勤”的蓝色围裙，花白头发，戴着老花镜，正在熟练地扫描商品条形码。"
+			},
+			"别名": [
+				"青城大学小卖部"
+			],
+			"地点名称": "小卖部",
+			"地点描述": "位于学海路与梧桐道交叉口的校园小卖部，玻璃门内堆满了零食饮料和生活用品，收银台前常常排着短队，是学生们课间补充能量的地方。窗外梧桐树影婆娑，偶尔有海风吹进，带来一丝咸湿的气息。",
+			"能前往的地点": [
+				"食堂",
+				"图书馆东馆",
+				"教学楼A座",
+				"学生活动中心",
+				"北区宿舍楼",
+				"大学学校"
+			],
+			"英文描述": "A small campus convenience store at the intersection of Xuehai Road and Wutong Road, with glass doors showing shelves of snacks, drinks, and daily necessities. A short queue at the counter, students grabbing quick energy during breaks. Sycamore shadows outside, occasional sea breeze."
 		}
 	},
 	"version": 1,

@@ -1,6 +1,18 @@
 extends RefCounted
 class_name GameFlowRuntimeUtils
 
+static func request_tool_inference(scene: Node, interaction_kind: String, source_input: String, reply_text: String, angle_tags_text: String = "", handled_direct_tags: Array = []) -> void:
+	var plain_reply = scene.process_string(reply_text).strip_edges()
+	var plain_input = str(source_input).strip_edges()
+	var plain_tags = str(angle_tags_text).strip_edges()
+	if plain_reply == "" and plain_tags == "":
+		return
+	var prompts = [
+		{"role": "system", "content": scene.agent_prompt},
+		{"role": "user", "content": scene._build_tool_inference_user_prompt(interaction_kind, plain_input, plain_reply, plain_tags, handled_direct_tags)}
+	]
+	await scene.ask_ai(prompts, scene.aiMode.tools)
+
 static func goto(scene: Node, where: String) -> void:
 	where = scene._resolve_site_alias(str(where).strip_edges())
 	if where == "":
@@ -441,25 +453,12 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 						scene._bg_debug("instant skipped from action (mode disabled)")
 					var tool_tags = scene.get_content_in_angle_brackets(action_reply)
 					var direct_tag_result = scene._apply_direct_action_tool_tags(action_reply)
-					var handled_direct = bool(direct_tag_result.get("handled_any", false))
-					var unresolved_tags = str(direct_tag_result.get("unresolved_tags", ""))
+					var handled_direct_tags: Array = direct_tag_result.get("handled_tags", [])
 					var nav_target = str(direct_tag_result.get("nav_target", ""))
 					if nav_target == "":
 						nav_target = scene._extract_nav_target_from_text(action_reply)
-					if unresolved_tags != "":
-						var aprompts = [
-							{"role":"system","content": scene.agent_prompt},
-							{"role":"user","content": unresolved_tags}]
-						await scene.ask_ai(aprompts, scene.aiMode.tools)
-					elif !handled_direct:
-						var infer_prompts = [
-							{"role":"system","content": scene.agent_prompt + "\n若输入没有<>标签，也要从语义中尽力提取可执行方法；如果确实没有再回复没有方法被调用。\n重要限制：consume_items（玩家交出或消耗背包物品）禁止从语义推断，只能由明确的<接受...>标签触发。"},
-							{"role":"user","content": "玩家行动：" + scene.last_action_input + "\n旁白结果：" + action_reply}
-						]
-						var _action_infer_src = (scene.last_action_input + " " + action_reply).strip_edges()
-						if scene._contains_any_keyword(_action_infer_src, ["送", "给", "卖", "买", "赠", "以", "价", "路径", "地点", "创建", "传闻", "赶往", "前往"]):
-							await scene.ask_ai(infer_prompts, scene.aiMode.tools)
-						scene._auto_handle_action_search(scene.last_action_input, action_reply)
+					await scene._request_tool_inference("action", scene.last_action_input, action_reply, tool_tags, handled_direct_tags)
+					scene._auto_handle_action_search(scene.last_action_input, action_reply)
 					if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
 						scene._record_current_chat_session("行动结果", "旁白", action_reply)
 						scene._remember_important_event("<行动结果>" + str(scene.currentNpc.npcName) + "：" + scene.process_string(action_reply), scene.currentSiteName, str(scene.currentNpc.npcName))
@@ -487,6 +486,8 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 				elif data["text"] is Dictionary:
 					await scene.handle_npc_instruction([data["text"]])
 				elif data["text"] is String:
+					if str(data["text"]).strip_edges() == "没有方法被调用":
+						return
 					var parser = JSON.new()
 					if parser.parse(data["text"]) == OK:
 						var parsed = parser.get_data()

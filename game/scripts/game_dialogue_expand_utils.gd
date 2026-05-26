@@ -14,12 +14,13 @@ static func looks_like_person_reference(npcs: Dictionary, target: String) -> boo
 			return true
 	return false
 
-static func apply_direct_npc_tool_tags(scene: Node, reply: String) -> bool:
+static func apply_direct_npc_tool_tags(scene: Node, reply: String) -> Dictionary:
 	var tags = scene._extract_angle_tags(reply)
 	if tags.is_empty():
-		return false
+		return {"handled_any": false, "only_location_tags": false, "handled_tags": []}
 	var handled_any = false
 	var only_location_tags = true
+	var handled_tags: Array = []
 	for raw_tag in tags:
 		var normalized = str(raw_tag).replace("：", ":").strip_edges()
 		if normalized.begins_with("创建路径:"):
@@ -27,15 +28,17 @@ static func apply_direct_npc_tool_tags(scene: Node, reply: String) -> bool:
 			if path != "":
 				scene.create_location(path)
 				handled_any = true
+				handled_tags.append(normalized)
 		elif normalized.begins_with("声望值"):
 			var rep_text = normalized.trim_prefix("声望值").strip_edges()
 			if rep_text != "":
 				var rep_change = int(rep_text)
 				scene.update_reputation(rep_change)
 				handled_any = true
+				handled_tags.append(normalized)
 		else:
 			only_location_tags = false
-	return handled_any and only_location_tags
+	return {"handled_any": handled_any, "only_location_tags": handled_any and only_location_tags, "handled_tags": handled_tags}
 
 static func extract_location_target_from_dialogue(scene: Node, input_text: String) -> String:
 	var t = GameTextUtils.normalize_single_line_input(input_text)
@@ -390,7 +393,9 @@ static func npc_reply(scene: Node, reply: String) -> void:
 	scene._record_current_chat_session("对话回复", active_npc_name, reply)
 	scene.currentNpc.currentChat += active_npc_name + ":" + reply + "\n"
 	scene._remember_important_event("<对话>" + active_npc_name + "：" + scene.process_string(reply), scene.currentSiteName, active_npc_name)
-	var direct_location_only = apply_direct_npc_tool_tags(scene, reply)
+	var direct_tag_result = apply_direct_npc_tool_tags(scene, reply)
+	var direct_location_only = bool(direct_tag_result.get("only_location_tags", false))
+	var handled_direct_tags: Array = direct_tag_result.get("handled_tags", [])
 	var entity_candidates: Array = []
 	if !direct_location_only:
 		var location_cand = _collect_location_candidate(scene, reply)
@@ -405,18 +410,7 @@ static func npc_reply(scene: Node, reply: String) -> void:
 	await validate_and_create_entity_candidates(scene, entity_candidates, full_context)
 	var tools_texts = scene.get_content_in_angle_brackets(reply)
 	print("提取出的工具信息：", tools_texts)
-	if tools_texts != "" and !direct_location_only:
-		var prompts = [
-			{"role": "system", "content": scene.agent_prompt},
-			{"role": "user", "content": tools_texts}
-		]
-		await scene.ask_ai(prompts, scene.aiMode.tools)
-	elif tools_texts == "" and scene._needs_tool_inference_from_context(scene.last_dialogue_input, reply):
-		var infer_prompts = [
-			{"role": "system", "content": scene.agent_prompt + "\n若输入没有<>标签，也要从语义中尽力提取买卖、赠送、交付、协助执行等可执行方法；如果玩家明确提出购买/出售而NPC回复未明确拒绝，应优先生成initiate_transaction（允许合理猜测数量/价格）；如果确实没有再回复没有方法被调用。"},
-			{"role": "user", "content": "玩家输入：" + scene.last_dialogue_input + "\nNPC回复：" + reply}
-		]
-		await scene.ask_ai(infer_prompts, scene.aiMode.tools)
+	await scene._request_tool_inference("dialogue", scene.last_dialogue_input, reply, tools_texts, handled_direct_tags)
 	await scene._auto_apply_action_effects("", reply, tools_texts)
 	if !scene._has_active_event_panel():
 		var action_req = scene._extract_npc_action_request(reply)

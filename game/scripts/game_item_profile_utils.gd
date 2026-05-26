@@ -8,6 +8,17 @@ const EFFECT_TYPES := [
 	"time_advance", "npc_affinity", "rumor_trigger"
 ]
 
+const ITEM_NO_TEXT_CONSTRAINT := "no text, no letters, no numbers, no symbols, no logo, no watermark"
+
+static func _ensure_item_prompt_no_text(prompt_text: String) -> String:
+	var p = str(prompt_text).strip_edges()
+	if p == "":
+		p = "single game inventory item icon, clean background, centered"
+	var lower = p.to_lower()
+	if lower.find("no text") == -1:
+		p += ", " + ITEM_NO_TEXT_CONSTRAINT
+	return p
+
 static func _infer_fallback_effect(item_name: String, value: int) -> Dictionary:
 	var n = str(item_name).strip_edges()
 	var v = max(5, int(round(max(1, value) / 10.0)))
@@ -30,21 +41,23 @@ static func generate_item_profile(scene: Node, item_name: String) -> Dictionary:
 	if !req.get("ok", false):
 		return {
 			"description": "这是一件实用的道具，可在冒险中派上用场。",
-			"image_prompt": "single game inventory item icon, clean background, detailed, centered",
+			"image_prompt": "single game inventory item icon, clean background, detailed, centered, " + ITEM_NO_TEXT_CONSTRAINT,
 			"effect_type": "none",
 			"effect_value": 0
 		}
 
 	var text = req["data"].get("text", "")
 	if text is Dictionary:
+		text["image_prompt"] = _ensure_item_prompt_no_text(str(text.get("image_prompt", "")))
 		return text
 	if text is String:
 		var json_dic = scene.extract_json_from_text(text)
 		if json_dic != {}:
+			json_dic["image_prompt"] = _ensure_item_prompt_no_text(str(json_dic.get("image_prompt", "")))
 			return json_dic
 	return {
 		"description": "这是一件实用的道具，可在冒险中派上用场。",
-		"image_prompt": "single game inventory item icon, clean background, detailed, centered",
+		"image_prompt": "single game inventory item icon, clean background, detailed, centered, " + ITEM_NO_TEXT_CONSTRAINT,
 		"effect_type": "none",
 		"effect_value": 0
 	}
@@ -91,10 +104,10 @@ static func generate_validation_dialogue(scene: Node, scene_context: String, fal
 	return fallback
 
 static func build_ultra_fast_item_prompt(base_prompt: String) -> String:
-	var cleaned = base_prompt.strip_edges()
+	var cleaned = _ensure_item_prompt_no_text(base_prompt)
 	if cleaned == "":
 		cleaned = "generic item"
-	return "minimalist inventory icon, single object, centered, plain clean background, no text, simple lighting, " + cleaned
+	return "minimalist inventory icon, single object, centered, plain clean background, " + ITEM_NO_TEXT_CONSTRAINT + ", simple lighting, " + cleaned
 
 static func sanitize_item_profile(item_name: String, raw_profile: Dictionary) -> Dictionary:
 	var raw_effect_type = str(raw_profile.get("effect_type", "")).strip_edges().to_lower()
@@ -103,7 +116,7 @@ static func sanitize_item_profile(item_name: String, raw_profile: Dictionary) ->
 	var raw_effect_value = int(raw_profile.get("effect_value", 0))
 	var safe: Dictionary = {
 		"description": str(raw_profile.get("description", "这是一件实用的道具，可在冒险中派上用场。")).strip_edges(),
-		"image_prompt": str(raw_profile.get("image_prompt", "single game inventory item icon of " + item_name + ", clean background, centered")).strip_edges(),
+		"image_prompt": _ensure_item_prompt_no_text(str(raw_profile.get("image_prompt", "single game inventory item icon of " + item_name + ", clean background, centered"))),
 		"value": int(raw_profile.get("value", 50)),
 		"rarity": str(raw_profile.get("rarity", "common")).strip_edges(),
 		"effect_type": raw_effect_type,
@@ -112,7 +125,7 @@ static func sanitize_item_profile(item_name: String, raw_profile: Dictionary) ->
 	if safe["description"] == "":
 		safe["description"] = "这是一件实用的道具，可在冒险中派上用场。"
 	if safe["image_prompt"] == "":
-		safe["image_prompt"] = "single game inventory item icon of " + item_name + ", clean background, centered"
+		safe["image_prompt"] = _ensure_item_prompt_no_text("single game inventory item icon of " + item_name + ", clean background, centered")
 	if safe["rarity"] == "":
 		safe["rarity"] = "common"
 	if safe["value"] < 1:

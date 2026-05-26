@@ -110,6 +110,29 @@ static func build_setting_consistency_guard_text(sig: Dictionary) -> String:
 		lines.append("fantasy motif only; avoid modern institutional style")
 	return "; ".join(lines)
 
+static func build_no_text_image_constraint() -> String:
+	return "no text, no letters, no numbers, no symbols, no logo, no watermark, no subtitles, no signage"
+
+static func infer_npc_demographic_hints(npc_name: String, npc_describe: String) -> Dictionary:
+	var merged = (str(npc_name) + " " + str(npc_describe)).strip_edges()
+	var gender = "unspecified"
+	if contains_any_keyword(merged, ["女性", "女人", "女生", "女孩", "少女", "阿姨", "女士", "妈妈", "母亲", "女儿", "学姐", "姐姐"]):
+		gender = "female"
+	elif contains_any_keyword(merged, ["男性", "男人", "男生", "男孩", "少年", "叔叔", "先生", "爸爸", "父亲", "儿子", "学长", "哥哥"]):
+		gender = "male"
+	var age_group = "adult"
+	if contains_any_keyword(merged, ["幼", "小孩", "儿童", "童", "娃"]):
+		age_group = "child"
+	elif contains_any_keyword(merged, ["高中", "中学", "未成年", "少年", "少女", "学生"]):
+		age_group = "teen"
+	elif contains_any_keyword(merged, ["青年", "大学生", "年轻", "二十", "三十"]):
+		age_group = "young_adult"
+	elif contains_any_keyword(merged, ["中年", "大叔", "阿姨", "四十", "五十"]):
+		age_group = "middle_aged"
+	elif contains_any_keyword(merged, ["老人", "老年", "爷爷", "奶奶", "老伯", "老太", "六十", "七十", "八十"]):
+		age_group = "elder"
+	return {"gender": gender, "age_group": age_group}
+
 static func build_scene_image_prompt(site_name: String, site_data: Dictionary, world_seed_input: String, background: String) -> String:
 	var english_prompt = str(site_data.get("英文描述", "")).strip_edges()
 	var cn_desc = str(site_data.get("地点描述", "")).strip_edges()
@@ -121,7 +144,7 @@ static func build_scene_image_prompt(site_name: String, site_data: Dictionary, w
 	var prompt_parts: Array = [
 		"cinematic environment faithful to world setting",
 		"daylight natural color",
-		"no text, no watermark",
+		build_no_text_image_constraint(),
 		"location:" + site_name
 	]
 	if style_guard != "":
@@ -159,6 +182,9 @@ static func build_scene_image_prompt(site_name: String, site_data: Dictionary, w
 static func build_npc_image_prompt(npc_name: String, npc_describe: String, world_seed_input: String, background: String, npc_location: String = "", location_desc: String = "") -> String:
 	var style_sig = detect_setting_style_signals(world_seed_input, background)
 	var style_text = (world_seed_input + " " + background + " " + npc_describe + " " + npc_location + " " + location_desc).strip_edges()
+	var demographic_hints = infer_npc_demographic_hints(npc_name, npc_describe)
+	var gender_hint = str(demographic_hints.get("gender", "unspecified"))
+	var age_group_hint = str(demographic_hints.get("age_group", "adult"))
 	var parts: Array = [
 		"anime character illustration",
 		"character name: " + npc_name,
@@ -166,7 +192,9 @@ static func build_npc_image_prompt(npc_name: String, npc_describe: String, world
 		"medium long shot, from thigh up, more body visible, subject scaled smaller in frame",
 		"non-photorealistic, stylized 2d anime art",
 		"simple clean background",
-		"no text, no watermark",
+		build_no_text_image_constraint(),
+		"gender hint: " + gender_hint,
+		"age group hint: " + age_group_hint,
 		"safe character depiction, no sexualization, age-appropriate body proportions"
 	]
 	if npc_describe.strip_edges() != "":
@@ -197,7 +225,7 @@ static func build_bootstrap_scene_image_prompt(site_name: String, background: St
 	var parts: Array = [
 		"cinematic environment faithful to world setting",
 		"daylight natural color",
-		"no text, no watermark",
+		build_no_text_image_constraint(),
 		"location:" + n
 	]
 	if background.strip_edges() != "":

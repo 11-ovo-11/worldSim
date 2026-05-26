@@ -33,13 +33,14 @@ const AGENT_PROMPT := """你是一个AI智能体，擅长确定需要调用的�
 	若一次输入含多个标签，必须按顺序调用多个函数。
 	涉及数量时 quantity 必须是真实值，不能默认1。
 	物品名必须严格取自<>原文，不得改写或外推。
+	若输入没有<>标签，也要从语义中尽力提取买卖、赠送、交付、协助执行等可执行方法；如果玩家明确提出购买/出售而NPC回复未明确拒绝，应优先生成initiate_transaction（允许合理猜测数量/价格）；如果确实没有再回复没有方法被调用。
 """
 
 const ITEM_PROFILE_PROMPT := """
 你是游戏道具设计助手。针对给定的物品名，输出严格 JSON：
 {
 	"description":"中文介绍，20~60字",
-	"image_prompt":"英文生图提示词，适合生成单个道具图标，纯净背景，无文字",
+	"image_prompt":"英文生图提示词，适合生成单个道具图标，纯净背景，严禁任何文字/字母/数字/符号/logo/水印",
 	"value": 物品预估价值（整数，日用品10-100，科技产品100-500，稀有物品500-2000）, 
 	"rarity": "common、uncommon、rare、epic、legendary之一",
 	"effect_type": "energy_restore、hp_restore、both_restore、money_gain、money_loss、reputation_gain、reputation_loss、time_advance、npc_affinity、rumor_trigger之一",
@@ -81,6 +82,32 @@ const ACTION_PROMPT := """
 11) 前往地点（行动为去某处且可成功到达时）：<前往:地点名>
 工具指令仅用<>附在句末，不要解释。
 """
+
+static func build_tool_inference_user_prompt(interaction_kind: String, source_input: String, reply_text: String, angle_tags_text: String = "", handled_direct_tags: Array = []) -> String:
+	var kind_label = "对话"
+	var reply_label = "NPC回复"
+	if str(interaction_kind).strip_edges().to_lower() == "action":
+		kind_label = "行动"
+		reply_label = "旁白结果"
+	var lines: Array = []
+	lines.append("请根据下面上下文判断需要调用的方法，并直接返回函数调用；如果没有就回复：没有方法被调用。")
+	if kind_label == "对话":
+		lines.append("对话补充规则：NPC以询问句表达交易/赠送意图也算可执行方法（如\"要不要买\"、\"给你\"、\"收下吧\"等），除非NPC明确拒绝。")
+	lines.append("交互类型：" + kind_label)
+	if str(source_input).strip_edges() != "":
+		lines.append("玩家输入：" + str(source_input).strip_edges())
+	lines.append(reply_label + "：" + str(reply_text).strip_edges())
+	if str(angle_tags_text).strip_edges() != "":
+		lines.append("AI输出中原始<>标签：" + str(angle_tags_text).strip_edges())
+	if handled_direct_tags is Array and !handled_direct_tags.is_empty():
+		var blocked: Array = []
+		for tag in handled_direct_tags:
+			var t = str(tag).strip_edges()
+			if t != "":
+				blocked.append("<" + t + ">")
+		if !blocked.is_empty():
+			lines.append("以下标签已在本地直接执行，禁止重复返回：" + "".join(blocked))
+	return "\n".join(lines)
 
 static func get_npc_tools() -> Array:
 	return [

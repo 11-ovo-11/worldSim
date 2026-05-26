@@ -5,6 +5,7 @@ static func parse_direct_action_tags(tags: Array) -> Dictionary:
 	var unresolved = ""
 	var handled_any = false
 	var operations: Array = []
+	var handled_tags: Array = []
 	for raw_tag in tags:
 		var normalized = str(raw_tag).replace("：", ":").strip_edges()
 		if normalized == "":
@@ -14,6 +15,7 @@ static func parse_direct_action_tags(tags: Array) -> Dictionary:
 			if money_delta != 0:
 				operations.append({"type": "money_delta", "delta": money_delta})
 				handled_any = true
+				handled_tags.append(normalized)
 			else:
 				unresolved += "<" + str(raw_tag) + ">"
 		elif normalized.begins_with("声望值"):
@@ -21,16 +23,19 @@ static func parse_direct_action_tags(tags: Array) -> Dictionary:
 			if rep_delta != 0:
 				operations.append({"type": "reputation_delta", "delta": rep_delta})
 				handled_any = true
+				handled_tags.append(normalized)
 			else:
 				unresolved += "<" + str(raw_tag) + ">"
 		elif normalized.begins_with("犯罪"):
 			operations.append({"type": "crime_flag"})
 			handled_any = true
+			handled_tags.append(normalized)
 		elif normalized.begins_with("前往"):
 			var target = normalized.trim_prefix("前往").replace(":", "").strip_edges()
 			if target != "":
 				operations.append({"type": "nav_target", "target": target})
 				handled_any = true
+				handled_tags.append(normalized)
 			else:
 				unresolved += "<" + str(raw_tag) + ">"
 		elif normalized.begins_with("设置时间"):
@@ -42,8 +47,9 @@ static func parse_direct_action_tags(tags: Array) -> Dictionary:
 					"minute": int(time_info.get("minute", 0))
 				})
 				handled_any = true
+				handled_tags.append(normalized)
 			else:
 				unresolved += "<" + str(raw_tag) + ">"
 		else:
 			unresolved += "<" + str(raw_tag) + ">"
-	return {"handled_any": handled_any, "unresolved_tags": unresolved, "operations": operations}
+	return {"handled_any": handled_any, "unresolved_tags": unresolved, "operations": operations, "handled_tags": handled_tags}

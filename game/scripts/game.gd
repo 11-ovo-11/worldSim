@@ -590,8 +590,14 @@ func _is_valid_generated_npc_name(raw_name: String) -> bool:
 func _extract_angle_tags(input_string: String) -> Array:
 	return GameAiUtils.extract_angle_tags(input_string)
 
-func _apply_direct_npc_tool_tags(reply: String) -> bool:
+func _apply_direct_npc_tool_tags(reply: String) -> Dictionary:
 	return GameDialogueExpandUtils.apply_direct_npc_tool_tags(self, reply)
+
+func _build_tool_inference_user_prompt(interaction_kind: String, source_input: String, reply_text: String, angle_tags_text: String = "", handled_direct_tags: Array = []) -> String:
+	return GamePrompts.build_tool_inference_user_prompt(interaction_kind, source_input, reply_text, angle_tags_text, handled_direct_tags)
+
+func _request_tool_inference(interaction_kind: String, source_input: String, reply_text: String, angle_tags_text: String = "", handled_direct_tags: Array = []) -> void:
+	await GameFlowRuntimeUtils.request_tool_inference(self, interaction_kind, source_input, reply_text, angle_tags_text, handled_direct_tags)
 
 func _is_location_query_dialogue(input_text: String) -> bool:
 	return GameTextUtils.is_location_query_dialogue(input_text)
@@ -1260,32 +1266,28 @@ func _build_crime_context(action_input: String, action_reply: String, tool_tags:
 func _apply_direct_action_tool_tags(action_reply: String) -> Dictionary:
 	var tags = _extract_angle_tags(action_reply)
 	if tags.is_empty():
-		return {"handled_any": false, "unresolved_tags": "", "nav_target": ""}
+		return {"handled_any": false, "unresolved_tags": "", "nav_target": "", "handled_tags": []}
 	var parsed = GameActionTagUtils.parse_direct_action_tags(tags)
 	var unresolved = str(parsed.get("unresolved_tags", ""))
 	var handled_any = bool(parsed.get("handled_any", false))
+	var handled_tags: Array = parsed.get("handled_tags", [])
 	var nav_target = ""
+	var state_changed = false
 	for op in parsed.get("operations", []):
 		if !(op is Dictionary):
 			continue
 		var op_type = str(op.get("type", "")).strip_edges()
-		if op_type == "money_delta":
-			var money_delta = int(op.get("delta", 0))
-			var before_money = money
-			money = max(0, money + money_delta)
-			var real_delta = money - before_money
-			if real_delta != 0:
-				var delta_sign = "+" if real_delta > 0 else ""
-				addLog("<资产变化" + delta_sign + str(real_delta) + "，当前资产" + str(money) + ">")
-		elif op_type == "reputation_delta":
+		if op_type == "reputation_delta":
 			update_reputation(int(op.get("delta", 0)))
+			state_changed = true
 		elif op_type == "set_time":
 			set_time(int(op.get("hour", 0)), int(op.get("minute", 0)))
+			state_changed = true
 		elif op_type == "nav_target":
 			nav_target = str(op.get("target", "")).strip_edges()
-	if handled_any:
+	if state_changed:
 		player_update()
-	return {"handled_any": handled_any, "unresolved_tags": unresolved, "nav_target": nav_target}
+	return {"handled_any": handled_any, "unresolved_tags": unresolved, "nav_target": nav_target, "handled_tags": handled_tags}
 
 func _extract_nav_target_from_text(text: String) -> String:
 	return GameActionUtils.extract_nav_target_from_text(text, currentSiteName, sites.keys())
