@@ -40,14 +40,20 @@ static func build_shared_context(data: Dictionary) -> String:
 		for s in session_lines:
 			if s.strip_edges() != "":
 				session_set[s] = true
-		lines.append("当前会话强约束：\n" + "\n".join(session_set.keys()))
+		var session_keys = session_set.keys()
+		if session_keys.size() > 6:
+			session_keys = session_keys.slice(session_keys.size() - 6, session_keys.size())
+		lines.append("当前会话强约束：\n" + "\n".join(session_keys))
 	if related_events != "":
 		var event_lines = related_events.split("\n")
 		var event_set = {}
 		for e in event_lines:
 			if e.strip_edges() != "":
 				event_set[e] = true
-		lines.append("事件记忆：\n" + "\n".join(event_set.keys()))
+		var event_keys = event_set.keys()
+		if event_keys.size() > 6:
+			event_keys = event_keys.slice(event_keys.size() - 6, event_keys.size())
+		lines.append("事件记忆：\n" + "\n".join(event_keys))
 	return "\n".join(lines)
 
 static func build_dialogue_user_content(prompt: String, shared_context: String = "") -> String:
