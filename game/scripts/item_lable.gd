@@ -141,5 +141,19 @@ func _on_item_image_button_pressed() -> void:
 			popup.hide()
 			popup.queue_free()
 		)
+	var gift_button = popup.get_node_or_null("%GiftButton") as Button
+	if gift_button != null:
+		gift_button.disabled = item_num <= 0
+		var scene_now = get_tree().current_scene
+		if scene_now != null and scene_now.has_method("gift_item"):
+			var in_chat = scene_now.currentState == scene_now.worldState.chat and scene_now.currentNpc != null
+			gift_button.text = "赠送给当前对话对象" if in_chat else "赠送给路人"
+		gift_button.pressed.connect(func():
+			var scene = get_tree().current_scene
+			if scene != null and scene.has_method("gift_item"):
+				scene.gift_item(item_name)
+			popup.hide()
+			popup.queue_free()
+		)
 	get_tree().current_scene.add_child(popup)
 	popup.popup_centered()

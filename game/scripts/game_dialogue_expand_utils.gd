@@ -380,7 +380,7 @@ static func validate_and_create_entity_candidates(scene: Node, candidates: Array
 		else:
 			print("[实体验证] 跳过「", str(need_ai[i].get("name", "")), "」（AI判定非", str(need_ai[i].get("kind", "")), "）")
 
-static func npc_reply(scene: Node, reply: String) -> void:
+static func npc_reply(scene: Node, reply: String, model_tool_calls: Array = []) -> void:
 	if scene.currentNpc == null or !is_instance_valid(scene.currentNpc):
 		return
 	var active_npc_name = str(scene.currentNpc.npcName).strip_edges()
@@ -409,8 +409,20 @@ static func npc_reply(scene: Node, reply: String) -> void:
 	var full_context = (str(scene.last_dialogue_input) + "\n" + scene.process_string(reply)).strip_edges()
 	await validate_and_create_entity_candidates(scene, entity_candidates, full_context)
 	var tools_texts = scene.get_content_in_angle_brackets(reply)
+	var tool_hint = GameFlowRuntimeUtils.build_tool_call_hint_text(model_tool_calls)
+	if tool_hint != "":
+		tools_texts = (tools_texts + "\n" + tool_hint).strip_edges()
 	print("提取出的工具信息：", tools_texts)
-	await scene._request_tool_inference("dialogue", scene.last_dialogue_input, reply, tools_texts, handled_direct_tags)
+	await GameFlowRuntimeUtils.handle_model_tool_calls(scene, model_tool_calls, handled_direct_tags)
+	if model_tool_calls.is_empty():
+		var plain_reply = scene.process_string(reply)
+		var should_fallback_infer = false
+		if tools_texts.strip_edges() != "":
+			should_fallback_infer = true
+		elif GameNpcInferUtils.needs_tool_inference_from_context(str(scene.last_dialogue_input), plain_reply):
+			should_fallback_infer = true
+		if should_fallback_infer:
+			await scene._request_tool_inference("dialogue", scene.last_dialogue_input, reply, tools_texts, handled_direct_tags)
 	await scene._auto_apply_action_effects("", reply, tools_texts)
 	if !scene._has_active_event_panel():
 		var action_req = scene._extract_npc_action_request(reply)

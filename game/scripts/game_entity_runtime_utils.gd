@@ -492,6 +492,13 @@ static func add_item(scene: Node, itemToAdd, itemNum) -> void:
 	scene.ensure_item_profile_async(itemToAdd)
 
 static func _resolve_item_effect_fallback(item_name: String, profile: Dictionary) -> Dictionary:
+	var desc_based = _infer_item_effect_from_description(
+		item_name,
+		str(profile.get("description", "")).strip_edges(),
+		int(profile.get("value", 50))
+	)
+	if !desc_based.is_empty():
+		return desc_based
 	var effect_type = str(profile.get("effect_type", "")).strip_edges().to_lower()
 	var effect_value = int(profile.get("effect_value", 0))
 	if effect_type == "none":
@@ -509,6 +516,64 @@ static func _resolve_item_effect_fallback(item_name: String, profile: Dictionary
 	if n.find("情报") != -1 or n.find("信") != -1 or n.find("地图") != -1:
 		return {"effect_type": "rumor_trigger", "effect_value": 1}
 	return {"effect_type": "both_restore", "effect_value": clamp(val, 6, 20)}
+
+static func _infer_item_effect_from_description(item_name: String, description: String, value: int) -> Dictionary:
+	var desc = str(description).strip_edges()
+	if desc == "":
+		return {}
+	var base = max(5, int(round(max(1, value) / 12.0)))
+	var severe = max(base, 10)
+	var negative_health_tokens = ["有毒", "剧毒", "腐坏", "变质", "诅咒", "副作用", "灼烧", "刺痛", "恶臭", "污染", "不适", "头晕", "发烧", "呕吐"]
+	for token in negative_health_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "hp_restore", "effect_value": -clamp(severe, 8, 28)}
+	var negative_energy_tokens = ["嗜睡", "昏沉", "疲惫", "乏力", "困倦", "麻木", "眩晕"]
+	for token in negative_energy_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "energy_restore", "effect_value": -clamp(severe, 8, 24)}
+	var money_loss_tokens = ["押金", "手续费", "维护费", "保养费", "破财", "损耗资金", "需支付", "代价"]
+	for token in money_loss_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "money_loss", "effect_value": clamp(severe * 2, 10, 120)}
+	var rep_loss_tokens = ["违禁", "赃物", "偷来", "可疑", "通缉", "黑市", "失礼", "冒犯", "败坏名声"]
+	for token in rep_loss_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "reputation_loss", "effect_value": clamp(severe, 6, 25)}
+	var hp_tokens = ["治愈", "疗伤", "止血", "恢复健康", "修复", "愈合", "缓解疼痛", "消炎"]
+	for token in hp_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "hp_restore", "effect_value": clamp(base, 8, 30)}
+	var energy_tokens = ["提神", "补充体力", "恢复体力", "充能", "振奋", "醒脑", "驱困"]
+	for token in energy_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "energy_restore", "effect_value": clamp(base, 8, 24)}
+	var both_tokens = ["恢复状态", "全面恢复", "补给", "应急恢复", "恢复精力与健康"]
+	for token in both_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "both_restore", "effect_value": clamp(base, 6, 20)}
+	var money_gain_tokens = ["兑奖", "变现", "赏金", "可售", "现金奖励", "增值", "抵扣"]
+	for token in money_gain_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "money_gain", "effect_value": clamp(base * 2, 10, 140)}
+	var rep_gain_tokens = ["荣誉", "嘉奖", "表彰", "推荐信", "信誉", "体面", "正当身份"]
+	for token in rep_gain_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "reputation_gain", "effect_value": clamp(base, 6, 25)}
+	var affinity_tokens = ["礼物", "纪念", "安抚", "表达心意", "联络", "示好", "缓和关系"]
+	for token in affinity_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "npc_affinity", "effect_value": max(1, int(round(base / 2.0)))}
+	var rumor_tokens = ["线索", "情报", "地图", "密信", "传闻", "密码", "笔记"]
+	for token in rumor_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "rumor_trigger", "effect_value": 1}
+	var time_tokens = ["需要等待", "耗时", "发酵", "冷却", "长时间", "延时"]
+	for token in time_tokens:
+		if desc.find(token) != -1:
+			return {"effect_type": "time_advance", "effect_value": clamp(base * 3, 10, 90)}
+	if str(item_name).find("毒") != -1:
+		return {"effect_type": "hp_restore", "effect_value": -clamp(severe, 8, 30)}
+	return {}
 
 static func request_item_use_ai_feedback(scene: Node, scene_context: String, fallback: String) -> void:
 	var line = await scene._generate_validation_dialogue(scene_context, fallback)
@@ -548,18 +613,22 @@ static func use_item(scene: Node, item_name: String) -> Dictionary:
 			target_name = "对话对象"
 	match effect_type:
 		"energy_restore":
-			scene.energy = clamp(scene.energy + effect_value, 0.0, 100.0)
-			effect_summary = "体力+" + str(effect_value)
+			scene.energy = clamp(scene.energy + float(effect_value), 0.0, 100.0)
+			effect_summary = "体力" + ("+" if effect_value >= 0 else "") + str(effect_value)
 			msg = "你对" + target_name + "使用了" + str(item_name) + "，" + effect_summary
 		"hp_restore":
-			scene.hp = clamp(scene.hp + effect_value, 0.0, 100.0)
-			effect_summary = "健康+" + str(effect_value)
+			scene.hp = clamp(scene.hp + float(effect_value), 0.0, 100.0)
+			effect_summary = "健康" + ("+" if effect_value >= 0 else "") + str(effect_value)
 			msg = "你对" + target_name + "使用了" + str(item_name) + "，" + effect_summary
 		"both_restore":
-			scene.energy = clamp(scene.energy + effect_value, 0.0, 100.0)
-			scene.hp = clamp(scene.hp + int(round(effect_value * 0.6)), 0.0, 100.0)
-			effect_summary = "体力与健康恢复"
-			msg = "你对" + target_name + "使用了" + str(item_name) + "，体力与健康都恢复了一些"
+			scene.energy = clamp(scene.energy + float(effect_value), 0.0, 100.0)
+			scene.hp = clamp(scene.hp + float(int(round(effect_value * 0.6))), 0.0, 100.0)
+			if effect_value >= 0:
+				effect_summary = "体力与健康恢复"
+				msg = "你对" + target_name + "使用了" + str(item_name) + "，体力与健康都恢复了一些"
+			else:
+				effect_summary = "体力与健康受损"
+				msg = "你对" + target_name + "使用了" + str(item_name) + "，状态明显变差"
 		"money_gain":
 			scene.money += max(1, effect_value)
 			effect_summary = "资产+" + str(max(1, effect_value))
@@ -602,5 +671,28 @@ static func use_item(scene: Node, item_name: String) -> Dictionary:
 	scene.player_update()
 	scene.addLog("<" + msg + ">")
 	var feedback_context = "玩家在地点「" + str(scene.currentSiteName) + "」使用道具「" + str(item_name) + "」，作用对象是「" + target_name + "」，效果为：" + effect_summary + "。请用15~35字给一句自然的结果反馈。"
+	scene.call_deferred("_request_item_use_ai_feedback", feedback_context, msg)
+	return {"ok": true, "message": msg}
+
+static func gift_item(scene: Node, item_name: String) -> Dictionary:
+	var key = str(item_name).strip_edges()
+	if key == "":
+		return {"ok": false, "message": "你还没有选定要赠送的物品。"}
+	var consume_result: Dictionary = scene.get_node("%itemContainer").consume_item(key, 1)
+	if !consume_result.get("success", false):
+		return {"ok": false, "message": "背包里没有可赠送的" + key + "。"}
+	var target_name = "路人"
+	var in_chat = scene.currentState == scene.worldState.chat and scene.currentNpc != null
+	if in_chat:
+		target_name = str(scene.currentNpc.npcName).strip_edges()
+		if target_name == "":
+			target_name = "对方"
+	var msg = "你把" + key + "赠送给了" + target_name
+	if in_chat:
+		scene._remember_important_event("<道具赠送>你向" + target_name + "赠送了「" + key + "x1」。", scene.currentSiteName, target_name)
+	else:
+		scene._remember_important_event("<道具赠送>你在" + str(scene.currentSiteName) + "将「" + key + "x1」赠送给路人。", scene.currentSiteName, "")
+	scene.addLog("<" + msg + ">")
+	var feedback_context = "玩家在地点「" + str(scene.currentSiteName) + "」将道具「" + key + "」赠送给「" + target_name + "」。请用15~35字给一句自然的结果反馈。"
 	scene.call_deferred("_request_item_use_ai_feedback", feedback_context, msg)
 	return {"ok": true, "message": msg}

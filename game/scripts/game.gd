@@ -492,6 +492,8 @@ func ask_ai(message: Array, askmode: aiMode):
 	match askmode:
 		aiMode.tools:
 			body = [outbound_messages,tools,"text"]
+		aiMode.chat, aiMode.action:
+			body = [outbound_messages,tools,"text"]
 		aiMode.explore:
 			body = [outbound_messages,null,"json_object"]
 	var url = chat_url
@@ -729,8 +731,8 @@ func _maybe_create_related_npc_from_dialogue(reply: String) -> void:
 func _maybe_create_unknown_npc_from_dialogue(reply: String) -> void:
 	GameDialogueExpandUtils.maybe_create_unknown_npc_from_dialogue(self, reply)
 
-func npc_reply(reply: String):
-	await GameDialogueExpandUtils.npc_reply(self, reply)
+func npc_reply(reply: String, model_tool_calls: Array = []):
+	await GameDialogueExpandUtils.npc_reply(self, reply, model_tool_calls)
 
 func process_string(input: String) -> String:
 	_ensure_process_regex_ready()
@@ -1385,6 +1387,9 @@ func add_item(itemToAdd, itemNum):
 
 func use_item(item_name: String) -> Dictionary:
 	return GameEntityRuntimeUtils.use_item(self, item_name)
+
+func gift_item(item_name: String) -> Dictionary:
+	return GameEntityRuntimeUtils.gift_item(self, item_name)
 
 func save_game() -> void:
 	if _is_runtime_transition_locked():

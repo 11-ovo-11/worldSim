@@ -67,6 +67,7 @@ const ACTION_PROMPT := """
 先校验常理与数据：资产、背包、数量、地点关系、角色身份、当前场景。
 玩家身份由系统确认，视为世界事实，不得质疑/否认/重置。
 涉及NPC态度时，必须结合玩家身份、声望、NPC身份、历史重要事件（敬畏/尊重/戒备/敌意等）。
+若本次结果包含可执行状态变化（交易、赠送、收取、创建地点/NPC、传闻、时间、声望等），必须在同一轮响应里调用对应工具函数；正文叙述与工具调用需同时存在，不能只返回函数调用。
 若不成立（钱不够/缺物品/地点不合理/场景不可执行等），只输出失败，不得伪造成功，不得添加交易或物品变更指令。
 若成立且有可执行变化，在叙述末追加一个或多个<>指令：
 1) 交易出售：<以50的价格卖1把剑> 或 <以总价100卖3瓶药水>
@@ -106,7 +107,7 @@ static func build_tool_inference_user_prompt(interaction_kind: String, source_in
 			if t != "":
 				blocked.append("<" + t + ">")
 		if !blocked.is_empty():
-			lines.append("以下标签已在本地直接执行，禁止重复返回：" + "".join(blocked))
+			lines.append("以下标签已识别到，本轮无需重复返回对应调用：" + "".join(blocked))
 	return "\n".join(lines)
 
 static func get_npc_tools() -> Array:

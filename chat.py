@@ -408,12 +408,12 @@ def chat():
                 )
                 # 获取消息
                 message = response.choices[0].message
-                text = message.content
-                # 如果有工具调用，转换为字典列表
+                text = message.content if message.content is not None else ""
+                tool_calls = []
                 if message.tool_calls is not None:
-                    text = [tool_call.model_dump() for tool_call in message.tool_calls]
-                print("ai:", text)
-                return jsonify({"text": text})
+                    tool_calls = [tool_call.model_dump() for tool_call in message.tool_calls]
+                print("ai:", {"text": text, "tool_calls": tool_calls})
+                return jsonify({"text": text, "tool_calls": tool_calls})
             except Exception as e:
                 print(f"DeepSeek API请求失败: {str(e)}")
                 return jsonify({"error": f"DeepSeek API请求失败: {str(e)}"}), 533

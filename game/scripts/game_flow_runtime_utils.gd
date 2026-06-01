@@ -13,6 +13,100 @@ static func request_tool_inference(scene: Node, interaction_kind: String, source
 	]
 	await scene.ask_ai(prompts, scene.aiMode.tools)
 
+static func _parse_tool_calls_raw(raw_value) -> Array:
+	if raw_value == null:
+		return []
+	if raw_value is Array:
+		return raw_value
+	if raw_value is Dictionary:
+		if raw_value.has("function") or raw_value.has("name"):
+			return [raw_value]
+		return []
+	if raw_value is String:
+		var text = str(raw_value).strip_edges()
+		if text == "":
+			return []
+		var parser = JSON.new()
+		if parser.parse(text) == OK:
+			var parsed = parser.get_data()
+			if parsed is Array:
+				return parsed
+			if parsed is Dictionary and (parsed.has("function") or parsed.has("name")):
+				return [parsed]
+	return []
+
+static func extract_tool_calls_from_response_data(data: Dictionary) -> Array:
+	if data.has("tool_calls"):
+		var tc = _parse_tool_calls_raw(data.get("tool_calls", null))
+		if !tc.is_empty():
+			return tc
+	if data.has("text"):
+		return _parse_tool_calls_raw(data.get("text", null))
+	return []
+
+static func _is_tool_call_blocked_by_handled_tags(method: String, handled_direct_tags: Array) -> bool:
+	var m = str(method).strip_edges()
+	if m == "" or handled_direct_tags.is_empty():
+		return false
+	for raw_tag in handled_direct_tags:
+		var tag = str(raw_tag).replace("：", ":").strip_edges()
+		if tag == "":
+			continue
+		if m == "set_time" and tag.begins_with("设置时间"):
+			return true
+		if m == "update_reputation" and tag.begins_with("声望值"):
+			return true
+		if m == "create_location" and tag.begins_with("创建路径:"):
+			return true
+		if m == "destroy_self" and tag.begins_with("离开"):
+			return true
+		if m == "got_items" and tag.begins_with("送"):
+			return true
+		if m == "consume_items" and tag.begins_with("接受"):
+			return true
+		if m == "initiate_transaction" and tag.begins_with("以"):
+			return true
+	return false
+
+static func filter_tool_calls_for_handled_tags(tool_calls: Array, handled_direct_tags: Array = []) -> Array:
+	if tool_calls.is_empty() or handled_direct_tags.is_empty():
+		return tool_calls
+	var filtered: Array = []
+	for tool_call in tool_calls:
+		if !(tool_call is Dictionary):
+			continue
+		var function_data = tool_call.get("function", {})
+		if function_data == {} and tool_call.has("name"):
+			function_data = tool_call
+		var method = str(function_data.get("name", "")).strip_edges()
+		if _is_tool_call_blocked_by_handled_tags(method, handled_direct_tags):
+			continue
+		filtered.append(tool_call)
+	return filtered
+
+static func handle_model_tool_calls(scene: Node, tool_calls: Array, handled_direct_tags: Array = []) -> void:
+	var filtered_calls = filter_tool_calls_for_handled_tags(tool_calls, handled_direct_tags)
+	if filtered_calls.is_empty():
+		return
+	await scene.handle_npc_instruction(filtered_calls)
+
+static func build_tool_call_hint_text(tool_calls: Array) -> String:
+	if tool_calls.is_empty():
+		return ""
+	var method_names: Array = []
+	for tool_call in tool_calls:
+		if !(tool_call is Dictionary):
+			continue
+		var function_data = tool_call.get("function", {})
+		if function_data == {} and tool_call.has("name"):
+			function_data = tool_call
+		var method = str(function_data.get("name", "")).strip_edges()
+		if method != "" and !method_names.has(method):
+			method_names.append(method)
+	if method_names.is_empty():
+		return ""
+	return "模型工具调用：" + ",".join(method_names)
+
 static func goto(scene: Node, where: String) -> void:
 	where = scene._resolve_site_alias(str(where).strip_edges())
 	if where == "":
@@ -319,6 +413,7 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 		return
 	var data = json.get_data()
 	if data.has("text"):
+		var model_tool_calls: Array = extract_tool_calls_from_response_data(data)
 		match scene.currentMode:
 			scene.aiMode.init_background:
 				scene.background = data["text"]
@@ -423,7 +518,10 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 				scene._save_site_json(location_name, jsonDic)
 				scene.pending_site_update = false
 			scene.aiMode.chat:
-				var chat_text = scene._enforce_output_min_length(str(data.get("text", "")), scene.aiMode.chat)
+				var raw_chat_text = data.get("text", "")
+				if !(raw_chat_text is String):
+					raw_chat_text = ""
+				var chat_text = scene._enforce_output_min_length(str(raw_chat_text), scene.aiMode.chat)
 				if scene.runtime_operation_lock or scene.currentState != scene.worldState.chat or scene.currentNpc == null:
 					return
 				var req_npc = str(scene.get_meta("chat_request_npc_name", "")).strip_edges()
@@ -431,7 +529,10 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 				if req_npc != "" and active_npc != "" and req_npc != active_npc:
 					scene.addLog("<已忽略过期对话响应：来源=" + req_npc + "，当前=" + active_npc + ">")
 					return
-				await scene.npc_reply(chat_text)
+				if chat_text.strip_edges() == "":
+					await handle_model_tool_calls(scene, model_tool_calls)
+					return
+				await scene.npc_reply(chat_text, model_tool_calls)
 				if scene._is_instant_gen_active():
 					scene.addLog("<即时生成触发：来源=对话输出>")
 					scene._bg_debug("instant trigger from chat, site=" + str(scene.currentSiteName) + ", text_len=" + str(chat_text.length()))
@@ -439,7 +540,10 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 				else:
 					scene._bg_debug("instant skipped from chat (mode disabled)")
 			scene.aiMode.action:
-				var action_reply = scene._enforce_output_min_length(str(data.get("text", "")), scene.aiMode.action)
+				var raw_action_text = data.get("text", "")
+				if !(raw_action_text is String):
+					raw_action_text = ""
+				var action_reply = scene._enforce_output_min_length(str(raw_action_text), scene.aiMode.action)
 				action_reply = scene._enforce_action_narration_richness(action_reply)
 				if action_reply is String and action_reply.strip_edges() != "":
 					scene._set_event_flow_lock(true)
@@ -452,12 +556,15 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 					else:
 						scene._bg_debug("instant skipped from action (mode disabled)")
 					var tool_tags = scene.get_content_in_angle_brackets(action_reply)
+					var tool_hint = build_tool_call_hint_text(model_tool_calls)
+					if tool_hint != "":
+						tool_tags = (tool_tags + "\n" + tool_hint).strip_edges()
 					var direct_tag_result = scene._apply_direct_action_tool_tags(action_reply)
 					var handled_direct_tags: Array = direct_tag_result.get("handled_tags", [])
 					var nav_target = str(direct_tag_result.get("nav_target", ""))
 					if nav_target == "":
 						nav_target = scene._extract_nav_target_from_text(action_reply)
-					await scene._request_tool_inference("action", scene.last_action_input, action_reply, tool_tags, handled_direct_tags)
+					await handle_model_tool_calls(scene, model_tool_calls, handled_direct_tags)
 					scene._auto_handle_action_search(scene.last_action_input, action_reply)
 					if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
 						scene._record_current_chat_session("行动结果", "旁白", action_reply)
@@ -469,6 +576,7 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 					if scene.currentState != scene.worldState.chat and !scene._has_active_event_panel():
 						scene._set_event_flow_lock(false)
 				else:
+					await handle_model_tool_calls(scene, model_tool_calls)
 					scene._set_event_flow_lock(false)
 			scene.aiMode.sum:
 				if scene.currentNpc != null:
@@ -481,20 +589,10 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 						scene.npcs[sum_npc_name]["npc_log"].append(str(data.get("text", "")))
 						scene.addLog("你结束了与" + sum_npc_name + "的对话。" + str(data.get("text", "")))
 			scene.aiMode.tools:
-				if data["text"] is Array:
-					await scene.handle_npc_instruction(data["text"])
-				elif data["text"] is Dictionary:
-					await scene.handle_npc_instruction([data["text"]])
-				elif data["text"] is String:
-					if str(data["text"]).strip_edges() == "没有方法被调用":
-						return
-					var parser = JSON.new()
-					if parser.parse(data["text"]) == OK:
-						var parsed = parser.get_data()
-						if parsed is Array:
-							await scene.handle_npc_instruction(parsed)
-						elif parsed is Dictionary and parsed.has("function"):
-							await scene.handle_npc_instruction([parsed])
+				if !model_tool_calls.is_empty():
+					await scene.handle_npc_instruction(model_tool_calls)
+				elif data["text"] is String and str(data["text"]).strip_edges() == "没有方法被调用":
+					return
 			scene.aiMode.validate_entity:
 				scene.last_entity_validation_response = str(data.get("text", "")).strip_edges()
 			scene.aiMode.refine_event:

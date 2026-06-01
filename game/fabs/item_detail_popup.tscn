@@ -51,3 +51,9 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 text = "使用"
+
+[node name="GiftButton" type="Button" parent="PanelMargin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+text = "赠送"

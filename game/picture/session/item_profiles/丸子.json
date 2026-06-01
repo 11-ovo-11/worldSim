@@ -1,8 +1,0 @@
-{
-	"description": "一个圆润可口的丸子，散发着诱人的香气，能恢复少量生命值。",
-	"effect_type": "hp_restore",
-	"effect_value": 10.0,
-	"image_prompt": "a round meatball on a plate, appetizing, clean background, no text, simple icon style",
-	"rarity": "common",
-	"value": 3
-}
