@@ -394,20 +394,7 @@ static func npc_reply(scene: Node, reply: String, model_tool_calls: Array = []) 
 	scene.currentNpc.currentChat += active_npc_name + ":" + reply + "\n"
 	scene._remember_important_event("<对话>" + active_npc_name + "：" + scene.process_string(reply), scene.currentSiteName, active_npc_name)
 	var direct_tag_result = apply_direct_npc_tool_tags(scene, reply)
-	var direct_location_only = bool(direct_tag_result.get("only_location_tags", false))
 	var handled_direct_tags: Array = direct_tag_result.get("handled_tags", [])
-	var entity_candidates: Array = []
-	if !direct_location_only:
-		var location_cand = _collect_location_candidate(scene, reply)
-		if !location_cand.is_empty():
-			entity_candidates.append(location_cand)
-	for npc_cand in _collect_related_npc_candidates(scene, reply):
-		entity_candidates.append(npc_cand)
-	var unknown_cand = _collect_unknown_npc_candidate(scene, reply)
-	if !unknown_cand.is_empty():
-		entity_candidates.append(unknown_cand)
-	var full_context = (str(scene.last_dialogue_input) + "\n" + scene.process_string(reply)).strip_edges()
-	await validate_and_create_entity_candidates(scene, entity_candidates, full_context)
 	var tools_texts = scene.get_content_in_angle_brackets(reply)
 	var tool_hint = GameFlowRuntimeUtils.build_tool_call_hint_text(model_tool_calls)
 	if tool_hint != "":
