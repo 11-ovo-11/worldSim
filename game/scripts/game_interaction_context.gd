@@ -35,9 +35,19 @@ static func build_shared_context(data: Dictionary) -> String:
 	if identity_guidance != "":
 		lines.append("态度导向：\n" + identity_guidance)
 	if chat_session_mem != "":
-		lines.append("当前会话强约束：\n" + chat_session_mem)
+		var session_lines = chat_session_mem.split("\n")
+		var session_set = {}
+		for s in session_lines:
+			if s.strip_edges() != "":
+				session_set[s] = true
+		lines.append("当前会话强约束：\n" + "\n".join(session_set.keys()))
 	if related_events != "":
-		lines.append("事件记忆：\n" + related_events)
+		var event_lines = related_events.split("\n")
+		var event_set = {}
+		for e in event_lines:
+			if e.strip_edges() != "":
+				event_set[e] = true
+		lines.append("事件记忆：\n" + "\n".join(event_set.keys()))
 	return "\n".join(lines)
 
 static func build_dialogue_user_content(prompt: String, shared_context: String = "") -> String:

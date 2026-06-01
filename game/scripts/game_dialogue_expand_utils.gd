@@ -1,4 +1,4 @@
-extends RefCounted
+﻿extends RefCounted
 class_name GameDialogueExpandUtils
 
 static func looks_like_person_reference(npcs: Dictionary, target: String) -> bool:
