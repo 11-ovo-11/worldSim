@@ -1,0 +1,8 @@
+{
+	"description": "一个由新鲜野花编织而成的花环，散发着淡淡清香，佩戴后能恢复少量精力。",
+	"effect_type": "energy_restore",
+	"effect_value": 15,
+	"image_prompt": "A simple wreath made of colorful wild flowers, on a clean white background, no text, no letters, no symbols, no logo, no watermark, icon style, high quality.",
+	"rarity": "common",
+	"value": 25
+}
