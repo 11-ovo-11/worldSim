@@ -1,0 +1,233 @@
+{
+	"background": "世界概览：\n这是一所位于现代都市边缘的综合性大学，以其严谨的学术氛围和相对封闭的校园环境而闻名。核心冲突潜藏于表面平静的日常之下，是象牙塔的理想主义与社会现实压力之间的无声角力，以及个体在集体规训中对自我身份的探寻与迷茫。\n\n人群状态：\n大多数学生过着宿舍、教室、食堂、图书馆四点一线的规律生活，被绩点、社团活动、实习机会和模糊的未来规划所驱动。他们普遍信仰“努力即正义”的个人奋斗叙事，同时对内卷感到疲惫，恐惧在看似平等的竞争中落后，成为“平庸的大多数”。一种微妙的集体焦虑与间歇性的青春狂欢交织成校园生活的主旋律。\n\n环境与天气：\n校园建筑风格混杂，既有上世纪遗留的苏式红砖楼，也有近年新建的玻璃幕墙现代建筑，被大量绿化带和人工湖分割。天气遵循典型的温带季风气候，四季分明。春秋短暂宜人，夏季闷热多雨，冬季干燥寒冷。反复无常的天气常常打乱学生的出行和学习计划，连绵的阴雨或突如其来的寒潮，会加剧宿舍-教室两点一线生活的封闭感，也偶尔成为年轻人情绪起伏的天然注脚。",
+	"current_site": "图书馆",
+	"env_dic": {
+		"current_humidity": 65.0,
+		"current_temperature": 18.0,
+		"current_weather": "cloudy",
+		"current_wind_speed": 8.0,
+		"humidity_range": [
+			30.0,
+			90.0
+		],
+		"temperature_range": [
+			-12.0,
+			38.0
+		],
+		"weather_duration_base": {
+			"cloudy": 90.0,
+			"overcast": 70.0,
+			"rain": 45.0,
+			"snow": 50.0,
+			"sunny": 140.0,
+			"thunder": 25.0
+		},
+		"weather_transition_probability": {
+			"cloudy": {
+				"cloudy": 0.4,
+				"overcast": 0.25,
+				"rain": 0.08,
+				"snow": 0.02,
+				"sunny": 0.25,
+				"thunder": 0.0
+			},
+			"overcast": {
+				"cloudy": 0.25,
+				"overcast": 0.35,
+				"rain": 0.25,
+				"snow": 0.05,
+				"sunny": 0.1,
+				"thunder": 0.0
+			},
+			"rain": {
+				"cloudy": 0.15,
+				"overcast": 0.3,
+				"rain": 0.45,
+				"snow": 0.0,
+				"sunny": 0.05,
+				"thunder": 0.05
+			},
+			"snow": {
+				"cloudy": 0.1,
+				"overcast": 0.25,
+				"rain": 0.0,
+				"snow": 0.55,
+				"sunny": 0.05,
+				"thunder": 0.05
+			},
+			"sunny": {
+				"cloudy": 0.3,
+				"overcast": 0.15,
+				"rain": 0.04,
+				"snow": 0.01,
+				"sunny": 0.5,
+				"thunder": 0.0
+			},
+			"thunder": {
+				"cloudy": 0.1,
+				"overcast": 0.2,
+				"rain": 0.65,
+				"snow": 0.0,
+				"sunny": 0.0,
+				"thunder": 0.05
+			}
+		},
+		"wind_range": [
+			0.0,
+			35.0
+		]
+	},
+	"items": [],
+	"logs": [
+		"<BG_DEBUG> goto start, where=\n学校, current=",
+		"你抵达了学校",
+		"<BG_DEBUG> gen_img start, site=学校, prompt=A comprehensive university on the edge of a modern city, featuring a mix of Sovi",
+		"你开始与张教授交谈",
+		"<BG_DEBUG> img callback, result=0, code=200, body_len=2538637",
+		"<BG_DEBUG> display image ok, site=学校, b64_len=2538564",
+		"你抵达了学校",
+		"你结束了与张教授的对话。张教授从教案上抬起头，推了推眼镜，向玩家问早。",
+		"你抵达了学校",
+		"<BG_DEBUG> goto start, where=人工湖公园, current=学校",
+		"你抵达了人工湖公园",
+		"<BG_DEBUG> gen_img start, site=人工湖公园, prompt=cinematic realistic campus environment, no text, 你来到了人工湖公园",
+		"<BG_DEBUG> img callback, result=0, code=200, body_len=2575389",
+		"<BG_DEBUG> display image ok, site=人工湖公园, b64_len=2575316",
+		"你抵达了人工湖公园",
+		"<BG_DEBUG> goto start, where=学校, current=人工湖公园",
+		"你抵达了学校",
+		"<BG_DEBUG> goto start, where=人工湖公园, current=学校",
+		"你抵达了人工湖公园",
+		"<BG_DEBUG> goto start, where=学校, current=人工湖公园",
+		"你抵达了学校",
+		"<BG_DEBUG> goto start, where=图书馆, current=学校",
+		"<BG_DEBUG> site json cache hit for 图书馆",
+		"<BG_DEBUG> scene image cache miss for 图书馆, prompt_len=56",
+		"<BG_DEBUG> gen_img start, site=图书馆, prompt=cinematic realistic campus environment, no text, 你来到了图书馆",
+		"<BG_DEBUG> img callback, result=0, code=200, body_len=2514393",
+		"<BG_DEBUG> display image ok, site=图书馆, b64_len=2514320",
+		"你抵达了图书馆"
+	],
+	"nowtime": 528.400000000003,
+	"npcs": {
+		"刘阿姨": {
+			"npc_describe": "食堂的工作人员，穿着白色工作服，系着围裙，正在窗口忙碌地打饭，态度亲切。",
+			"特征": ""
+		},
+		"张教授": {
+			"npc_describe": "一位中年男性教授，穿着整洁的衬衫和西裤，手提公文包，面带温和的微笑，正与一名学生交谈。",
+			"npc_log": [
+				"张教授从教案上抬起头，推了推眼镜，向玩家问早。"
+			],
+			"特征": ""
+		},
+		"张明": {
+			"npc_describe": "一个穿着运动服、耳机挂在脖子上的男生，沿着湖边慢跑，脸上带着疲惫但坚定的表情。",
+			"特征": ""
+		},
+		"张老师": {
+			"npc_describe": "一名中年图书管理员，穿着整洁的衬衫和卡其裤，在借阅台后整理书籍，表情温和但带着一丝职业性的严肃。",
+			"特征": ""
+		},
+		"李思远": {
+			"npc_describe": "一名戴着黑框眼镜的男生，穿着简单的灰色卫衣和牛仔裤，正专注地翻阅一本厚重的专业书，眉头微皱。",
+			"特征": ""
+		},
+		"李思雨": {
+			"npc_describe": "一名戴着眼镜、背着书包的大三女生，正坐在长椅上专注地阅读一本厚厚的专业书。",
+			"特征": ""
+		},
+		"李明": {
+			"npc_describe": "一名戴着黑框眼镜、背着双肩包的大三学生，穿着简单的T恤和牛仔裤，表情略显疲惫但眼神专注。",
+			"特征": ""
+		},
+		"王芳": {
+			"npc_describe": "一名扎着马尾辫、手持几本书的大二女生，穿着运动外套和休闲裤，正快步走向教学楼。",
+			"特征": ""
+		},
+		"王阿姨": {
+			"npc_describe": "校园清洁工，推着清洁车缓慢走过，偶尔停下来捡起地上的垃圾，表情平静。",
+			"特征": ""
+		},
+		"王雨欣": {
+			"npc_describe": "一名扎着马尾辫的女生，坐在靠窗的位置，面前摊开笔记本电脑和几本笔记，偶尔抬头望向窗外，眼神略显疲惫。",
+			"特征": ""
+		}
+	},
+	"player": {
+		"energy": 100.0,
+		"hp": 100.0,
+		"money": 1000,
+		"name": "大学生",
+		"reputation": 100.0
+	},
+	"rumors": {
+
+	},
+	"sites": {
+		"人工湖公园": {
+			"accessible_locations": [
+				"图书馆",
+				"学生宿舍区",
+				"教学楼",
+				"食堂"
+			],
+			"english_description": "A serene artificial lake park in a modern university campus, surrounded by willow trees and benches, with ducks swimming on the water under clear skies, reflecting a mix of traditional and contemporary architecture in the background.",
+			"location_description": "位于校园中心的人工湖公园，是学生们放松、社交和短暂逃离学业压力的热门去处。湖边环绕着柳树和长椅，水面在阳光下波光粼粼，偶尔有野鸭游过。这里既有情侣漫步的浪漫角落，也有学生独自阅读或小组讨论的安静区域，体现了校园生活理想化与日常焦虑交织的氛围。",
+			"location_name": "人工湖公园",
+			"npc": {
+				"张明": "一个穿着运动服、耳机挂在脖子上的男生，沿着湖边慢跑，脸上带着疲惫但坚定的表情。",
+				"李思雨": "一名戴着眼镜、背着书包的大三女生，正坐在长椅上专注地阅读一本厚厚的专业书。",
+				"王阿姨": "校园清洁工，推着清洁车缓慢走过，偶尔停下来捡起地上的垃圾，表情平静。"
+			},
+			"地点名称": "人工湖公园",
+			"地点描述": "你来到了人工湖公园",
+			"能前往的地点": [
+				"学校"
+			],
+			"英文描述": ""
+		},
+		"图书馆": {
+			"accessible_locations": [
+				"学生宿舍",
+				"教学楼",
+				"校园食堂",
+				"校园广场"
+			],
+			"english_description": "A five-story university library built in the 1990s, with slightly worn beige tiles on the exterior and a bronze plaque reading 'Thirst for Knowledge' at the entrance. Inside, spacious but crowded with dense bookshelves, the air smells of old paper and disinfectant. The first floor has a lending area and study hall with rows of wooden tables and chairs, where students are immersed in books or laptops; upper floors house specialized books and journals in quieter, dimly lit rooms. It serves as a sanctuary for studying and a subtle social hub.",
+			"location_description": "一座建于上世纪90年代的五层建筑，外墙是略显斑驳的米黄色瓷砖，入口处挂着“求知若渴”的铜字牌匾。内部空间宽敞但略显拥挤，书架排列密集，空气中弥漫着旧书纸张和消毒水的混合气味。一楼是借阅区和自习大厅，摆放着成排的木制桌椅，学生们埋头于书本或笔记本电脑中，偶尔传来翻页声和键盘敲击声；二楼及以上是专业书籍区和期刊阅览室，环境更安静，但灯光有些昏暗。这里既是学生们备考、写论文的圣地，也是社交的隐形场所——熟人间会通过眼神或纸条交流，而陌生人则保持着礼貌的距离。",
+			"location_name": "校园图书馆",
+			"npc": {
+				"张老师": "一名中年图书管理员，穿着整洁的衬衫和卡其裤，在借阅台后整理书籍，表情温和但带着一丝职业性的严肃。",
+				"李思远": "一名戴着黑框眼镜的男生，穿着简单的灰色卫衣和牛仔裤，正专注地翻阅一本厚重的专业书，眉头微皱。",
+				"王雨欣": "一名扎着马尾辫的女生，坐在靠窗的位置，面前摊开笔记本电脑和几本笔记，偶尔抬头望向窗外，眼神略显疲惫。"
+			},
+			"地点名称": "图书馆",
+			"地点描述": "你来到了图书馆",
+			"能前往的地点": [
+				"大学正门及主广场"
+			],
+			"英文描述": ""
+		},
+		"学校": {
+			"npc": {
+				"刘阿姨": "食堂的工作人员，穿着白色工作服，系着围裙，正在窗口忙碌地打饭，态度亲切。",
+				"张教授": "一位中年男性教授，穿着整洁的衬衫和西裤，手提公文包，面带温和的微笑，正与一名学生交谈。",
+				"李明": "一名戴着黑框眼镜、背着双肩包的大三学生，穿着简单的T恤和牛仔裤，表情略显疲惫但眼神专注。",
+				"王芳": "一名扎着马尾辫、手持几本书的大二女生，穿着运动外套和休闲裤，正快步走向教学楼。"
+			},
+			"地点名称": "学校",
+			"地点描述": "这是一所位于现代都市边缘的综合性大学，校园内混杂着上世纪遗留的苏式红砖楼和近年新建的玻璃幕墙现代建筑，被绿化带和人工湖分割。学生们过着宿舍、教室、食堂、图书馆四点一线的规律生活，空气中弥漫着微妙的集体焦虑与青春活力交织的氛围。天气遵循温带季风气候，当前季节为春季，短暂宜人，偶尔有细雨打乱出行计划。",
+			"能前往的地点": [
+				"宿舍区",
+				"教学楼",
+				"图书馆",
+				"食堂",
+				"人工湖公园"
+			],
+			"英文描述": "A comprehensive university on the edge of a modern city, featuring a mix of Soviet-era red-brick buildings and contemporary glass-walled structures, interspersed with green belts and artificial lakes. Students follow a routine between dorms, classrooms, cafeterias, and libraries, with an atmosphere blending subtle collective anxiety and youthful energy. The weather is temperate monsoon, currently spring with mild and pleasant conditions, occasional light rain disrupting plans."
+		}
+	},
+	"version": 1,
+	"world_seed_input": "\n学校"
+}
