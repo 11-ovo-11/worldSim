@@ -89,9 +89,16 @@ func _compact_npc_log() -> String:
 	if !(logs is Array) or logs.is_empty():
 		return ""
 	var out: Array = []
+	var seen: Dictionary = {}
 	var start_idx = max(0, logs.size() - 6)
 	for i in range(start_idx, logs.size()):
-		out.append("- " + _clip_text(str(logs[i]), 80))
+		var row = str(logs[i]).strip_edges()
+		if row == "" or row.begins_with("重要事件："):
+			continue
+		if seen.has(row):
+			continue
+		seen[row] = true
+		out.append("- " + _clip_text(row, 80))
 	return _clip_text("\n".join(out), NPC_LOG_MAX_CHARS)
 
 # 提取构建提示词的公共方法
@@ -105,7 +112,7 @@ func build_base_prompt() -> String:
 	if scene != null and scene.has_method("get_identity_attitude_guidance_for_npc"):
 		identity_guidance = _clip_text(str(scene.get_identity_attitude_guidance_for_npc(npcName, npcDescribe)), IDENTITY_GUIDANCE_MAX_CHARS)
 	if scene != null and scene.has_method("get_current_chat_session_memory"):
-		session_memory = _clip_text(str(scene.get_current_chat_session_memory(npcName)), SESSION_MEMORY_MAX_CHARS)
+		session_memory = _clip_text(str(scene.get_current_chat_session_memory(npcName, false)), SESSION_MEMORY_MAX_CHARS)
 	var history = _tail_lines(currentChat, CHAT_HISTORY_MAX_LINES, CHAT_HISTORY_MAX_CHARS)
 	var chat_context = history
 	var min_chars = 90

@@ -246,17 +246,31 @@ func _compact_current_context_for_recovery() -> void:
 func _record_current_chat_session(kind: String, speaker: String, text: String) -> void:
 	GameInteractionRuntimeUtils.record_current_chat_session(self, kind, speaker, text)
 
-func get_current_chat_session_memory(npc_name: String = "") -> String:
+func _should_keep_chat_session_record_for_prompt(record_text: String, include_dialogue_records: bool = true) -> bool:
+	var plain = str(record_text).strip_edges()
+	if plain == "":
+		return false
+	if include_dialogue_records:
+		return true
+	if plain.begins_with("[对话输入]") or plain.begins_with("[对话回复]"):
+		return false
+	return true
+
+func get_current_chat_session_memory(npc_name: String = "", include_dialogue_records: bool = true) -> String:
 	var target_name = npc_name.strip_edges()
 	if target_name != "" and target_name != current_chat_session_npc:
 		return ""
 	if current_chat_session_records.is_empty():
 		return ""
 	var lines: Array = []
+	var seen: Dictionary = {}
 	for i in range(current_chat_session_records.size()):
 		var row_text = str(current_chat_session_records[i]).strip_edges()
-		if row_text == "":
+		if !_should_keep_chat_session_record_for_prompt(row_text, include_dialogue_records):
 			continue
+		if seen.has(row_text):
+			continue
+		seen[row_text] = true
 		lines.append("- " + row_text)
 	if lines.is_empty():
 		return ""

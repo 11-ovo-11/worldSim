@@ -56,6 +56,19 @@ static func build_shared_context(data: Dictionary) -> String:
 		lines.append("事件记忆：\n" + "\n".join(event_keys))
 	return "\n".join(lines)
 
+static func build_dialogue_runtime_context(data: Dictionary) -> String:
+	var lines: Array = []
+	var current_site_name = str(data.get("current_site_name", "")).strip_edges()
+	var money = str(data.get("money", "")).strip_edges()
+	var inventory_snapshot = str(data.get("inventory_snapshot", "")).strip_edges()
+	if current_site_name != "":
+		lines.append("地点：" + current_site_name)
+	if money != "":
+		lines.append("资产：" + money)
+	if inventory_snapshot != "":
+		lines.append("背包：" + inventory_snapshot)
+	return "\n".join(lines)
+
 static func build_dialogue_user_content(prompt: String, shared_context: String = "") -> String:
 	var clean_prompt = str(prompt).strip_edges()
 	var clean_context = str(shared_context).strip_edges()

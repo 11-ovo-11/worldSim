@@ -1,152 +1,118 @@
 {
 	"action_narration_min_chars": 90,
-	"background": "## 世界概览\n\n这是一个被称为“柔水之境”的乌托邦式岛屿国家，所有女性天生便拥有飘逸长发、纤细腰肢与温柔如水的容貌与性情。核心冲突在于：岛上男性人口稀少（不足总人口的5%），每个男性都被视为珍稀资源，而作为被选中的“你”，需要以公正与爱意平衡众多仰慕者之间的情感暗流与隐形竞争，维系这个看似完美却脆弱的后宫生态。\n\n## 人群状态\n\n岛上的女性从出生起便接受“优雅与奉献”的集体教化，信奉“被爱是最高荣誉”。她们的日常生活围绕取悦男性、发展才艺（如抚琴、花道、诗词）与维护容貌展开。恐惧的事物主要有三：被爱人冷落、容颜衰老、以及“后宫失序”导致社会动荡。普通人（即多数女性）生活在一种甜蜜的焦虑中——她们为能靠近你而欢喜，又为竞争加剧而暗自神伤。\n\n## 环境与天气\n\n岛屿常年沐浴在温润的季风与濛濛细雨中，四季不分，终日有轻雾缭绕。空气里飘散着永不凋谢的花香与淡淡的水汽。环境以精致的园林、朱漆回廊、镜面湖泊与隐于竹林的温泉浴场为主。这种潮湿温暖的气候使得女人们的肌肤永远莹润，长发轻易便泛出水光——但也导致她们对干燥、寒冷或强风异常敏感，因此全岛的建筑均以避风、保暖、采光柔和为设计核心。",
-	"current_chat_session_npc": "柳如烟",
+	"background": "# 世界观设定\n\n## 世界概览\n在芙洛拉女子大学，所有师生均为长发及腰、身材纤细窈窕的年轻女性，日常身着半透明纱裙，学院以“温柔美学”为最高教义。表面是一所培养淑女的贵族学府，暗中却隐藏着“纱裙能量”与女性情感波动相勾连的神秘体系——纱裙的透明度会随情绪变化，而极端情绪可能引发现实扭曲。\n\n## 人群状态\n全体师生温柔得体，信仰“纯粹之美”与“克制之爱”，以纱裙流光为社交信号（透明=安宁，半透明=心绪波动，完全不透明=禁忌愤怒）。人们恐惧情绪失控——一旦纱裙因激烈情绪而完全透明或凝成实体，将被“织理堂”带走，再无音讯。日常交谈必用修辞与敬语，连争吵都需保持微笑。\n\n## 环境与天气\n校园悬浮于巨大纺锤形结界中，天空是永不落幕的淡紫色暮光，流淌着丝绸般的云絮。终日无风，却有持续不断的微弱香薰气流（茉莉与乳香）拂过肌肤，令所有人气息温软。偶有“泪雨”——细密温热的含盐雨水，仅降临于情绪集体低落的时刻，淋湿纱裙后会加速其透明度变化。校园建筑由半透明玉质材料构筑，每栋楼檐角悬有共鸣铃，铃声随当日平均情绪频率改变音色。",
+	"current_chat_session_npc": "绫波·芙洛拉",
 	"current_chat_session_records": [
-		"[对话回复]柳如烟：雨声淅淅沥沥地敲着廊檐，我指尖刚抚过琴弦，抬眸便见您踏着水汽进来。这《清心》我今早调了第三遍了，总觉得少了点什么——这会儿看见您，倒像是曲子自己找到了该落的位置。您别急着说话，先坐下把袍角的雨水掸一掸，我这就从头弹给您听。"
+		"[对话回复]绫波·芙洛拉：啊...（银铃轻响，我微微侧首看向你，指尖下意识抚过裙摆）这位先生，似乎不是芙洛拉女子大学的常客呢。清晨的茉莉香还弥漫在廊间，多数学生此刻正在祷告厅礼拜，您是从哪条小径走来的？"
 	],
-	"current_site": "人均长发并身材窈窕纤细且温柔漂亮的我的后宫",
+	"current_site": "人均长发并身材窈窕纤细且温柔漂亮身着透明纱裙的女子大学",
 	"dead_npc_names": [],
 	"dialogue_min_chars": 90,
 	"env_dic": {
-		"current_humidity": 85.0,
-		"current_temperature": 26.0,
-		"current_weather": "rain",
-		"current_wind_speed": 5.0,
+		"current_humidity": 75.0,
+		"current_temperature": 24.0,
+		"current_weather": "cloudy",
+		"current_wind_speed": 0.5,
 		"humidity_range": [
-			70.0,
-			98.0
+			60.0,
+			90.0
 		],
 		"temperature_range": [
-			20.0,
-			32.0
+			18.0,
+			28.0
 		],
 		"weather_duration_base": {
-			"cloudy": 120.0,
-			"overcast": 90.0,
-			"rain": 100.0,
-			"snow": 120.0,
-			"sunny": 150.0,
-			"thunder": 40.0
+			"cloudy": 180.0,
+			"overcast": 100.0,
+			"rain": 60.0,
+			"snow": 30.0,
+			"sunny": 120.0,
+			"thunder": 20.0
 		},
 		"weather_transition_probability": {
 			"cloudy": {
-				"cloudy": 0.4,
-				"overcast": 0.2,
-				"rain": 0.1,
-				"snow": 0.0,
-				"sunny": 0.3,
-				"thunder": 0.0
+				"cloudy": 0.7,
+				"overcast": 0.15,
+				"rain": 0.05,
+				"snow": 0.03,
+				"sunny": 0.05,
+				"thunder": 0.02
 			},
 			"overcast": {
-				"cloudy": 0.3,
-				"overcast": 0.3,
-				"rain": 0.25,
-				"snow": 0.0,
-				"sunny": 0.1,
-				"thunder": 0.05
+				"cloudy": 0.2,
+				"overcast": 0.5,
+				"rain": 0.2,
+				"snow": 0.03,
+				"sunny": 0.05,
+				"thunder": 0.02
 			},
 			"rain": {
 				"cloudy": 0.2,
 				"overcast": 0.3,
 				"rain": 0.4,
-				"snow": 0.0,
+				"snow": 0.03,
 				"sunny": 0.05,
-				"thunder": 0.05
+				"thunder": 0.02
 			},
 			"snow": {
-				"cloudy": 0.4,
+				"cloudy": 0.3,
 				"overcast": 0.3,
-				"rain": 0.3,
-				"snow": 0.0,
-				"sunny": 0.0,
+				"rain": 0.1,
+				"snow": 0.1,
+				"sunny": 0.2,
 				"thunder": 0.0
 			},
 			"sunny": {
-				"cloudy": 0.4,
-				"overcast": 0.05,
+				"cloudy": 0.2,
+				"overcast": 0.1,
 				"rain": 0.05,
-				"snow": 0.0,
-				"sunny": 0.5,
-				"thunder": 0.0
+				"snow": 0.03,
+				"sunny": 0.6,
+				"thunder": 0.02
 			},
 			"thunder": {
-				"cloudy": 0.1,
-				"overcast": 0.2,
-				"rain": 0.5,
+				"cloudy": 0.2,
+				"overcast": 0.3,
+				"rain": 0.3,
 				"snow": 0.0,
-				"sunny": 0.05,
-				"thunder": 0.15
+				"sunny": 0.1,
+				"thunder": 0.1
 			}
 		},
 		"wind_range": [
 			0.0,
-			20.0
+			5.0
 		]
 	},
-	"important_event_memories": [
-		{
-			"assist": 0,
-			"coercion": 0,
-			"gift": 1,
-			"negative": 0,
-			"npcs": [
-				"苏月汐"
-			],
-			"positive": 0,
-			"respect": 0,
-			"site": "人均长发并身材窈窕纤细且温柔漂亮的我的后宫",
-			"t": 1780381915.006,
-			"text": "苏月汐：（团扇轻掩半张脸，眉梢微微扬起）哟，国王陛下今儿个怎么有空往我这雨檐底下钻？我正想着这雨要下到什么时候呢，您就踩着水花来了。",
-			"trade": 1
-		}
-	],
+	"important_event_memories": [],
 	"items": [],
 	"logs": [
-		"你抵达了人均长发并身材窈窕纤细且温柔漂亮的我的后宫",
-		"你开始与柳如烟交谈",
-		"你开始与花想容交谈",
-		"你开始与柳如烟交谈",
-		"你开始与花想容交谈",
-		"你开始与苏月汐交谈",
-		"你开始与柳如烟交谈"
+		"你抵达了人均长发并身材窈窕纤细且温柔漂亮身着透明纱裙的女子大学",
+		"你开始与月见·琉璃交谈",
+		"你开始与绫波·芙洛拉交谈"
 	],
-	"nowtime": 650.800000000031,
+	"nowtime": 575.400000000014,
 	"npcs": {
-		"柳如烟": {
+		"月见·琉璃": {
 			"important_events": [],
-			"npc_describe": "一袭月白纱裙，墨绿长发及腰，眼眸含水，纤纤玉手正轻抚古琴，姿态柔美如画。",
+			"npc_describe": "及臀黑发用茉莉花簪盘起，纱裙为淡青色半透明，袖口绣有银线波纹，目光柔和如月华。",
 			"npc_log": [
-				"她邀请你在这朦胧雨天坐下来，听一曲她为这雨景特意调好的《清心》。",
-				"她新调了一首《清心》想要弹给你听，还说配上这窗外的雨声正好。",
-				"重要事件：苏月汐：（团扇轻掩半张脸，眉梢微微扬起）哟，国王陛下今儿个怎么有空往我这雨檐底下钻？我正想着这雨要下到什么时候呢，您就踩着水花来了。"
+				"早安，这个清晨的露珠还挂在树叶上未落，不知您匆匆赶路是要去寻什么？"
 			],
-			"portrait_generating": false,
+			"portrait_generating": true,
 			"特征": ""
 		},
-		"花想容": {
+		"樱庭·霞": {
 			"important_events": [],
-			"npc_describe": "身着粉色绣牡丹襦裙，青丝高绾成堕马髻，鬓边簪一朵海棠，笑容温婉，腰肢盈盈一握。",
-			"npc_log": [
-				"她见我淋雨，立即关切地为我撑伞，言语间透着担忧，还用帕子为我擦拭雨水，让我随她到亭中避雨。",
-				"我正烦恼着朝中大事，一时出神，竟忘了避雨。你来的正好，这花茶来得及时。"
-			],
-			"portrait_generating": false,
+			"npc_describe": "浅粉长发微卷垂至膝弯，纱裙是樱色透明薄纱，腰间系着一条细丝绦，神情温婉似春水。",
+			"npc_log": [],
 			"特征": ""
 		},
-		"苏月汐": {
-			"important_events": [
-				{
-					"npc_view": "我记住了一件会直接影响我对玩家态度的事：苏月汐：（团扇轻掩半张脸，眉梢微微扬起）哟，国王陛下今儿个怎么有空往我这雨檐底下钻？我正想着这雨要下到什么时候呢，您就踩着水花来了。",
-					"t": 1780381915,
-					"text": "苏月汐：（团扇轻掩半张脸，眉梢微微扬起）哟，国王陛下今儿个怎么有空往我这雨檐底下钻？我正想着这雨要下到什么时候呢，您就踩着水花来了。"
-				}
-			],
-			"npc_describe": "淡紫罗衣，长发未束垂至膝弯，眉间一点朱砂，斜倚在美人靠上，手持团扇轻摇，目光如水般注视着你。",
-			"npc_log": [
-				"（团扇掩面轻笑）陛下呀，您这衣角都湿透了，要不上楼喝杯热茶暖暖身子？我这儿可藏着上好的龙井。"
-			],
-			"portrait_generating": false,
+		"绫波·芙洛拉": {
+			"important_events": [],
+			"npc_describe": "长发及腰，身姿如柳，纱裙呈半透明珍珠白，裙摆缀有细碎银铃，行走时无声却隐约可闻清响。",
+			"npc_log": [],
+			"portrait_generating": true,
 			"特征": ""
 		}
 	},
@@ -162,34 +128,35 @@
 		"energy": 100.0,
 		"hp": 100.0,
 		"money": 1000,
-		"name": "国王",
+		"name": "必定成功的男性洗脑师",
 		"reputation": 100.0
 	},
 	"rumors": {
 
 	},
 	"sites": {
-		"人均长发并身材窈窕纤细且温柔漂亮的我的后宫": {
+		"人均长发并身材窈窕纤细且温柔漂亮身着透明纱裙的女子大学": {
 			"npc": {
-				"柳如烟": "一袭月白纱裙，墨绿长发及腰，眼眸含水，纤纤玉手正轻抚古琴，姿态柔美如画。",
-				"花想容": "身着粉色绣牡丹襦裙，青丝高绾成堕马髻，鬓边簪一朵海棠，笑容温婉，腰肢盈盈一握。",
-				"苏月汐": "淡紫罗衣，长发未束垂至膝弯，眉间一点朱砂，斜倚在美人靠上，手持团扇轻摇，目光如水般注视着你。"
+				"月见·琉璃": "及臀黑发用茉莉花簪盘起，纱裙为淡青色半透明，袖口绣有银线波纹，目光柔和如月华。",
+				"樱庭·霞": "浅粉长发微卷垂至膝弯，纱裙是樱色透明薄纱，腰间系着一条细丝绦，神情温婉似春水。",
+				"绫波·芙洛拉": "长发及腰，身姿如柳，纱裙呈半透明珍珠白，裙摆缀有细碎银铃，行走时无声却隐约可闻清响。"
 			},
 			"别名": [
-				"沁芳园"
+				"芙洛拉女子大学主校门"
 			],
-			"地点名称": "人均长发并身材窈窕纤细且温柔漂亮的我的后宫",
-			"地点描述": "一座被轻雾与花香笼罩的庭院，朱漆回廊环绕着镜面般的水池，池中锦鲤悠游。岸边垂柳依依，石径旁种满永不凋谢的粉白花树。这里是后宫佳丽们常来抚琴、对弈或品茶之所，空气中弥漫着温润的甜香。",
+			"地点名称": "人均长发并身材窈窕纤细且温柔漂亮身着透明纱裙的女子大学",
+			"地点描述": "乳白色半透明玉质拱门高约十米，门楣上缠着永不凋谢的茉莉花藤，花蕊散发出淡淡乳香。门内是一条铺满鹅卵石的小径，两侧种着银叶垂柳，枝条几乎拂地。天空是永恒的淡紫色暮光，丝绸般的云絮缓缓流淌。空气中弥漫着茉莉与乳香的香薰气流，轻柔拂过肌肤。校门附近几位长及腰际、身材纤细窈窕的女子身着半透明纱裙，纱裙在暮光下泛着柔和微光，她们正低语交谈，笑容温柔得体。",
 			"能前往的地点": [
-				"碧波湖",
-				"百花楼",
-				"温泉汤",
-				"琴韵水榭",
-				"竹影回廊"
+				"晨露庭院",
+				"织理堂",
+				"泪雨亭",
+				"淑女讲堂",
+				"心绪湖",
+				"香凝图书馆"
 			],
-			"英文描述": "A misty garden with vermilion corridors surrounding a mirror-like pond, koi swimming lazily. Weeping willows and ever-blooming pink-white trees line the stone paths. Gentle fragrance permeates the humid air. Elegant women with long silky hair in flowing robes play zither or sip tea by the water."
+			"英文描述": "A main gate of a women's university made of translucent milky jade, about ten meters high, adorned with ever-blooming jasmine vines emitting a faint milky scent. A cobblestone path leads inward, flanked by silver weeping willows with branches nearly touching the ground. The sky is eternal twilight purple, with silken clouds drifting slowly. A constant fragrant breeze of jasmine and frankincense caresses the skin. Several slender women with waist-long hair wear translucent gauze skirts that glow softly in the twilight, chatting gracefully with gentle smiles."
 		}
 	},
 	"version": 1,
-	"world_seed_input": "\n人均长发并身材窈窕纤细且温柔漂亮的我的后宫"
+	"world_seed_input": "\n人均长发并身材窈窕纤细且温柔漂亮身着透明纱裙的女子大学"
 }

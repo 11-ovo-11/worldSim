@@ -168,6 +168,13 @@ static func build_shared_interaction_context(scene: Node, interaction_text: Stri
 		"related_events": related_events,
 	}), 0)
 
+static func build_dialogue_runtime_context(scene: Node) -> String:
+	return scene._clip_prompt_text(GameInteractionContext.build_dialogue_runtime_context({
+		"current_site_name": scene.currentSiteName,
+		"money": str(scene.money),
+		"inventory_snapshot": scene._build_inventory_snapshot(),
+	}), 0)
+
 static func build_continue_action_text() -> String:
 	return "继续当前事情的发展"
 
@@ -230,7 +237,7 @@ static func submit_dialogue_input(scene: Node, raw_input: String, allow_continue
 		if scene._has_active_event_panel():
 			scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【旁白】")
 			scene.changeTextTo(scene.response_label, "当前情况无法脱离，" + scene.currentNpc.npcName + "不会让你就这么走。")
-			await scene.currentNpc.chatWithNpc("[玩家试图离开]", scene._build_shared_interaction_context("离开", str(scene.currentNpc.npcName), str(scene.currentNpc.npcDescribe)))
+			await scene.currentNpc.chatWithNpc("[玩家试图离开]", build_dialogue_runtime_context(scene))
 			return
 		scene._request_leave_chat_confirm()
 		return
@@ -239,7 +246,7 @@ static func submit_dialogue_input(scene: Node, raw_input: String, allow_continue
 	scene.changeTextTo(scene.get_node("%speakerNameLabel"), scene.playerName)
 	scene.changeTextTo(scene.response_label, user_input)
 	scene._record_current_chat_session("对话输入", scene.playerName, user_input)
-	var dialogue_context = scene._build_shared_interaction_context(user_input, str(scene.currentNpc.npcName), str(scene.currentNpc.npcDescribe))
+	var dialogue_context = build_dialogue_runtime_context(scene)
 	await scene.currentNpc.chatWithNpc(user_input, dialogue_context)
 	scene.currentNpc.currentChat += "玩家：" + user_input + "\n"
 
