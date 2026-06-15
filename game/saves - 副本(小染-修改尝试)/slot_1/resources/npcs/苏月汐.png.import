@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://p1prpvx8verd"
-path="res://.godot/imported/苏月汐.png-a07118e69a36ffbce2f9dbd5cedf20c9.ctex"
+path="res://.godot/imported/苏月汐.png-05cad32c8e6674cacc4773be13650e4d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/苏月汐.png"
-dest_files=["res://.godot/imported/苏月汐.png-a07118e69a36ffbce2f9dbd5cedf20c9.ctex"]
+source_file="res://saves - 副本(小染-修改尝试)/slot_1/resources/npcs/苏月汐.png"
+dest_files=["res://.godot/imported/苏月汐.png-05cad32c8e6674cacc4773be13650e4d.ctex"]
 
 [params]
 

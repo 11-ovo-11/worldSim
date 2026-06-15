@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dod7ggjjxp33n"
-path="res://.godot/imported/林清音.png-f7bbc260e246e09db1f509495253b014.ctex"
+uid="uid://b4i1r7dtwl1u0"
+path="res://.godot/imported/沈清漪.png-6603c4f0fefe3d034e2d1fe2b70715de.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://picture/session/npcs/林清音.png"
-dest_files=["res://.godot/imported/林清音.png-f7bbc260e246e09db1f509495253b014.ctex"]
+source_file="res://saves - 副本（小染）/slot_1/resources/npcs/沈清漪.png"
+dest_files=["res://.godot/imported/沈清漪.png-6603c4f0fefe3d034e2d1fe2b70715de.ctex"]
 
 [params]
 

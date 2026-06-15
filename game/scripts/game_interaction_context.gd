@@ -41,7 +41,7 @@ static func build_shared_context(data: Dictionary) -> String:
 			if s.strip_edges() != "":
 				session_set[s] = true
 		var session_keys = session_set.keys()
-		if session_keys.size() > 10:
+		if session_keys.size() > 30:
 			session_keys = session_keys.slice(session_keys.size() - 10, session_keys.size())
 		lines.append("当前会话强约束：\n" + "\n".join(session_keys))
 	if related_events != "":
@@ -51,8 +51,8 @@ static func build_shared_context(data: Dictionary) -> String:
 			if e.strip_edges() != "":
 				event_set[e] = true
 		var event_keys = event_set.keys()
-		if event_keys.size() > 10:
-			event_keys = event_keys.slice(event_keys.size() - 10, event_keys.size())
+		if event_keys.size() > 30:
+			event_keys = event_keys.slice(event_keys.size() - 30, event_keys.size())
 		lines.append("事件记忆：\n" + "\n".join(event_keys))
 	return "\n".join(lines)
 

@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ctl1ggydonlry"
-path="res://.godot/imported/花想容.png-f572dc556a8651de35323122c727475c.ctex"
+path="res://.godot/imported/花想容.png-d5703196d3aaee406fd209b4b7a79fe8.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://picture/session/npcs/花想容.png"
-dest_files=["res://.godot/imported/花想容.png-f572dc556a8651de35323122c727475c.ctex"]
+source_file="res://saves/slot_1/resources/npcs/花想容.png"
+dest_files=["res://.godot/imported/花想容.png-d5703196d3aaee406fd209b4b7a79fe8.ctex"]
 
 [params]
 

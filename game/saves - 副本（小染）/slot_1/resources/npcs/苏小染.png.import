@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://oo0ibsjgtaq6"
-path="res://.godot/imported/林婉.png-5c77fbf21a203f6e65a9e6c5ca731091.ctex"
+uid="uid://c2gix7i8drpys"
+path="res://.godot/imported/苏小染.png-626def45ee002523999f918b279b5e18.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://picture/session/npcs/林婉.png"
-dest_files=["res://.godot/imported/林婉.png-5c77fbf21a203f6e65a9e6c5ca731091.ctex"]
+source_file="res://saves - 副本（小染）/slot_1/resources/npcs/苏小染.png"
+dest_files=["res://.godot/imported/苏小染.png-626def45ee002523999f918b279b5e18.ctex"]
 
 [params]
 
