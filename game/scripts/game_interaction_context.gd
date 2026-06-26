@@ -42,7 +42,7 @@ static func build_shared_context(data: Dictionary) -> String:
 				session_set[s] = true
 		var session_keys = session_set.keys()
 		if session_keys.size() > 30:
-			session_keys = session_keys.slice(session_keys.size() - 10, session_keys.size())
+			session_keys = session_keys.slice(session_keys.size() - 30, session_keys.size())
 		lines.append("当前会话强约束：\n" + "\n".join(session_keys))
 	if related_events != "":
 		var event_lines = related_events.split("\n")

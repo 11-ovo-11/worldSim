@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ctl1ggydonlry"
-path="res://.godot/imported/花想容.png-d5703196d3aaee406fd209b4b7a79fe8.ctex"
+uid="uid://oo0ibsjgtaq6"
+path="res://.godot/imported/林婉.png-23d6051867cbd2d504e571e789cf64fc.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/花想容.png"
-dest_files=["res://.godot/imported/花想容.png-d5703196d3aaee406fd209b4b7a79fe8.ctex"]
+source_file="res://saves/slot_1/resources/npcs/林婉.png"
+dest_files=["res://.godot/imported/林婉.png-23d6051867cbd2d504e571e789cf64fc.ctex"]
 
 [params]
 
