@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bnhgqhy8hky2t"
-path="res://.godot/imported/苏小染.jpg-82ad7bb41320886e5ddf94e592efd919.ctex"
+uid="uid://bfurk2tb1kck8"
+path="res://.godot/imported/苏小染.png-c9db40db3fe7442db7214bc38c55059d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/苏小染.jpg"
-dest_files=["res://.godot/imported/苏小染.jpg-82ad7bb41320886e5ddf94e592efd919.ctex"]
+source_file="res://picture/session/npcs/苏小染.png"
+dest_files=["res://.godot/imported/苏小染.png-c9db40db3fe7442db7214bc38c55059d.ctex"]
 
 [params]
 

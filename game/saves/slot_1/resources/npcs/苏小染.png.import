@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://kjeqi546q5qf"
-path="res://.godot/imported/楚瑶.jpg-42ca82ba10a3e3595d2decb33769b4dc.ctex"
+uid="uid://bfurk2tb1kck8"
+path="res://.godot/imported/苏小染.png-c208d08cb90e87dd4d1d2491cac77205.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/楚瑶.jpg"
-dest_files=["res://.godot/imported/楚瑶.jpg-42ca82ba10a3e3595d2decb33769b4dc.ctex"]
+source_file="res://saves/slot_1/resources/npcs/苏小染.png"
+dest_files=["res://.godot/imported/苏小染.png-c208d08cb90e87dd4d1d2491cac77205.ctex"]
 
 [params]
 

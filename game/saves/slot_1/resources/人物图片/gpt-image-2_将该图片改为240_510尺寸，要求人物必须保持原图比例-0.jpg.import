@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://kjeqi546q5qf"
-path="res://.godot/imported/楚瑶.jpg-42ca82ba10a3e3595d2decb33769b4dc.ctex"
+uid="uid://co433i2bsnpy0"
+path="res://.godot/imported/gpt-image-2_将该图片改为240_510尺寸，要求人物必须保持原图比例-0.jpg-56e2e6da55fadc596f6066475ead132d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/楚瑶.jpg"
-dest_files=["res://.godot/imported/楚瑶.jpg-42ca82ba10a3e3595d2decb33769b4dc.ctex"]
+source_file="res://saves/slot_1/resources/人物图片/gpt-image-2_将该图片改为240_510尺寸，要求人物必须保持原图比例-0.jpg"
+dest_files=["res://.godot/imported/gpt-image-2_将该图片改为240_510尺寸，要求人物必须保持原图比例-0.jpg-56e2e6da55fadc596f6066475ead132d.ctex"]
 
 [params]
 
