@@ -18,6 +18,15 @@ static func resolve_image_slot_size(target_type: String, npc_size: Vector2, npc_
 		return Vector2i(w, h)
 	return Vector2i(1024, 576)
 
+static func get_scaled_size_for_fixed_height(texture: Texture2D, target_height: int) -> Vector2:
+	var safe_height = max(1, target_height)
+	if texture == null:
+		return Vector2(0, safe_height)
+	var tex_w = max(1, texture.get_width())
+	var tex_h = max(1, texture.get_height())
+	var scaled_w = int(round(float(tex_w) * float(safe_height) / float(tex_h)))
+	return Vector2(max(1, scaled_w), safe_height)
+
 static func fit_image_to_target_slot(raw_image: Image, target_size: Vector2i) -> Image:
 	if raw_image == null:
 		return null

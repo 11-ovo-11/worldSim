@@ -516,11 +516,12 @@ size_flags_vertical = 3
 [node name="npcIcon" type="TextureRect" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer" unique_id=1665040662]
 unique_name_in_owner = true
 clip_contents = true
+custom_minimum_size = Vector2(0, 510)
 layout_mode = 2
-size_flags_vertical = 3
+size_flags_vertical = 0
 texture = ExtResource("2_0xm2m")
 expand_mode = 1
-stretch_mode = 3
+stretch_mode = 0
 
 [node name="npcInfosContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer" unique_id=1489749021]
 unique_name_in_owner = true

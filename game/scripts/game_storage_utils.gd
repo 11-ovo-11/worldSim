@@ -61,13 +61,35 @@ static func save_image_png(image: Image, dir_path: String, file_name: String) ->
 	var path = dir_path + sanitize_filename(file_name) + ".png"
 	image.save_png(path)
 
-static func load_image_png(dir_path: String, file_name: String) -> Texture2D:
-	var path = dir_path + sanitize_filename(file_name) + ".png"
-	if FileAccess.file_exists(path):
-		var img = Image.load_from_file(path)
-		if img != null:
-			return ImageTexture.create_from_image(img)
+static func find_image_path(dir_path: String, file_name: String) -> String:
+	var sanitized_name = sanitize_filename(file_name).strip_edges()
+	if sanitized_name == "":
+		return ""
+	var direct_path = dir_path.path_join(sanitized_name)
+	if FileAccess.file_exists(direct_path):
+		return direct_path
+	var supported_exts = [".jpg", ".jpeg", ".png", ".webp", ".bmp"]
+	var lower_name = sanitized_name.to_lower()
+	for ext in supported_exts:
+		if lower_name.ends_with(ext):
+			return direct_path if FileAccess.file_exists(direct_path) else ""
+	for ext in supported_exts:
+		var candidate = dir_path.path_join(sanitized_name + ext)
+		if FileAccess.file_exists(candidate):
+			return candidate
+	return ""
+
+static func load_image_texture(dir_path: String, file_name: String) -> Texture2D:
+	var path = find_image_path(dir_path, file_name)
+	if path == "":
+		return null
+	var img = Image.load_from_file(path)
+	if img != null:
+		return ImageTexture.create_from_image(img)
 	return null
+
+static func load_image_png(dir_path: String, file_name: String) -> Texture2D:
+	return load_image_texture(dir_path, file_name)
 
 static func save_json_dict(dir_path: String, file_name: String, data: Dictionary, indent: String = "") -> void:
 	ensure_dir(dir_path)

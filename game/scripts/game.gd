@@ -123,6 +123,7 @@ var reputation:float = 100
 const PASSIVE_ENERGY_RECOVERY_PER_HOUR: float = 4.0
 const PASSIVE_HP_RECOVERY_PER_HOUR: float = 1.2
 const ACTION_PROACTIVE_NPC_RATE: float = 0.2
+const NPC_ICON_DISPLAY_HEIGHT: int = 510
 
 var role_prompt = GamePrompts.ROLE_PROMPT
 var agent_prompt:String = GamePrompts.AGENT_PROMPT
@@ -168,10 +169,12 @@ func _ready():
 	load_button.connect("pressed", _on_load_button_pressed)
 	if input_text_edit != null:
 		input_text_edit.placeholder_text = "输入行动，留空则继续"
-	if %npcIcon is Control:
-		%npcIcon.custom_minimum_size.x = 0
-		(%npcIcon as Control).mouse_filter = Control.MOUSE_FILTER_STOP
-		(%npcIcon as Control).gui_input.connect(_on_npc_icon_gui_input)
+	if %npcIcon is TextureRect:
+		var npc_icon_rect := %npcIcon as TextureRect
+		npc_icon_rect.custom_minimum_size = Vector2(0, NPC_ICON_DISPLAY_HEIGHT)
+		npc_icon_rect.stretch_mode = TextureRect.STRETCH_SCALE
+		npc_icon_rect.mouse_filter = Control.MOUSE_FILTER_STOP
+		npc_icon_rect.gui_input.connect(_on_npc_icon_gui_input)
 	_prepare_session_resource_dir()
 	dialogue_container.visible = false
 	# %backgroundImg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -352,7 +355,17 @@ func _resolve_image_slot_size(target_type: String) -> Vector2i:
 		bg_min_size = bg_ctrl.custom_minimum_size
 	return GameImageUtils.resolve_image_slot_size(target_type, npc_size, npc_min_size, bg_size, bg_min_size)
 
+func _apply_npc_icon_texture(texture: Texture2D) -> void:
+	var npc_icon = get_node_or_null("%npcIcon")
+	if !(npc_icon is TextureRect):
+		return
+	var icon := npc_icon as TextureRect
+	icon.texture = texture
+	icon.custom_minimum_size = GameImageUtils.get_scaled_size_for_fixed_height(texture, NPC_ICON_DISPLAY_HEIGHT)
+
 func _fit_image_to_target_slot(raw_image: Image, target_type: String) -> Image:
+	if target_type == "npc":
+		return raw_image.duplicate() if raw_image != null else null
 	var target_size = _resolve_image_slot_size(target_type)
 	return GameImageUtils.fit_image_to_target_slot(raw_image, target_size)
 

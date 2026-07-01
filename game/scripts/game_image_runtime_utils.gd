@@ -214,7 +214,7 @@ static func try_use_cached_image_for_target(scene: Node, target_site: String) ->
 			return false
 		var npc_icon = scene.get_node("%npcIcon")
 		if scene.currentNpc != null and str(scene.currentNpc.npcName) == npc_name and npc_icon is TextureRect:
-			(npc_icon as TextureRect).texture = npc_tex
+			scene._apply_npc_icon_texture(npc_tex)
 		return true
 	if target_site.begins_with("ITEM:"):
 		var item_name = target_site.trim_prefix("ITEM:")
@@ -292,7 +292,7 @@ static func display_base64_image(scene: Node, base64_string: String, site_name: 
 			scene._save_image_png(fitted_npc_img, scene.NPC_IMG_DIR, npc_n)
 			var npc_icon = scene.get_node("%npcIcon")
 			if scene.currentNpc != null and str(scene.currentNpc.npcName) == npc_n and npc_icon is TextureRect:
-				(npc_icon as TextureRect).texture = npc_tex
+				scene._apply_npc_icon_texture(npc_tex)
 		if scene.npcs.has(npc_n) and scene.npcs[npc_n] is Dictionary:
 			scene.npcs[npc_n]["portrait_generating"] = false
 		scene._drain_pending_img()

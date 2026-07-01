@@ -10,7 +10,7 @@ static func change_state_into(scene: Node, stateToChange) -> void:
 			scene._end_chat_session()
 	match stateToChange:
 		scene.worldState.chat:
-			scene.create_tween().tween_property(scene.get_node("%npcIcon"), "custom_minimum_size:x", 240, 0.2)
+			scene._apply_npc_icon_texture(null)
 			if scene.currentNpc != null:
 				scene.currentNpc.queue_free()
 			scene.currentNpc = scene.newNpc
@@ -18,8 +18,7 @@ static func change_state_into(scene: Node, stateToChange) -> void:
 			scene.set_meta("npc_profile_prev_npc", "")
 			scene.set_meta("npc_profile_prev_speaker", "")
 			scene.set_meta("npc_profile_prev_text", "")
-			if scene.get_node("%npcIcon") is TextureRect:
-				(scene.get_node("%npcIcon") as TextureRect).texture = null
+			scene._apply_npc_icon_texture(null)
 			scene._start_chat_session(str(scene.currentNpc.npcName))
 			scene.currentNpc.start_chat()
 			scene.changeTextTo(scene.response_label, "你走近了" + scene.currentNpc.npcName, 100)
@@ -29,23 +28,19 @@ static func change_state_into(scene: Node, stateToChange) -> void:
 			var _cn = str(scene.currentNpc.npcName)
 			var _cd = str(scene.currentNpc.npcDescribe)
 			if scene.npcImgs.has(_cn) and scene.npcImgs[_cn] is Texture2D:
-				if scene.get_node("%npcIcon") is TextureRect:
-					(scene.get_node("%npcIcon") as TextureRect).texture = scene.npcImgs[_cn]
+				scene._apply_npc_icon_texture(scene.npcImgs[_cn])
 			else:
 				var _cached_npc = scene._load_image_png(scene.NPC_IMG_DIR, _cn)
 				if _cached_npc != null:
 					scene.npcImgs[_cn] = _cached_npc
-					if scene.get_node("%npcIcon") is TextureRect:
-						(scene.get_node("%npcIcon") as TextureRect).texture = _cached_npc
+					scene._apply_npc_icon_texture(_cached_npc)
 				else:
 					var _loc_hint = scene._infer_npc_location_for_prompt(_cn)
 					var _np = scene._build_npc_image_prompt(_cn, _cd, _loc_hint)
 					if _np != "":
 						scene.gen_img(_np, "NPC:" + _cn)
 		scene.worldState.explore:
-			scene.create_tween().tween_property(scene.get_node("%npcIcon"), "custom_minimum_size:x", 0, 0.2)
-			if scene.get_node("%npcIcon") is TextureRect:
-				(scene.get_node("%npcIcon") as TextureRect).texture = null
+			scene._apply_npc_icon_texture(null)
 			scene.changeTextTo(scene.get_node("%speakerNameLabel"), scene.playerName, 100)
 			scene.dialogue_container.visible = false
 			if scene.currentState == scene.worldState.chat and !scene.currentSiteName.is_empty():
@@ -343,8 +338,7 @@ static func start_chat_with_existing_npc(scene: Node, npc_name: String) -> void:
 	scene.set_meta("npc_profile_prev_speaker", "")
 	scene.set_meta("npc_profile_prev_text", "")
 	scene._end_chat_session()
-	if scene.get_node("%npcIcon") is TextureRect:
-		(scene.get_node("%npcIcon") as TextureRect).texture = null
+	scene._apply_npc_icon_texture(null)
 	if !scene.npcs[npc_name].has("portrait_generating"):
 		scene.npcs[npc_name]["portrait_generating"] = false
 	var has_portrait = scene.npcImgs.has(npc_name) and scene.npcImgs[npc_name] is Texture2D

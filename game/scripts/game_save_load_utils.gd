@@ -85,7 +85,7 @@ static func load_game(scene: Node) -> bool:
 	scene.npcImgs.clear()
 	var npc_icon = scene.get_node("%npcIcon")
 	if npc_icon is TextureRect:
-		(npc_icon as TextureRect).texture = null
+		scene._apply_npc_icon_texture(null)
 	var bg = scene.get_node("%backgroundImg")
 	if bg is TextureRect:
 		(bg as TextureRect).texture = null
