@@ -5,7 +5,7 @@ var chat_url = "http://127.0.0.1:5000/chat"
 var agent_url = "http://127.0.0.1:5000/agent"
 var image_api_url = "http://localhost:5000/generate_image"
 @onready var http_request = $HTTPRequest
-var ai_request_timeout_seconds: float = 30.0
+var ai_request_timeout_seconds: float = 40.0
 var _ignore_next_request_completed: bool = false
 
 enum aiMode {

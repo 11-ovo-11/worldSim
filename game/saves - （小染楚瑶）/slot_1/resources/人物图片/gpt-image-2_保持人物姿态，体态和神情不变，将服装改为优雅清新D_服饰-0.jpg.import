@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://duhl8kgu6rdmo"
-path="res://.godot/imported/林婉.png-23d6051867cbd2d504e571e789cf64fc.ctex"
+uid="uid://dixajfjehgc3k"
+path="res://.godot/imported/gpt-image-2_保持人物姿态，体态和神情不变，将服装改为优雅清新D_服饰-0.jpg-8f29011e553659d96edae51b7d7eedb4.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/林婉.png"
-dest_files=["res://.godot/imported/林婉.png-23d6051867cbd2d504e571e789cf64fc.ctex"]
+source_file="res://人物图片/gpt-image-2_保持人物姿态，体态和神情不变，将服装改为优雅清新D_服饰-0.jpg"
+dest_files=["res://.godot/imported/gpt-image-2_保持人物姿态，体态和神情不变，将服装改为优雅清新D_服饰-0.jpg-8f29011e553659d96edae51b7d7eedb4.ctex"]
 
 [params]
 

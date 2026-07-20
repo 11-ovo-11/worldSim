@@ -521,7 +521,6 @@ layout_mode = 2
 size_flags_vertical = 0
 texture = ExtResource("2_0xm2m")
 expand_mode = 1
-stretch_mode = 0
 
 [node name="npcInfosContainer" type="VBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer" unique_id=1489749021]
 unique_name_in_owner = true
