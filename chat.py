@@ -34,7 +34,7 @@ CORS(app)
 #   Qwen      : https://dashscope.aliyuncs.com/compatible-mode/v1
 API_BASE_URL = "https://api.deepseek.com"#"https://api.vectorengine.ai/v1"
 # model 示例：deepseek-chat / deepseek-r1 / Qwen/Qwen3-30B-A3B / moonshot-v1-8k
-API_MODEL_CHAT ="deepseek-v4-flash"
+API_MODEL_CHAT ="deepseek-v4-flash"#deepseek-v4-pro
 # =========================================================================
 
 DEEP_SEEK_KEY = key
