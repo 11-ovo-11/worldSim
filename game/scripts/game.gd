@@ -79,8 +79,8 @@ var explore_route_retry_count: int = 0
 var bg_debug_enabled: bool = true
 var has_saved_in_session: bool = false
 var dead_npc_names: Array = []
-var dialogue_min_chars: int = 90
-var action_narration_min_chars: int = 90
+var dialogue_min_chars: int = 150
+var action_narration_min_chars: int = 150
 var output_mode_debug_enabled: bool = false
 var output_length_button: Button
 var min_chars_dialog: AcceptDialog
