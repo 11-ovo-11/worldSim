@@ -126,8 +126,8 @@ static func load_game(scene: Node) -> bool:
 		scene.current_chat_session_npc = ""
 		scene.current_chat_session_records = []
 	scene.dead_npc_names = data.get("dead_npc_names", [])
-	scene.dialogue_min_chars = clamp(int(data.get("dialogue_min_chars", data.get("efficient_mode_min_chars", 150))), 40, 2000)
-	scene.action_narration_min_chars = clamp(int(data.get("action_narration_min_chars", 150)), 40, 2000)
+	scene.dialogue_min_chars = clamp(int(data.get("dialogue_min_chars", data.get("efficient_mode_min_chars", 250))), 40, 2000)
+	scene.action_narration_min_chars = clamp(int(data.get("action_narration_min_chars", 250)), 40, 2000)
 
 	var p = data.get("player", {})
 	scene.playerName = p.get("name", scene.playerName)

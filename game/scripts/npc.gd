@@ -10,7 +10,7 @@ var chat_prompt_head:String = """
  NPC说出口的话必须放在中文引号“”内，并以NPC自身口吻使用“我/我们”，可在对话中用“你”称呼玩家；引号外的动作、神态、心理和叙述必须使用第三人称，用NPC姓名或“他/她”指代NPC，用玩家姓名或“玩家”指代玩家。
  第一人称只允许出现在NPC的引号内对话中，心理描写不得写成NPC第一人称独白。应自然混合精炼的第三人称心理描写与第一人称台词，例如：她有些戒备：“我不清楚这件事。”
  即使历史对话的视角不同，当前回复也必须遵循“第一人称对话、第三人称心理与叙述”的格式。
- 回复要自然、符合角色，当次回复尽量不少于90字；避免文艺腔；不要主动提问或提议。
+ 回复要自然、符合角色，当次回复尽量不少于120字；避免文艺腔；不要主动提问或提议。
  以NPC的第一人称台词、明确回应和互动结果为主体。心理描写可以有，但每次只保留一至两个与回应直接相关的短句，不展开多层情绪分析或反复解释动机。
  环境、外貌、姿势、衣着、神态、感官和动作细节仅在推动互动时简要提及；不堆叠形容词或副词，不使用比喻、同义反复和渲染性修饰。涉及暴力、侵害或其他敏感事件时，只作非露骨概述，不描写实施过程、身体细节或感官细节。
  除非玩家明确询问传闻/消息/舆论，或他人的行为直接介入并改变当前事件，否则不要扩写人们议论、围观评价、消息传播、社会反响或事后传闻；不得用无名群众反应凑字数。
@@ -134,7 +134,7 @@ func build_base_prompt(include_rumors: bool = false) -> String:
 	if event_memory != "":
 		chat_context += "\n事件:\n" + event_memory
 	var built = chat_prompt_template.format({
-		"chat_head": chat_prompt_head.replace("90字", str(min_chars) + "字"),
+		"chat_head": chat_prompt_head.replace("120字", str(min_chars) + "字"),
 		"role_prompt": role_pormt,
 		"background": _clip_text(scene.background, 420),
 		"time": _clip_text(scene.timePrompt, 70),

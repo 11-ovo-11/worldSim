@@ -21,14 +21,14 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		var dialogue_tip = Label.new()
 		dialogue_tip.text = "对话最小字数"
 		scene.dialogue_min_chars_spin = SpinBox.new()
-		scene.dialogue_min_chars_spin.min_value = 40
+		scene.dialogue_min_chars_spin.min_value = 250
 		scene.dialogue_min_chars_spin.max_value = 2000
 		scene.dialogue_min_chars_spin.step = 10
 		scene.dialogue_min_chars_spin.value = scene.dialogue_min_chars
 		var action_tip = Label.new()
 		action_tip.text = "行动最小字数"
 		scene.action_min_chars_spin = SpinBox.new()
-		scene.action_min_chars_spin.min_value = 40
+		scene.action_min_chars_spin.min_value = 250
 		scene.action_min_chars_spin.max_value = 2000
 		scene.action_min_chars_spin.step = 10
 		scene.action_min_chars_spin.value = scene.action_narration_min_chars

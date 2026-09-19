@@ -79,8 +79,8 @@ var explore_route_retry_count: int = 0
 var bg_debug_enabled: bool = true
 var has_saved_in_session: bool = false
 var dead_npc_names: Array = []
-var dialogue_min_chars: int = 150
-var action_narration_min_chars: int = 150
+var dialogue_min_chars: int = 250
+var action_narration_min_chars: int = 250
 var output_mode_debug_enabled: bool = false
 var output_length_button: Button
 var min_chars_dialog: AcceptDialog
@@ -268,7 +268,10 @@ func get_current_chat_session_memory(npc_name: String = "") -> String:
 
 func _clip_prompt_text(text: String, _max_chars: int) -> String:
 	var src = str(text).strip_edges()
-	return src
+	if _max_chars <= 0 or src.length() <= _max_chars:
+		return src
+	var keep = max(8, _max_chars - 3)
+	return src.substr(src.length() - keep, keep).strip_edges()
 
 func _clear_all_npc_dialogue_memory() -> void:
 	for npc_name in npcs.keys():
@@ -501,14 +504,19 @@ func ask_ai(message: Array, askmode: aiMode):
 	else:
 		http_request.timeout = ai_request_timeout_seconds
 	var outbound_messages = _compact_messages_for_request(_decorate_messages_for_output_mode(message, askmode))
-	var body = [outbound_messages,null,"text"]
+	var request_options = {"min_chars": 0, "timeout_seconds": ai_request_timeout_seconds}
+	if askmode == aiMode.chat:
+		request_options["min_chars"] = max(0, dialogue_min_chars)
+	elif askmode == aiMode.action:
+		request_options["min_chars"] = max(0, action_narration_min_chars)
+	var body = [outbound_messages,null,"text",request_options]
 	match askmode:
 		aiMode.tools:
-			body = [outbound_messages,tools,"text"]
+			body = [outbound_messages,tools,"text",request_options]
 		aiMode.chat, aiMode.action:
-			body = [outbound_messages,tools,"text"]
+			body = [outbound_messages,tools,"text",request_options]
 		aiMode.explore:
-			body = [outbound_messages,null,"json_object"]
+			body = [outbound_messages,null,"json_object",request_options]
 	var url = chat_url
 	var json_string = JSON.stringify(body)
 	if http_request.get_http_client_status() == HTTPClient.STATUS_REQUESTING:
@@ -548,7 +556,7 @@ func _decorate_messages_for_output_mode(message: Array, askmode: aiMode) -> Arra
 		return message
 	var copied = message.duplicate(true)
 	var min_chars = dialogue_min_chars if askmode == aiMode.chat else action_narration_min_chars
-	min_chars = max(40, min_chars)
+	min_chars = max(160, min_chars)
 	var constraint = "输出要求：本次回复至少" + str(min_chars) + "字，信息完整、自然，不要省略关键细节，不要用固定收尾句硬凑字数。"
 	copied.push_front({"role":"system", "content": constraint})
 	return copied
@@ -577,7 +585,7 @@ func _expand_text_to_min_chars(text: String, _min_chars: int, _askmode: aiMode) 
 	return text
 
 func _enforce_output_min_length(text: String, _askmode: aiMode) -> String:
-	return text
+	return text.strip_edges()
 
 func _enforce_action_narration_richness(text: String) -> String:
 	return text

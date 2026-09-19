@@ -147,7 +147,7 @@ static func on_send_button_pressed(scene: Node) -> void:
 
 static func build_shared_interaction_context(scene: Node, interaction_text: String, focus_npc_name: String = "", focus_npc_desc: String = "") -> String:
 	var identity_guidance = scene._clip_prompt_text(scene._build_identity_attitude_guidance(focus_npc_name, focus_npc_desc), 520)
-	var chat_session_mem = scene._clip_prompt_text(scene.get_current_chat_session_memory(focus_npc_name), 900)
+	var chat_session_mem = scene._clip_prompt_text(scene.get_current_chat_session_memory(focus_npc_name), 520)
 	var related_events = scene._clip_prompt_text(scene._build_related_event_memory_for_action(interaction_text, focus_npc_name), 480)
 	return scene._clip_prompt_text(GameInteractionContext.build_shared_context({
 		"world_seed_input": scene.world_seed_input,
@@ -161,7 +161,7 @@ static func build_shared_interaction_context(scene: Node, interaction_text: Stri
 		"identity_guidance": identity_guidance,
 		"chat_session_mem": chat_session_mem,
 		"related_events": related_events,
-	}), 0)
+	}), 1800)
 
 static func build_continue_action_text() -> String:
 	return "继续当前事情的发展"

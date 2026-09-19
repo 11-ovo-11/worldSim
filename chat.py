@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from ai_output_policy import ensure_minimum_text
 import requests
 import base64
 import time
@@ -371,9 +372,11 @@ def chat():
     global CHAT_REQUEST_COUNT
     CHAT_REQUEST_COUNT += 1
     _maybe_recycle_runtime(False, "chat_threshold")
-    user_msg = request.get_json()[0]
-    tools = request.get_json()[1]
-    output_format = request.get_json()[2]
+    body = request.get_json()
+    user_msg, tools, output_format = body[:3]
+    options = body[3] if len(body) > 3 and isinstance(body[3], dict) else {}
+    minimum = max(0, min(2000, int(options.get("min_chars", 0)))) if output_format == "text" else 0
+    deadline = time.monotonic() + max(3, min(120, float(options.get("timeout_seconds", 30)))) - 1
     if not user_msg:
         return jsonify({"error": "消息不能为空"}), 400
         
@@ -391,8 +394,14 @@ def chat():
                 r.raise_for_status()
                 j = r.json()
                 text = j.get("response", "")
+                def repair_ollama(messages, timeout):
+                    repair_payload = dict(payload, prompt="\n".join(str(m.get("role", "")) + ": " + str(m.get("content", "")) for m in messages))
+                    repaired = requests.post(OLLAMA_URL, json=repair_payload, timeout=timeout)
+                    repaired.raise_for_status()
+                    return repaired.json().get("response", "")
+                text, length_status = ensure_minimum_text(user_msg, text, minimum, repair_ollama, deadline)
                 print("文本生成完成")
-                return jsonify({"text": text})
+                return jsonify({"text": text, "length_status": length_status})
             except Exception as e:
                 return jsonify({"error": f"Ollama请求失败: {str(e)}"}), 500
                 
@@ -412,8 +421,15 @@ def chat():
                 tool_calls = []
                 if message.tool_calls is not None:
                     tool_calls = [tool_call.model_dump() for tool_call in message.tool_calls]
+                def repair_openai(messages, timeout):
+                    repaired = clientOpenAI.chat.completions.create(
+                        model=API_MODEL_CHAT, messages=messages,
+                        stream=False, timeout=timeout,
+                    )
+                    return repaired.choices[0].message.content
+                text, length_status = ensure_minimum_text(user_msg, text, minimum, repair_openai, deadline)
                 print("ai:", {"text": text, "tool_calls": tool_calls})
-                return jsonify({"text": text, "tool_calls": tool_calls})
+                return jsonify({"text": text, "tool_calls": tool_calls, "length_status": length_status})
             except Exception as e:
                 print(f"DeepSeek API请求失败: {str(e)}")
                 return jsonify({"error": f"DeepSeek API请求失败: {str(e)}"}), 533
