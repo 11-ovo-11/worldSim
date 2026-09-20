@@ -16,6 +16,28 @@ static func compact_prompt_content(text: String) -> String:
 		return ""
 	return "\n".join(out)
 
+static func sanitize_frontend_text(text: String) -> String:
+	var src = strip_angle_tags(str(text)).replace("\r\n", "\n").replace("\r", "\n")
+	var meta_keywords = ["态度变化", "NPC态度", "好感度", "亲密度", "声望变化", "状态变化", "后台数据", "后端数据", "系统提示", "工具调用", "函数调用"]
+	var kept: Array = []
+	for raw_line in src.split("\n", false):
+		var line = str(raw_line).strip_edges()
+		if line == "":
+			continue
+		var structured_meta = line.begins_with("[") or line.begins_with("【") or line.begins_with("(") or line.begins_with("（") or line.begins_with("{")
+		var remove_line = false
+		for keyword in meta_keywords:
+			if (structured_meta and line.find(keyword) != -1) or line.begins_with(keyword + "：") or line.begins_with(keyword + ":"):
+					remove_line = true
+					break
+		if !remove_line:
+			kept.append(line)
+	var result = "\n".join(kept)
+	var inline_meta = RegEx.new()
+	if inline_meta.compile("[（(【\\[]\\s*(NPC)?(态度变化|好感度|亲密度|声望变化|状态变化|后台数据|后端数据|系统提示|工具调用|函数调用)[^）)】\\]]*[）)】\\]]") == OK:
+		result = inline_meta.sub(result, "", true)
+	return result.strip_edges()
+
 static func compact_messages_for_request(messages: Array) -> Array:
 	var copied = messages.duplicate(true)
 	for i in range(copied.size()):
@@ -27,6 +49,40 @@ static func compact_messages_for_request(messages: Array) -> Array:
 		row["content"] = compact_prompt_content(str(row.get("content", "")))
 		copied[i] = row
 	return copied
+
+static func compact_action_narration(text: String) -> String:
+	var src = str(text).strip_edges()
+	if src == "":
+		return src
+	var removable = ["没有人阻拦", "没人阻拦", "没有人报警", "没人报警", "没有人追着问", "没人追问", "没有人问你来意", "没人问你来意", "没有人躲开", "没人躲开", "没有谁表现出抗拒或犹豫", "没有人表现出抗拒或犹豫", "没有意外也没有不满", "公司照常营业", "其他事务照旧运转", "无需提前跟他打招呼", "不用提前跟他打招呼", "不用顾及他的安排", "不必顾及他的安排", "一切照常"]
+	var out: Array = []
+	for raw_line in src.replace("\r", "").split("\n", false):
+		for raw_piece in str(raw_line).split("。", false):
+			var piece = str(raw_piece).strip_edges()
+			if piece == "":
+				continue
+			for fragment in removable:
+				piece = piece.replace(fragment, "")
+			piece = piece.replace("，。，", "，").replace("，，", "，").strip_edges()
+			if piece == "":
+				continue
+			var side_only = true
+			for marker in removable:
+				if piece.find(marker) == -1:
+					side_only = false
+					break
+			if side_only:
+				continue
+			var duplicate = false
+			for old in out:
+				if str(old) == piece or (piece.length() >= 12 and str(old).find(piece) != -1):
+					duplicate = true
+					break
+			if !duplicate:
+				out.append(piece)
+	if out.is_empty():
+		return src
+	return "。".join(out) + ("。" if src.ends_with("。") else "")
 
 static func tail_preview(text: String, max_chars: int = 48) -> String:
 	var src = str(text)

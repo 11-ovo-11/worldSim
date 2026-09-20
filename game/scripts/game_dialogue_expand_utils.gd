@@ -387,12 +387,13 @@ static func npc_reply(scene: Node, reply: String, model_tool_calls: Array = []) 
 	if active_npc_name == "":
 		return
 	scene.changeTextTo(scene.get_node("%speakerNameLabel"), active_npc_name)
-	scene.changeTextTo(scene.response_label, scene.process_string(reply))
+	var display_reply = scene.process_display_string(reply)
+	scene.changeTextTo(scene.response_label, display_reply)
 	if scene.currentNpc == null or !is_instance_valid(scene.currentNpc) or str(scene.currentNpc.npcName).strip_edges() != active_npc_name:
 		return
-	scene._record_current_chat_session("对话回复", active_npc_name, reply)
+	scene._record_current_chat_session("对话回复", active_npc_name, display_reply)
 	scene.currentNpc.currentChat += active_npc_name + ":" + reply + "\n"
-	scene._remember_important_event("<对话>" + active_npc_name + "：" + scene.process_string(reply), scene.currentSiteName, active_npc_name)
+	scene._remember_important_event("<对话>" + active_npc_name + "：" + display_reply, scene.currentSiteName, active_npc_name)
 	var direct_tag_result = apply_direct_npc_tool_tags(scene, reply)
 	var handled_direct_tags: Array = direct_tag_result.get("handled_tags", [])
 	var tools_texts = scene.get_content_in_angle_brackets(reply)

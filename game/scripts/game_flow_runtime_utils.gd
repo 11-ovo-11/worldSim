@@ -548,7 +548,7 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 				if action_reply is String and action_reply.strip_edges() != "":
 					scene._set_event_flow_lock(true)
 					scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【旁白】")
-					scene.changeTextTo(scene.response_label, scene.process_string(action_reply))
+					scene.changeTextTo(scene.response_label, scene.process_display_string(action_reply))
 					if scene._is_instant_gen_active():
 						scene.addLog("<即时生成触发：来源=行动输出>")
 						scene._bg_debug("instant trigger from action, site=" + str(scene.currentSiteName) + ", text_len=" + str(action_reply.length()))

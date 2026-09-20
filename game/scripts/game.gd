@@ -588,7 +588,7 @@ func _enforce_output_min_length(text: String, _askmode: aiMode) -> String:
 	return text.strip_edges()
 
 func _enforce_action_narration_richness(text: String) -> String:
-	return text
+	return GameAiUtils.compact_action_narration(text)
 
 func _looks_like_action_or_dialogue_phrase(text: String) -> bool:
 	return GameEntityUtils.looks_like_action_phrase(text)
@@ -764,6 +764,9 @@ func process_string(input: String) -> String:
 	if _process_newline_regex != null and _process_newline_regex.is_valid():
 		result = _process_newline_regex.sub(result, "\n", true)
 	return result.strip_edges()
+
+func process_display_string(input: String) -> String:
+	return GameAiUtils.sanitize_frontend_text(input)
 
 func _ensure_process_regex_ready() -> void:
 	if _process_strip_regex == null:
