@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://co433i2bsnpy0"
-path="res://.godot/imported/gpt-image-2_将该图片改为240_510尺寸，要求人物必须保持原图比例-0.jpg-ef5c65da9870c046de0da814eda4acee.ctex"
+uid="uid://dlkyn226dpeo7"
+path="res://.godot/imported/图层 1.png-4309e2405b498f4e5da4e1219a6d46c8.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves -（爱丽丝）/slot_1/resources/人物图片/gpt-image-2_将该图片改为240_510尺寸，要求人物必须保持原图比例-0.jpg"
-dest_files=["res://.godot/imported/gpt-image-2_将该图片改为240_510尺寸，要求人物必须保持原图比例-0.jpg-ef5c65da9870c046de0da814eda4acee.ctex"]
+source_file="res://saves - 爱丽丝/slot_1/resources/npcs/图层 1.png"
+dest_files=["res://.godot/imported/图层 1.png-4309e2405b498f4e5da4e1219a6d46c8.ctex"]
 
 [params]
 

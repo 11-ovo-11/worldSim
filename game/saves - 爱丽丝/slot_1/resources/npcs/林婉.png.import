@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://1go6681pv7d6"
-path="res://.godot/imported/苏小染-连衣裙.jpg-97252856b5beabaa1a5842ee8bea4fe1.ctex"
+uid="uid://duhl8kgu6rdmo"
+path="res://.godot/imported/林婉.png-0a1590c03650f3a56706044ef130e1f7.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves -（爱丽丝）/slot_1/resources/人物图片/苏小染-连衣裙.jpg"
-dest_files=["res://.godot/imported/苏小染-连衣裙.jpg-97252856b5beabaa1a5842ee8bea4fe1.ctex"]
+source_file="res://saves - 爱丽丝/slot_1/resources/npcs/林婉.png"
+dest_files=["res://.godot/imported/林婉.png-0a1590c03650f3a56706044ef130e1f7.ctex"]
 
 [params]
 

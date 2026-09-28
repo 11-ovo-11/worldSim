@@ -15,6 +15,12 @@ var player_era: String = ""
 @onready var start_http_request: HTTPRequest = $startHTTPRequest
 func _ready() -> void:
 	scene = owner
+	add_start_log("正在启动 DeepSeek API 桥接...")
+	var services_ok = await scene.ensure_deepseek_service_ready()
+	if !services_ok:
+		add_start_log("⚠ DeepSeek API 桥接启动失败：" + str(scene.get_node("DeepSeekService").get_startup_message()))
+		$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
+		return
 	await get_tree().create_timer(2).timeout
 	add_start_log("正在初始化...")
 	await get_tree().create_timer(1).timeout

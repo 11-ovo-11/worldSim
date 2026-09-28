@@ -189,6 +189,12 @@ func _ready():
 	_apply_interaction_locks()
 	call_deferred("_focus_active_input")
 
+func ensure_deepseek_service_ready() -> bool:
+	var manager = get_node_or_null("DeepSeekService")
+	if manager == null or !manager.has_method("ensure_ready"):
+		return false
+	return await manager.ensure_ready()
+
 func _setup_output_mode_controls() -> void:
 	GameUiSetupUtils.setup_output_mode_controls(self)
 
@@ -256,14 +262,14 @@ func get_current_chat_session_memory(npc_name: String = "") -> String:
 	if current_chat_session_records.is_empty():
 		return ""
 	var lines: Array = []
-	for i in range(current_chat_session_records.size()):
+	for i in range(max(0, current_chat_session_records.size() - 8), current_chat_session_records.size()):
 		var row_text = str(current_chat_session_records[i]).strip_edges()
 		if row_text == "":
 			continue
-		lines.append("- " + row_text)
+		lines.append("- " + row_text.left(180))
 	if lines.is_empty():
 		return ""
-	var joined = "以下是当前会话中刚发生且必须延续影响的内容：\n" + "\n".join(lines)
+	var joined = "当前会话最近记录：\n" + "\n".join(lines)
 	return joined
 
 func _clip_prompt_text(text: String, _max_chars: int) -> String:
@@ -1047,6 +1053,12 @@ func clear_children(node: Node):
 
 func addLog(logText: String, instant: bool = false):
 	GameInteractionRuntimeUtils.addLog(self, logText, instant)
+
+func report_ai_error(message: String) -> void:
+	var detail = str(message).strip_edges()
+	if detail == "":
+		detail = "未知错误"
+	addLog("【AI错误】" + detail.left(360), true)
 
 func _is_important_log(log_text: String) -> bool:
 	return GameEventUtils.is_important_log(log_text)

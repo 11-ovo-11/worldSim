@@ -106,6 +106,8 @@ static func record_current_chat_session(scene: Node, kind: String, speaker: Stri
 	if !scene.current_chat_session_records.is_empty() and str(scene.current_chat_session_records[scene.current_chat_session_records.size() - 1]) == rec:
 		return
 	scene.current_chat_session_records.append(rec)
+	if scene.current_chat_session_records.size() > 12:
+		scene.current_chat_session_records = scene.current_chat_session_records.slice(scene.current_chat_session_records.size() - 12)
 
 static func update_item_trade_price(scene: Node, item_name: String, per_unit_price: int) -> void:
 	if item_name == "" or per_unit_price <= 0:
@@ -150,18 +152,18 @@ static func build_shared_interaction_context(scene: Node, interaction_text: Stri
 	var chat_session_mem = scene._clip_prompt_text(scene.get_current_chat_session_memory(focus_npc_name), 520)
 	var related_events = scene._clip_prompt_text(scene._build_related_event_memory_for_action(interaction_text, focus_npc_name), 480)
 	return scene._clip_prompt_text(GameInteractionContext.build_shared_context({
-		"world_seed_input": scene.world_seed_input,
-		"background": scene.background,
+		"world_seed_input": scene._clip_prompt_text(scene.world_seed_input, 180),
+		"background": scene._clip_prompt_text(scene.background, 360),
 		"current_site_name": scene.currentSiteName,
 		"money": str(scene.money),
 		"player_name": scene.playerName,
-		"inventory_snapshot": scene._build_inventory_snapshot(),
+		"inventory_snapshot": scene._clip_prompt_text(scene._build_inventory_snapshot(), 200),
 		"focus_npc_name": focus_npc_name,
-		"focus_npc_desc": focus_npc_desc,
+		"focus_npc_desc": scene._clip_prompt_text(focus_npc_desc, 220),
 		"identity_guidance": identity_guidance,
 		"chat_session_mem": chat_session_mem,
 		"related_events": related_events,
-	}), 1800)
+	}), 0)
 
 static func build_continue_action_text() -> String:
 	return "继续当前事情的发展"
@@ -195,7 +197,10 @@ static func submit_action_input(scene: Node, raw_input: String, bypass_lock_chec
 	var focus_npc_name = ""
 	var focus_npc_desc = ""
 	var explicitly_target_npc = _is_action_explicitly_targeting_current_npc(scene, user_input)
-	if explicitly_target_npc and scene.currentState == scene.worldState.chat and scene.currentNpc != null:
+	# In a chat, the action bar is the same scene with a different input mode.
+	# Carry the active NPC context by default so action replies retain the
+	# character voice and immediate relationship state of the dialogue path.
+	if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
 		focus_npc_name = str(scene.currentNpc.npcName)
 		focus_npc_desc = str(scene.currentNpc.npcDescribe)
 	if focus_npc_name != "":

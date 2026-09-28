@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dlkyn226dpeo7"
-path="res://.godot/imported/图层 1.png-19d0f5d6e60748b79642331da0fbc0e1.ctex"
+uid="uid://c38blmkqevx8q"
+path="res://.godot/imported/小染.png-9b93b11eb09d667f76e40efe6580aed1.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves -（爱丽丝）/slot_1/resources/npcs/图层 1.png"
-dest_files=["res://.godot/imported/图层 1.png-19d0f5d6e60748b79642331da0fbc0e1.ctex"]
+source_file="res://saves - 爱丽丝/slot_1/resources/npcs/小染.png"
+dest_files=["res://.godot/imported/小染.png-9b93b11eb09d667f76e40efe6580aed1.ctex"]
 
 [params]
 

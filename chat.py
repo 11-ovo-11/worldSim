@@ -408,19 +408,25 @@ def chat():
         case "openai":
             print("发起了一次openai请求：", user_msg)
             try:
-                response = clientOpenAI.chat.completions.create(
-                    model=API_MODEL_CHAT,
-                    messages=user_msg,
-                    tools=tools,
-                    response_format = { "type": output_format } ,
-                    stream=False
-                )
+                request_kwargs = {
+                    "model": API_MODEL_CHAT,
+                    "messages": user_msg,
+                    "tools": tools,
+                    "stream": False,
+                }
+                # DeepSeek 的普通文本请求不应携带 response_format=text；
+                # 只在明确要求 JSON 时传递结构化输出参数。
+                if output_format in ("json_object", "json_schema"):
+                    request_kwargs["response_format"] = {"type": output_format}
+                response = clientOpenAI.chat.completions.create(**request_kwargs)
                 # 获取消息
                 message = response.choices[0].message
                 text = message.content if message.content is not None else ""
                 tool_calls = []
                 if message.tool_calls is not None:
                     tool_calls = [tool_call.model_dump() for tool_call in message.tool_calls]
+                if str(text).strip() == "" and not tool_calls:
+                    return jsonify({"error": "模型返回空内容，请重试或检查模型响应。"}), 502
                 def repair_openai(messages, timeout):
                     repaired = clientOpenAI.chat.completions.create(
                         model=API_MODEL_CHAT, messages=messages,

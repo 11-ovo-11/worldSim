@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dan3qemb2cwhe"]
 
 [ext_resource type="Script" uid="uid://dccxc0ayjp3ct" path="res://scripts/game.gd" id="1_ig7tw"]
+[ext_resource type="Script" path="res://scripts/deepseek_service_manager.gd" id="1_deepseek_service"]
 [ext_resource type="Theme" uid="uid://cw27y3q15da6g" path="res://assets/main.tres" id="1_ycdy4"]
 [ext_resource type="Texture2D" uid="uid://dxvfctw51bsus" path="res://icon.svg" id="2_0xm2m"]
 [ext_resource type="PackedScene" uid="uid://c08dcgwadp4u" path="res://fabs/水平分割线.tscn" id="3_7mycd"]
@@ -74,6 +75,9 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 0, 0, 1)
+
+[node name="DeepSeekService" type="Node" parent="."]
+script = ExtResource("1_deepseek_service")
 
 [node name="HTTPRequest" type="HTTPRequest" parent="." unique_id=1648532]
 

@@ -102,8 +102,8 @@ static func build_npc_personal_event_summary(plain_text: String, npc_name: Strin
 			return "我获知传闻：" + rumor_text
 		return "相关传闻：" + rumor_text
 	if npc_name == focus_npc:
-		return "我记住了一件会直接影响我对玩家态度的事：" + t
-	return "有一件与我相关的事会影响我之后对玩家的判断：" + t
+		return "我记得：" + t
+	return "与我有关：" + t
 
 static func score_event_relevance(mem: Dictionary, site_name: String, npc_name: String, intent_hint: Dictionary = {}) -> int:
 	var score = 0

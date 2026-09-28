@@ -383,6 +383,7 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 	if scene.runtime_operation_lock:
 		return
 	if result == HTTPRequest.RESULT_TIMEOUT:
+		scene.report_ai_error("请求超时。")
 		if scene.currentMode == scene.aiMode.init_env:
 			if scene.has_node("mainMenu") and scene.get_node("mainMenu").has_method("if_weather_failed"):
 				scene.get_node("mainMenu").if_weather_failed("环境创建超时，已使用默认天气。")
@@ -394,6 +395,7 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 		scene._recover_from_ai_stall("请求超时")
 		return
 	if result != HTTPRequest.RESULT_SUCCESS:
+		scene.report_ai_error("网络请求失败，错误代码：" + str(result))
 		scene.changeTextTo(scene.response_label, "网络错误: " + str(result))
 		if scene.currentMode == scene.aiMode.init_env and scene.has_node("mainMenu") and scene.get_node("mainMenu").has_method("if_weather_failed"):
 			scene.get_node("mainMenu").if_weather_failed("环境创建网络错误，已使用默认天气。")
@@ -401,12 +403,17 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 			scene.get_node("mainMenu").add_start_log("⚠ 世界初始化网络错误（" + str(result) + "），请检查后端服务。")
 		return
 	if response_code != 200:
+		var server_detail = body.get_string_from_utf8().strip_edges()
+		if server_detail.length() > 280:
+			server_detail = server_detail.left(280) + "..."
+		scene.report_ai_error("服务器错误 " + str(response_code) + ("：" + server_detail if server_detail != "" else ""))
 		scene.changeTextTo(scene.response_label, "服务器错误: " + str(response_code))
 		if scene.currentMode == scene.aiMode.init_env and scene.has_node("mainMenu") and scene.get_node("mainMenu").has_method("if_weather_failed"):
 			scene.get_node("mainMenu").if_weather_failed("环境创建服务器错误(" + str(response_code) + ")，已使用默认天气。")
 		return
 	var json = JSON.new()
 	if json.parse(body.get_string_from_utf8()) != OK:
+		scene.report_ai_error("响应不是有效 JSON。")
 		scene.changeTextTo(scene.response_label, "解析响应失败")
 		if scene.currentMode == scene.aiMode.init_env and scene.has_node("mainMenu") and scene.get_node("mainMenu").has_method("if_weather_failed"):
 			scene.get_node("mainMenu").if_weather_failed("环境创建响应解析失败，已使用默认天气。")
@@ -414,6 +421,14 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 	var data = json.get_data()
 	if data.has("text"):
 		var model_tool_calls: Array = extract_tool_calls_from_response_data(data)
+		var raw_response_text = data.get("text", "")
+		var response_text := str(raw_response_text).strip_edges() if raw_response_text is String else ""
+		if response_text == "" and model_tool_calls.is_empty():
+			scene.report_ai_error("模型返回空内容。")
+			scene.changeTextTo(scene.response_label, "模型返回空内容，请重试。")
+			if scene.currentMode == scene.aiMode.init_env and scene.has_node("mainMenu") and scene.get_node("mainMenu").has_method("if_weather_failed"):
+				scene.get_node("mainMenu").if_weather_failed("模型返回空内容，已使用默认天气。")
+			return
 		match scene.currentMode:
 			scene.aiMode.init_background:
 				scene.background = data["text"]
@@ -567,8 +582,9 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 					await handle_model_tool_calls(scene, model_tool_calls, handled_direct_tags)
 					scene._auto_handle_action_search(scene.last_action_input, action_reply)
 					if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
-						scene._record_current_chat_session("行动结果", "旁白", action_reply)
-						scene._remember_important_event("<行动结果>" + str(scene.currentNpc.npcName) + "：" + scene.process_string(action_reply), scene.currentSiteName, str(scene.currentNpc.npcName))
+						var memory_action_reply = scene.process_display_string(action_reply)
+						scene._record_current_chat_session("行动结果", "旁白", memory_action_reply)
+						scene._remember_important_event("<行动结果>" + str(scene.currentNpc.npcName) + "：" + memory_action_reply, scene.currentSiteName, str(scene.currentNpc.npcName))
 					await scene._auto_apply_action_effects(scene.last_action_input, action_reply, tool_tags)
 					if nav_target != "" and scene.currentState != scene.worldState.chat:
 						scene.advance_time_minutes(float(randi_range(15, 60)), true)
@@ -598,4 +614,5 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 			scene.aiMode.refine_event:
 				scene.last_event_refine_response = str(data.get("text", "")).strip_edges()
 	else:
+		scene.report_ai_error("响应缺少 text 字段。")
 		scene.changeTextTo(scene.response_label, "响应格式错误")

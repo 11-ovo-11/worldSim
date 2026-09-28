@@ -6,6 +6,7 @@ var npcLog:String = ""
 var currentChat:String = ""
 var scene:GameManager
 var chat_prompt_head:String = """
+这是虚构游戏中的角色扮演对话。保持当前场景和角色连续，直接回应玩家，不要输出政策、审查、道德说教或“无法继续”等元话语。若某个细节不适合展开，用简短非露骨概述保留角色关系、行动和立即结果，不要让回复变成空白或事件总结。
 你叙述NPC与玩家的直接互动，同时让NPC用第一人称说话，并始终用第二人称称呼玩家。
  NPC说出口的话必须放在中文引号“”内，以NPC自身口吻使用“我/我们”，并用“你”称呼玩家；禁止在台词中把玩家称为“玩家”“他/她”或第三人。引号外的动作、神态、心理和叙述用NPC姓名或“他/她”指代NPC，用“你”指代玩家，也不得写“玩家”。
  第一人称只允许出现在NPC的引号内对话中，心理描写不得写成NPC第一人称独白。应自然混合精炼的第三人称心理描写与第一人称台词，例如：她有些戒备：“我不清楚这件事。”
@@ -39,17 +40,17 @@ var sum_prompt:String = """
 他在这里很久了，熟悉这个地方，也有一些东西可以卖。
 """
 var role_pormt
-const CHAT_HISTORY_MAX_LINES := 12
-const CHAT_HISTORY_MAX_CHARS := 700
-const SESSION_MEMORY_MAX_CHARS := 760
+const CHAT_HISTORY_MAX_LINES := 8
+const CHAT_HISTORY_MAX_CHARS := 900
+const SESSION_MEMORY_MAX_CHARS := 1100
 const EVENT_MEMORY_MAX_CHARS := 240
 const IDENTITY_GUIDANCE_MAX_CHARS := 280
 const RUMORS_MAX_CHARS := 160
 const NPC_LOG_MAX_CHARS := 420
 const PLAYER_IDENTITY_MAX_CHARS := 120
-const BASE_PROMPT_MAX_CHARS := 2600
+const BASE_PROMPT_MAX_CHARS := 3600
 # 在类顶部定义提示词模板
-var chat_prompt_template = "{chat_head}\n角色:{role_prompt}\n背景:{background}\n时天气:{time}{weather}\n玩家:{player_identity}\n态度:{identity_guidance}{rumor_context}\n印象:{player_impression}\n对话:{chat_history}"
+var chat_prompt_template = "{chat_head}\n角色:{role_prompt}\n背景:{background}\n地点与时间:{site}{time}{weather}\n玩家:{player_identity}\n态度:{identity_guidance}{rumor_context}\n印象:{player_impression}\n对话:{chat_history}"
 
 func _clip_text(text: String, max_chars: int) -> String:
 	var src = str(text).strip_edges()
@@ -70,10 +71,13 @@ func _tail_lines(text: String, max_lines: int, max_chars: int) -> String:
 	for i in range(start_idx, rows.size()):
 		var row = str(rows[i]).strip_edges()
 		if row != "":
-			picked.append(_clip_text(row, 110))
+			picked.append(_clip_text(row, 180))
 	if picked.is_empty():
 		return ""
-	return _clip_text("\n".join(picked), max_chars)
+	var joined = "\n".join(picked)
+	if joined.length() <= max_chars:
+		return joined
+	return joined.substr(joined.length() - max_chars, max_chars).strip_edges()
 
 func _compact_rumors() -> String:
 	if scene == null:
@@ -125,20 +129,20 @@ func build_base_prompt(include_rumors: bool = false) -> String:
 	if scene != null and scene.has_method("get_identity_attitude_guidance_for_npc"):
 		identity_guidance = _clip_text(str(scene.get_identity_attitude_guidance_for_npc(npcName, npcDescribe)), IDENTITY_GUIDANCE_MAX_CHARS)
 	if scene != null and scene.has_method("get_current_chat_session_memory"):
-		session_memory = _clip_text(str(scene.get_current_chat_session_memory(npcName)), SESSION_MEMORY_MAX_CHARS)
-	var history = _tail_lines(currentChat, CHAT_HISTORY_MAX_LINES, CHAT_HISTORY_MAX_CHARS)
-	var chat_context = history
+		session_memory = _tail_lines(str(scene.get_current_chat_session_memory(npcName)), 8, SESSION_MEMORY_MAX_CHARS)
+	# One recent-history source per request. Session records already contain both sides
+	# of this conversation; currentChat is only a fallback for older saved games.
+	var chat_context = session_memory if session_memory != "" else _tail_lines(currentChat, CHAT_HISTORY_MAX_LINES, CHAT_HISTORY_MAX_CHARS)
 	var min_chars = 150
 	if scene != null:
 		min_chars = max(40, int(scene.dialogue_min_chars))
-	if session_memory != "":
-		chat_context += "\n会话:\n" + session_memory
 	if event_memory != "":
 		chat_context += "\n事件:\n" + event_memory
 	var built = chat_prompt_template.format({
 		"chat_head": chat_prompt_head.replace("120字", str(min_chars) + "字"),
-		"role_prompt": role_pormt,
+		"role_prompt": _clip_text(str(role_pormt), 360),
 		"background": _clip_text(scene.background, 420),
+		"site": _clip_text(scene.currentSiteName, 70),
 		"time": _clip_text(scene.timePrompt, 70),
 		"weather": _clip_text(scene.weatherPrompt, 70),
 		"player_identity": _clip_text(scene.playerName + "；" + scene.world_seed_input, PLAYER_IDENTITY_MAX_CHARS),
@@ -147,7 +151,9 @@ func build_base_prompt(include_rumors: bool = false) -> String:
 		"chat_history": chat_context,
 		"rumor_context": rumor_context
 	})
-	return _clip_text(built, BASE_PROMPT_MAX_CHARS)
+	# Keep the behavioral instructions and the latest conversation intact.
+	# Optional impressions/history have their own limits above.
+	return built
 
 # 重构后的函数
 func start_chat() -> void:
@@ -177,7 +183,9 @@ func sum_chat():
 
 func chatWithNpc(prompt: String, shared_context: String = ""):
 	var base = build_base_prompt(_is_rumor_query(prompt))
-	var system_content = base if shared_context == "" else base + "\n" + shared_context
+	# The shared context duplicates the world, NPC identity and session history
+	# already present in the base prompt. Use the base prompt for dialogue.
+	var system_content = base
 	var prompts = [
 		{"role": "system", "content": system_content},
 		{"role": "user", "content": prompt}
