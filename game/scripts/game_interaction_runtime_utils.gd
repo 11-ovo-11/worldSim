@@ -146,8 +146,7 @@ static func on_send_button_pressed(scene: Node) -> void:
 			return
 		var action_text = scene.input_text_edit.text
 		scene.input_text_edit.text = ""
-		if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
-			await submit_dialogue_input(scene, action_text, false, "行动输入")
+		await submit_action_input(scene, action_text, false)
 		return
 	if scene._is_runtime_transition_locked():
 		return
@@ -193,13 +192,6 @@ static func trigger_continue_flow(scene: Node) -> void:
 	await scene._submit_action_input(build_continue_action_text(), true)
 
 static func submit_action_input(scene: Node, raw_input: String, bypass_lock_check: bool = false) -> void:
-	if scene.is_dialogue_only_mode():
-		if scene.ai_busy or scene._is_runtime_transition_locked():
-			return
-		scene.input_text_edit.text = ""
-		if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
-			await submit_dialogue_input(scene, raw_input, false, "行动输入")
-		return
 	var user_input = _normalize_single_line_input(raw_input)
 	if user_input == "" or scene.ai_busy:
 		return
@@ -225,7 +217,12 @@ static func submit_action_input(scene: Node, raw_input: String, bypass_lock_chec
 		scene._record_current_chat_session("行动输入", scene.playerName, user_input)
 	var action_context = scene._build_shared_interaction_context(user_input, focus_npc_name, focus_npc_desc)
 	if scene.is_dialogue_only_mode():
+		var recent_chat = scene._clip_prompt_text(scene.get_current_chat_session_memory(focus_npc_name), scene.session_memory_max_chars)
 		action_context = "世界设定：" + scene._clip_prompt_text(scene.background, 900) + "\n当前地点：" + scene._clip_prompt_text(scene.currentSiteName, 80)
+		if focus_npc_name != "":
+			action_context += "\n当前NPC：" + scene._clip_prompt_text(focus_npc_name + "；" + focus_npc_desc, 360)
+		if recent_chat != "":
+			action_context += "\n近期对话与事件：\n" + recent_chat
 	var aprompts = [
 		{"role":"system","content": (scene.text_only_action_prompt if scene.is_dialogue_only_mode() else scene.action_prompt) + "\n" + action_context},
 		{"role":"user","content": user_input}]

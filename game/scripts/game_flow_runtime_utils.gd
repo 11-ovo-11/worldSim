@@ -573,6 +573,10 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 						action_reply = GameAiUtils.safe_continuation_text()
 					scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【叙事】")
 					scene.changeTextTo(scene.response_label, scene.process_display_string(action_reply))
+					if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
+						var action_memory = scene.process_display_string(action_reply)
+						scene._record_current_chat_session("行动结果", "叙事", action_memory)
+						scene.currentNpc.currentChat += "行动结果：" + action_memory + "\n"
 					scene._set_event_flow_lock(false)
 					return
 				if action_reply is String and action_reply.strip_edges() != "":
