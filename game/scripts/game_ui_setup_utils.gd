@@ -39,12 +39,39 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		scene.timeout_seconds_spin.max_value = 120
 		scene.timeout_seconds_spin.step = 5
 		scene.timeout_seconds_spin.value = scene.ai_request_timeout_seconds
+		var history_lines_tip = Label.new()
+		history_lines_tip.text = "对话记忆轮数"
+		scene.chat_history_lines_spin = SpinBox.new()
+		scene.chat_history_lines_spin.min_value = 4
+		scene.chat_history_lines_spin.max_value = 30
+		scene.chat_history_lines_spin.step = 1
+		scene.chat_history_lines_spin.value = scene.chat_history_max_lines
+		var history_chars_tip = Label.new()
+		history_chars_tip.text = "近期对话字符数"
+		scene.chat_history_chars_spin = SpinBox.new()
+		scene.chat_history_chars_spin.min_value = 600
+		scene.chat_history_chars_spin.max_value = 6000
+		scene.chat_history_chars_spin.step = 100
+		scene.chat_history_chars_spin.value = scene.chat_history_max_chars
+		var session_chars_tip = Label.new()
+		session_chars_tip.text = "当前会话记忆字符数"
+		scene.session_memory_chars_spin = SpinBox.new()
+		scene.session_memory_chars_spin.min_value = 800
+		scene.session_memory_chars_spin.max_value = 8000
+		scene.session_memory_chars_spin.step = 100
+		scene.session_memory_chars_spin.value = scene.session_memory_max_chars
 		box.add_child(dialogue_tip)
 		box.add_child(scene.dialogue_min_chars_spin)
 		box.add_child(action_tip)
 		box.add_child(scene.action_min_chars_spin)
 		box.add_child(timeout_tip)
 		box.add_child(scene.timeout_seconds_spin)
+		box.add_child(history_lines_tip)
+		box.add_child(scene.chat_history_lines_spin)
+		box.add_child(history_chars_tip)
+		box.add_child(scene.chat_history_chars_spin)
+		box.add_child(session_chars_tip)
+		box.add_child(scene.session_memory_chars_spin)
 		scene.min_chars_dialog.add_child(box)
 		scene.add_child(scene.min_chars_dialog)
 		scene.min_chars_dialog.confirmed.connect(scene._on_min_chars_dialog_confirmed)

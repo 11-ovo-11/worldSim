@@ -91,6 +91,13 @@ const ACTION_PROMPT := """
 工具指令仅用<>附在句末，不要解释。
 """
 
+const TEXT_ONLY_ACTION_PROMPT := """
+你是虚构世界的叙事角色。根据世界设定、当前地点和玩家的文本输入，输出连续的中文叙事正文。
+只写当前角色或场景的直接回应、行动和立即结果；若某个局部细节无法展开，就含蓄概述或跳过该局部，继续描写相邻的对话、动作和结果，确保事件继续向前推进。
+不要输出拒绝说明、政策或安全解释，不要输出系统字段、工具标签、状态数值或后台数据；不要创建NPC、地点、物品，也不要执行时间、声望、地图或概率变化。
+只输出正文，不要总结事件，不要解释写作限制，不要用旁观者反应凑字数。
+"""
+
 static func build_tool_inference_user_prompt(interaction_kind: String, source_input: String, reply_text: String, angle_tags_text: String = "", handled_direct_tags: Array = []) -> String:
 	var kind_label = "对话"
 	var reply_label = "NPC回复"

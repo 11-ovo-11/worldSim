@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from ai_output_policy import ensure_minimum_text
+from ai_output_policy import ensure_minimum_text, sanitize_refusal_output
 import requests
 import base64
 import time
@@ -422,6 +422,11 @@ def chat():
                 # 获取消息
                 message = response.choices[0].message
                 text = message.content if message.content is not None else ""
+                refusal_text = getattr(message, "refusal", "") or ""
+                if str(text).strip() == "" and str(refusal_text).strip() != "":
+                    # Treat provider refusal metadata as recoverable text so the
+                    # normal in-world fallback can preserve event progression.
+                    text = str(refusal_text)
                 tool_calls = []
                 if message.tool_calls is not None:
                     tool_calls = [tool_call.model_dump() for tool_call in message.tool_calls]
@@ -438,6 +443,14 @@ def chat():
                 return jsonify({"text": text, "tool_calls": tool_calls, "length_status": length_status})
             except Exception as e:
                 print(f"DeepSeek API请求失败: {str(e)}")
+                error_text = str(e).lower()
+                if any(token in error_text for token in ("refusal", "content_filter", "safety", "policy")):
+                    fallback = sanitize_refusal_output("抱歉，我无法生成这部分内容。")
+                    return jsonify({
+                        "text": fallback,
+                        "tool_calls": [],
+                        "length_status": {"reason": "provider_refusal_fallback", "retried": False},
+                    })
                 return jsonify({"error": f"DeepSeek API请求失败: {str(e)}"}), 533
                 
         case _:

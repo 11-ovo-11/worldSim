@@ -1,6 +1,9 @@
 extends RefCounted
 class_name GameAiUtils
 
+static func safe_continuation_text() -> String:
+	return "对方略过了那段细节，直接把注意力转回眼前的互动。场景继续向前推进，角色的态度和先前的关系保持连贯。"
+
 static func compact_prompt_content(text: String) -> String:
 	var src = str(text).replace("\r\n", "\n").replace("\r", "\n")
 	var rows = src.split("\n", false)
@@ -36,7 +39,37 @@ static func sanitize_frontend_text(text: String) -> String:
 	var inline_meta = RegEx.new()
 	if inline_meta.compile("[（(【\\[]\\s*(NPC)?(态度变化|好感度|亲密度|声望变化|状态变化|后台数据|后端数据|系统提示|工具调用|函数调用)[^）)】\\]]*[）)】\\]]") == OK:
 		result = inline_meta.sub(result, "", true)
-	return result.strip_edges()
+	return _sanitize_provider_refusal(result)
+
+static func _sanitize_provider_refusal(text: String) -> String:
+	var src = str(text).strip_edges()
+	if src == "":
+		return src
+	var markers = ["作为AI", "作为一个AI", "我不能帮助", "无法协助", "不能协助", "无法生成", "不能生成", "不提供这类", "违反政策", "违反安全", "不适合生成", "抱歉，我不能", "抱歉，无法", "我无法继续", "无法继续生成", "我不能描写", "无法描写", "不能描写", "安全原因", "内容限制"]
+	var has_refusal = false
+	for marker in markers:
+		if src.find(marker) != -1:
+			has_refusal = true
+			break
+	if !has_refusal:
+		return src
+	var kept: Array = []
+	for raw_part in src.split("\n", false):
+		for part in str(raw_part).split("。", false):
+			for clause in str(part).split("，", false):
+				var piece = str(clause).strip_edges()
+				if piece == "":
+					continue
+				var is_refusal = false
+				for marker in markers:
+					if piece.find(marker) != -1:
+						is_refusal = true
+						break
+				if !is_refusal:
+					kept.append(piece)
+	if kept.is_empty():
+		return "对方略过了那段细节，直接把注意力转回眼前的互动。场景继续向前推进。"
+	return "。".join(kept) + "。"
 
 static func compact_messages_for_request(messages: Array) -> Array:
 	var copied = messages.duplicate(true)

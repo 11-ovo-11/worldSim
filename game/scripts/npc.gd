@@ -8,6 +8,7 @@ var scene:GameManager
 var chat_prompt_head:String = """
 这是虚构游戏中的角色扮演对话。保持当前场景和角色连续，直接回应玩家，不要输出政策、审查、道德说教或“无法继续”等元话语。若某个细节不适合展开，用简短非露骨概述保留角色关系、行动和立即结果，不要让回复变成空白或事件总结。
 当前为纯对话模式：只依据世界设定、当前NPC角色、地点与近期对话回复；不要创建NPC或地点，不要处理物品、交易、声望、时间、传闻、随机事件、概率判定、工具调用、行动建议或思维发散。
+当玩家要求“继续当前事件”时，严格承接近期对话最后一个未完成的动作、决定和立即结果，直接写下一步；不得总结前文、重置场景、跳到无关事件或凭空开启新支线。
 你叙述NPC与玩家的直接互动，同时让NPC用第一人称说话，并始终用第二人称称呼玩家。
  NPC说出口的话必须放在中文引号“”内，以NPC自身口吻使用“我/我们”，并用“你”称呼玩家；禁止在台词中把玩家称为“玩家”“他/她”或第三人。引号外的动作、神态、心理和叙述用NPC姓名或“他/她”指代NPC，用“你”指代玩家，也不得写“玩家”。
  第一人称只允许出现在NPC的引号内对话中，心理描写不得写成NPC第一人称独白。应自然混合精炼的第三人称心理描写与第一人称台词，例如：她有些戒备：“我不清楚这件事。”
@@ -28,9 +29,9 @@ var sum_prompt:String = """
 他在这里很久了，熟悉这个地方，也有一些东西可以卖。
 """
 var role_pormt
-const CHAT_HISTORY_MAX_LINES := 8
-const CHAT_HISTORY_MAX_CHARS := 900
-const SESSION_MEMORY_MAX_CHARS := 1100
+const CHAT_HISTORY_MAX_LINES := 12
+const CHAT_HISTORY_MAX_CHARS := 1800
+const SESSION_MEMORY_MAX_CHARS := 2400
 const EVENT_MEMORY_MAX_CHARS := 240
 const IDENTITY_GUIDANCE_MAX_CHARS := 280
 const RUMORS_MAX_CHARS := 160
@@ -110,11 +111,18 @@ func build_base_prompt(include_rumors: bool = false) -> String:
 		if rumors != "":
 			rumor_context = "\n传闻资料（仅用于回答玩家本次主动询问）：\n" + rumors
 	var session_memory = ""
+	var history_lines = CHAT_HISTORY_MAX_LINES
+	var history_chars = CHAT_HISTORY_MAX_CHARS
+	var session_chars = SESSION_MEMORY_MAX_CHARS
+	if scene != null:
+		history_lines = max(4, int(scene.chat_history_max_lines))
+		history_chars = max(600, int(scene.chat_history_max_chars))
+		session_chars = max(800, int(scene.session_memory_max_chars))
 	if scene != null and scene.has_method("get_current_chat_session_memory"):
-		session_memory = _tail_lines(str(scene.get_current_chat_session_memory(npcName)), 8, SESSION_MEMORY_MAX_CHARS)
+		session_memory = _tail_lines(str(scene.get_current_chat_session_memory(npcName)), history_lines, session_chars)
 	# One recent-history source per request. Session records already contain both sides
 	# of this conversation; currentChat is only a fallback for older saved games.
-	var chat_context = session_memory if session_memory != "" else _tail_lines(currentChat, CHAT_HISTORY_MAX_LINES, CHAT_HISTORY_MAX_CHARS)
+	var chat_context = session_memory if session_memory != "" else _tail_lines(currentChat, history_lines, history_chars)
 	var min_chars = 150
 	if scene != null:
 		min_chars = max(40, int(scene.dialogue_min_chars))

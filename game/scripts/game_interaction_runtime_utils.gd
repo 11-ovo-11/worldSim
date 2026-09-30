@@ -106,8 +106,9 @@ static func record_current_chat_session(scene: Node, kind: String, speaker: Stri
 	if !scene.current_chat_session_records.is_empty() and str(scene.current_chat_session_records[scene.current_chat_session_records.size() - 1]) == rec:
 		return
 	scene.current_chat_session_records.append(rec)
-	if scene.current_chat_session_records.size() > 12:
-		scene.current_chat_session_records = scene.current_chat_session_records.slice(scene.current_chat_session_records.size() - 12)
+	var max_records = max(8, int(scene.chat_history_max_lines))
+	if scene.current_chat_session_records.size() > max_records:
+		scene.current_chat_session_records = scene.current_chat_session_records.slice(scene.current_chat_session_records.size() - max_records)
 
 static func update_item_trade_price(scene: Node, item_name: String, per_unit_price: int) -> void:
 	if item_name == "" or per_unit_price <= 0:
@@ -141,8 +142,12 @@ static func _is_action_explicitly_targeting_current_npc(scene: Node, action_text
 
 static func on_send_button_pressed(scene: Node) -> void:
 	if scene.is_dialogue_only_mode():
+		if scene.ai_busy or scene._is_runtime_transition_locked():
+			return
+		var action_text = scene.input_text_edit.text
+		scene.input_text_edit.text = ""
 		if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
-			await submit_dialogue_input(scene, scene.input_text_edit.text, false)
+			await submit_dialogue_input(scene, action_text, false, "行动输入")
 		return
 	if scene._is_runtime_transition_locked():
 		return
@@ -172,10 +177,10 @@ static func build_shared_interaction_context(scene: Node, interaction_text: Stri
 	}), 0)
 
 static func build_continue_action_text() -> String:
-	return "继续当前事情的发展"
+	return "继续当前事件：严格承接上一轮未完成的动作、决定和立即结果，直接续写下一步，不总结、不重置、不跳到无关事件。"
 
 static func build_continue_dialogue_text() -> String:
-	return "继续当前对话和眼前发生的事情"
+	return "继续当前事件：严格承接上一轮未完成的对话、动作、决定和立即结果，直接续写下一步，不总结、不重置、不跳到无关事件。"
 
 static func trigger_continue_flow(scene: Node) -> void:
 	if scene._is_runtime_transition_locked():
@@ -189,8 +194,11 @@ static func trigger_continue_flow(scene: Node) -> void:
 
 static func submit_action_input(scene: Node, raw_input: String, bypass_lock_check: bool = false) -> void:
 	if scene.is_dialogue_only_mode():
+		if scene.ai_busy or scene._is_runtime_transition_locked():
+			return
+		scene.input_text_edit.text = ""
 		if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
-			await submit_dialogue_input(scene, raw_input, false)
+			await submit_dialogue_input(scene, raw_input, false, "行动输入")
 		return
 	var user_input = _normalize_single_line_input(raw_input)
 	if user_input == "" or scene.ai_busy:
@@ -216,15 +224,17 @@ static func submit_action_input(scene: Node, raw_input: String, bypass_lock_chec
 	if focus_npc_name != "":
 		scene._record_current_chat_session("行动输入", scene.playerName, user_input)
 	var action_context = scene._build_shared_interaction_context(user_input, focus_npc_name, focus_npc_desc)
+	if scene.is_dialogue_only_mode():
+		action_context = "世界设定：" + scene._clip_prompt_text(scene.background, 900) + "\n当前地点：" + scene._clip_prompt_text(scene.currentSiteName, 80)
 	var aprompts = [
-		{"role":"system","content": scene.action_prompt + "\n" + action_context},
+		{"role":"system","content": (scene.text_only_action_prompt if scene.is_dialogue_only_mode() else scene.action_prompt) + "\n" + action_context},
 		{"role":"user","content": user_input}]
 	await scene.ask_ai(aprompts, scene.aiMode.action)
 
 static func on_dialogue_button_pressed(scene: Node) -> void:
 	await scene._submit_dialogue_input(scene.dialogue_input.text, false)
 
-static func submit_dialogue_input(scene: Node, raw_input: String, allow_continue_text: bool = false) -> void:
+static func submit_dialogue_input(scene: Node, raw_input: String, allow_continue_text: bool = false, record_kind: String = "对话输入") -> void:
 	if scene.currentState != scene.worldState.chat or scene.currentNpc == null or scene.ai_busy or scene._is_runtime_transition_locked():
 		return
 	var user_input = _normalize_single_line_input(raw_input)
@@ -248,7 +258,7 @@ static func submit_dialogue_input(scene: Node, raw_input: String, allow_continue
 	scene.dialogue_input.text = ""
 	scene.changeTextTo(scene.get_node("%speakerNameLabel"), scene.playerName)
 	scene.changeTextTo(scene.response_label, user_input)
-	scene._record_current_chat_session("对话输入", scene.playerName, user_input)
+	scene._record_current_chat_session(record_kind, scene.playerName, user_input)
 	var dialogue_context = ""
 	if !scene.is_dialogue_only_mode():
 		dialogue_context = scene._build_shared_interaction_context(user_input, str(scene.currentNpc.npcName), str(scene.currentNpc.npcDescribe))

@@ -56,6 +56,7 @@ const SAVE_ITEM_PROFILE_DIR = SAVE_RESOURCE_DIR + "item_profiles/"
 const NPC_IMG_DIR = SESSION_RESOURCE_DIR + "npcs/"
 const SAVE_NPC_IMG_DIR = SAVE_RESOURCE_DIR + "npcs/"
 const SAVE_FILE = SAVE_SLOT_DIR + "save.json"
+const SETTINGS_FILE = "user://worldsim_settings.cfg"
 
 var pending_site_update: bool = false
 var pending_img_queue: Array = []
@@ -82,12 +83,18 @@ var has_saved_in_session: bool = false
 var dead_npc_names: Array = []
 var dialogue_min_chars: int = 250
 var action_narration_min_chars: int = 250
+@export_range(4, 30, 1) var chat_history_max_lines: int = 12
+@export_range(600, 6000, 100) var chat_history_max_chars: int = 1800
+@export_range(800, 8000, 100) var session_memory_max_chars: int = 2400
 var output_mode_debug_enabled: bool = false
 var output_length_button: Button
 var min_chars_dialog: AcceptDialog
 var dialogue_min_chars_spin: SpinBox
 var action_min_chars_spin: SpinBox
 var timeout_seconds_spin: SpinBox
+var chat_history_lines_spin: SpinBox
+var chat_history_chars_spin: SpinBox
+var session_memory_chars_spin: SpinBox
 var img_watchdog_seq: int = 0
 var pending_entity_records: Dictionary = {"npcs": {}, "locations": {}}
 var last_entity_validation_response: String = ""
@@ -131,6 +138,7 @@ var agent_prompt:String = GamePrompts.AGENT_PROMPT
 var item_profile_prompt:String = GamePrompts.ITEM_PROFILE_PROMPT
 var validation_feedback_prompt:String = GamePrompts.VALIDATION_FEEDBACK_PROMPT
 var action_prompt:String = GamePrompts.ACTION_PROMPT
+var text_only_action_prompt:String = GamePrompts.TEXT_ONLY_ACTION_PROMPT
 
 var ai_busy: bool = false
 var text_update_seq: int = 0
@@ -186,6 +194,7 @@ func _ready():
 	%backgroundImg.material = null
 	changeTextTo(%siteName, "未定位")
 	player_update()
+	_load_user_settings()
 	_setup_output_mode_controls()
 	_configure_dialogue_only_mode()
 	_apply_interaction_locks()
@@ -212,6 +221,27 @@ func _configure_dialogue_only_mode() -> void:
 		image_mode.visible = false
 	instant_gen_mode = false
 
+func _load_user_settings() -> void:
+	var config = ConfigFile.new()
+	if config.load(SETTINGS_FILE) != OK:
+		return
+	dialogue_min_chars = clamp(int(config.get_value("output", "dialogue_min_chars", dialogue_min_chars)), 40, 2000)
+	action_narration_min_chars = clamp(int(config.get_value("output", "action_min_chars", action_narration_min_chars)), 40, 2000)
+	ai_request_timeout_seconds = clamp(float(config.get_value("output", "timeout_seconds", ai_request_timeout_seconds)), 5.0, 120.0)
+	chat_history_max_lines = clamp(int(config.get_value("memory", "history_lines", chat_history_max_lines)), 4, 30)
+	chat_history_max_chars = clamp(int(config.get_value("memory", "history_chars", chat_history_max_chars)), 600, 6000)
+	session_memory_max_chars = clamp(int(config.get_value("memory", "session_chars", session_memory_max_chars)), 800, 8000)
+
+func _save_user_settings() -> void:
+	var config = ConfigFile.new()
+	config.set_value("output", "dialogue_min_chars", dialogue_min_chars)
+	config.set_value("output", "action_min_chars", action_narration_min_chars)
+	config.set_value("output", "timeout_seconds", ai_request_timeout_seconds)
+	config.set_value("memory", "history_lines", chat_history_max_lines)
+	config.set_value("memory", "history_chars", chat_history_max_chars)
+	config.set_value("memory", "session_chars", session_memory_max_chars)
+	config.save(SETTINGS_FILE)
+
 func ensure_deepseek_service_ready() -> bool:
 	var manager = get_node_or_null("DeepSeekService")
 	if manager == null or !manager.has_method("ensure_ready"):
@@ -230,15 +260,25 @@ func _on_output_length_button_pressed() -> void:
 		action_min_chars_spin.value = action_narration_min_chars
 	if timeout_seconds_spin != null:
 		timeout_seconds_spin.value = ai_request_timeout_seconds
+	if chat_history_lines_spin != null:
+		chat_history_lines_spin.value = chat_history_max_lines
+	if chat_history_chars_spin != null:
+		chat_history_chars_spin.value = chat_history_max_chars
+	if session_memory_chars_spin != null:
+		session_memory_chars_spin.value = session_memory_max_chars
 	min_chars_dialog.popup_centered(Vector2i(360, 240))
 
 func _on_min_chars_dialog_confirmed() -> void:
-	if dialogue_min_chars_spin == null or action_min_chars_spin == null:
+	if dialogue_min_chars_spin == null or action_min_chars_spin == null or chat_history_lines_spin == null or chat_history_chars_spin == null or session_memory_chars_spin == null:
 		return
 	dialogue_min_chars = clamp(int(dialogue_min_chars_spin.value), 40, 2000)
 	action_narration_min_chars = clamp(int(action_min_chars_spin.value), 40, 2000)
 	if timeout_seconds_spin != null:
 		ai_request_timeout_seconds = clamp(float(timeout_seconds_spin.value), 5.0, 120.0)
+	chat_history_max_lines = clamp(int(chat_history_lines_spin.value), 4, 30)
+	chat_history_max_chars = clamp(int(chat_history_chars_spin.value), 600, 6000)
+	session_memory_max_chars = clamp(int(session_memory_chars_spin.value), 800, 8000)
+	_save_user_settings()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
@@ -285,15 +325,16 @@ func get_current_chat_session_memory(npc_name: String = "") -> String:
 	if current_chat_session_records.is_empty():
 		return ""
 	var lines: Array = []
-	for i in range(max(0, current_chat_session_records.size() - 8), current_chat_session_records.size()):
+	for i in range(max(0, current_chat_session_records.size() - chat_history_max_lines), current_chat_session_records.size()):
 		var row_text = str(current_chat_session_records[i]).strip_edges()
 		if row_text == "":
 			continue
-		lines.append("- " + row_text.left(180))
+		var row_limit = max(80, int(chat_history_max_chars / max(1, chat_history_max_lines)))
+		lines.append("- " + row_text.left(row_limit))
 	if lines.is_empty():
 		return ""
 	var joined = "当前会话最近记录：\n" + "\n".join(lines)
-	return joined
+	return _clip_prompt_text(joined, session_memory_max_chars)
 
 func _clip_prompt_text(text: String, _max_chars: int) -> String:
 	var src = str(text).strip_edges()
@@ -355,6 +396,8 @@ func _get_instant_gen_button() -> BaseButton:
 	return null
 
 func _is_instant_gen_active() -> bool:
+	if DIALOGUE_ONLY_MODE:
+		return false
 	var btn = _get_instant_gen_button()
 	if btn != null:
 		var pressed = bool(btn.button_pressed)

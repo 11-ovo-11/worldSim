@@ -128,6 +128,10 @@ static func load_game(scene: Node) -> bool:
 	scene.dead_npc_names = data.get("dead_npc_names", [])
 	scene.dialogue_min_chars = clamp(int(data.get("dialogue_min_chars", data.get("efficient_mode_min_chars", 250))), 40, 2000)
 	scene.action_narration_min_chars = clamp(int(data.get("action_narration_min_chars", 250)), 40, 2000)
+	# Output and memory preferences are global defaults, so a slot load must not
+	# silently replace the values chosen in the settings dialog.
+	if scene.has_method("_load_user_settings"):
+		scene._load_user_settings()
 
 	var p = data.get("player", {})
 	scene.playerName = p.get("name", scene.playerName)
