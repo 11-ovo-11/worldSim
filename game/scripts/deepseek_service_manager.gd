@@ -21,7 +21,10 @@ func ensure_ready() -> bool:
 		return _startup_ok
 	_startup_started = true
 	OS.set_environment("WORLD_SIM_CHAT_MODE", "openai")
-	OS.set_environment("WORLD_SIM_API_BASE_URL", "https://api.deepseek.com")
+	var api_base = OS.get_environment("WORLD_SIM_API_BASE_URL").strip_edges()
+	if api_base == "":
+		api_base = "https://api.deepseek.com"
+	OS.set_environment("WORLD_SIM_API_BASE_URL", api_base)
 	if await _endpoint_ok(WORLDSIM_URL):
 		return _finish(true, "DeepSeek API 桥接已就绪")
 	_start_worldsim_api()

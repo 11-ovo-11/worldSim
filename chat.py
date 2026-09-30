@@ -13,6 +13,14 @@ from openai import OpenAI
 import gc
 from key import key
 from image_key import image_key
+
+# Honor values passed by the Godot launcher and optional system/provider proxy
+# settings. OpenAI's HTTP client and requests both inherit these variables.
+for _proxy_key, _proxy_alias in (("WORLD_SIM_HTTP_PROXY", "HTTP_PROXY"), ("WORLD_SIM_HTTPS_PROXY", "HTTPS_PROXY")):
+    _proxy_value = str(os.getenv(_proxy_key, "")).strip()
+    if _proxy_value and not str(os.getenv(_proxy_alias, "")).strip():
+        os.environ[_proxy_alias] = _proxy_value
+
 IMAGE_MODE = "cloud"  # 可选 "local" 或 "cloud"
 STABILITY_API_HOST ="https://api.vectorengine.cn"
 #https://api.vectorengine.cn
@@ -33,16 +41,39 @@ CORS(app)
 #   Moonshot  : https://api.moonshot.cn/v1
 #   OpenAI    : https://api.openai.com/v1
 #   Qwen      : https://dashscope.aliyuncs.com/compatible-mode/v1
-API_BASE_URL = "https://api.deepseek.com"#"https://api.vectorengine.ai/v1"
+API_BASE_URL = str(os.getenv("WORLD_SIM_API_BASE_URL", "https://api.deepseek.com")).strip().rstrip("/")
+if not API_BASE_URL:
+    API_BASE_URL = "https://api.deepseek.com"
 # model 示例：deepseek-chat / deepseek-r1 / Qwen/Qwen3-30B-A3B / moonshot-v1-8k
-API_MODEL_CHAT ="deepseek-v4-flash"#deepseek-v4-pro
+API_MODEL_CHAT = str(os.getenv("WORLD_SIM_MODEL", "deepseek-v4-flash")).strip() or "deepseek-v4-flash"
+OPENAI_TIMEOUT_SECONDS = float(os.getenv("WORLD_SIM_PROVIDER_TIMEOUT", "45"))
+OPENAI_MAX_RETRIES = max(0, int(os.getenv("WORLD_SIM_PROVIDER_RETRIES", "1")))
 # =========================================================================
 
 DEEP_SEEK_KEY = key
-clientOpenAI = OpenAI(
-    api_key=DEEP_SEEK_KEY,
-    base_url=API_BASE_URL
-)
+def _chat_base_url_candidates():
+    """Return configured provider endpoints in priority order."""
+    values = [API_BASE_URL]
+    raw = str(os.getenv("WORLD_SIM_API_BASE_URLS", "")).strip()
+    if raw:
+        values.extend(part.strip().rstrip("/") for part in raw.replace(";", ",").split(","))
+    out = []
+    for value in values:
+        if value and value not in out:
+            out.append(value)
+    return out
+
+
+def _new_openai_client(base_url):
+    return OpenAI(
+        api_key=DEEP_SEEK_KEY,
+        base_url=base_url,
+        timeout=OPENAI_TIMEOUT_SECONDS,
+        max_retries=OPENAI_MAX_RETRIES,
+    )
+
+
+clientOpenAI = _new_openai_client(API_BASE_URL)
 
 #def comfy_headers():
    # headers = {"Content-Type": "application/json"}
@@ -54,7 +85,7 @@ clientOpenAI = OpenAI(
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL_NAME = "deepseek-v4-flash"#"deepseek-v4-pro"
 AGENT_MODEL_NAME = "qwen3:8b"
-chat_mode = "openai"
+chat_mode = str(os.getenv("WORLD_SIM_CHAT_MODE", "openai")).strip().lower() or "openai"
 CHAT_RESTART_THRESHOLD = int(os.getenv("CHAT_RESTART_THRESHOLD", "300"))
 CHAT_REQUEST_COUNT = 0
 LAST_RUNTIME_RECYCLE_AT = 0.0
@@ -273,10 +304,60 @@ def _build_image_size_candidates(target_type: str, width: int, height: int) -> l
 
 def _rebuild_openai_client():
     global clientOpenAI
-    clientOpenAI = OpenAI(
-        api_key=DEEP_SEEK_KEY,
-        base_url=API_BASE_URL
+    clientOpenAI = _new_openai_client(API_BASE_URL)
+
+
+def _is_retryable_provider_error(error):
+    text = str(error or "").lower()
+    status = getattr(getattr(error, "response", None), "status_code", None)
+    if status in (401, 403, 404, 400, 422):
+        return False
+    retry_markers = (
+        "timeout", "timed out", "connection", "connecterror", "connection reset",
+        "name or service", "nodename", "dns", "proxy", "network", "remoteprotocol",
+        "502", "503", "504", "temporarily unavailable", "server disconnected",
     )
+    return status in (408, 429, 500, 502, 503, 504) or any(marker in text for marker in retry_markers)
+
+
+def _chat_completion_with_fallback(**kwargs):
+    """Try the configured endpoint, then explicitly configured alternates."""
+    global API_BASE_URL, clientOpenAI
+    last_error = None
+    for base_url in _chat_base_url_candidates():
+        client = clientOpenAI if base_url == API_BASE_URL else _new_openai_client(base_url)
+        try:
+            response = client.chat.completions.create(**kwargs)
+            if base_url != API_BASE_URL:
+                API_BASE_URL = base_url
+                clientOpenAI = client
+                print(f"[CHAT_PROVIDER] switched endpoint to {base_url}")
+            return response
+        except Exception as error:
+            last_error = error
+            print(f"[CHAT_PROVIDER] endpoint failed: {base_url} error={_truncate_text(error, 240)}")
+            if not _is_retryable_provider_error(error):
+                break
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("没有可用的模型服务端点")
+
+
+def _apply_action_fact_protocol(messages, request_kind):
+    """Keep the action-bar contract intact even if a client omits part of it."""
+    if str(request_kind or "").strip().lower() != "action_fact" or not isinstance(messages, list):
+        return messages
+    protocol = (
+        "本轮请求来自行动栏，不是对话栏。玩家输入已经发生，是既定事实；"
+        "直接续写该行动之后的行动、角色即时反应和结果。不要把输入改写成台词、提问、请求或未执行的意图。"
+    )
+    copied = [dict(item) if isinstance(item, dict) else item for item in messages]
+    for item in copied:
+        if isinstance(item, dict) and str(item.get("role", "")).lower() == "system":
+            item["content"] = protocol + "\n" + str(item.get("content", ""))
+            return copied
+    copied.insert(0, {"role": "system", "content": protocol})
+    return copied
 
 def _maybe_recycle_runtime(force: bool = False, reason: str = ""):
     global CHAT_REQUEST_COUNT, LAST_RUNTIME_RECYCLE_AT, workflow_cache
@@ -375,6 +456,7 @@ def chat():
     body = request.get_json()
     user_msg, tools, output_format = body[:3]
     options = body[3] if len(body) > 3 and isinstance(body[3], dict) else {}
+    user_msg = _apply_action_fact_protocol(user_msg, options.get("request_kind", ""))
     minimum = max(0, min(2000, int(options.get("min_chars", 0)))) if output_format == "text" else 0
     deadline = time.monotonic() + max(3, min(120, float(options.get("timeout_seconds", 30)))) - 1
     if not user_msg:
@@ -418,7 +500,7 @@ def chat():
                 # 只在明确要求 JSON 时传递结构化输出参数。
                 if output_format in ("json_object", "json_schema"):
                     request_kwargs["response_format"] = {"type": output_format}
-                response = clientOpenAI.chat.completions.create(**request_kwargs)
+                response = _chat_completion_with_fallback(**request_kwargs)
                 # 获取消息
                 message = response.choices[0].message
                 text = message.content if message.content is not None else ""
@@ -433,7 +515,7 @@ def chat():
                 if str(text).strip() == "" and not tool_calls:
                     return jsonify({"error": "模型返回空内容，请重试或检查模型响应。"}), 502
                 def repair_openai(messages, timeout):
-                    repaired = clientOpenAI.chat.completions.create(
+                    repaired = _chat_completion_with_fallback(
                         model=API_MODEL_CHAT, messages=messages,
                         stream=False, timeout=timeout,
                     )
@@ -678,8 +760,7 @@ def test_chat():
     """快速测试AI文本生成，返回完整调试信息"""
     result = {"chat_mode": chat_mode}
     try:
-        client = OpenAI(api_key=key, base_url=API_BASE_URL)
-        resp = client.chat.completions.create(
+        resp = _chat_completion_with_fallback(
             model=API_MODEL_CHAT,
             messages=[{"role": "user", "content": "用一句话证明你已运行"}],
             max_tokens=50
@@ -791,7 +872,7 @@ def check_chat_service():
             case "openai":
                 # 检查DeepSeek API服务
                 # 发送一个简单的测试请求
-                test_response = clientOpenAI.chat.completions.create(
+                test_response = _chat_completion_with_fallback(
                     model=API_MODEL_CHAT,
                     messages=[{"role": "user", "content": "测试连接"}],
                     max_tokens=5,

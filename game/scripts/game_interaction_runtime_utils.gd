@@ -202,7 +202,7 @@ static func submit_action_input(scene: Node, raw_input: String, bypass_lock_chec
 	scene.input_text_edit.text = ""
 	scene.last_action_input = user_input
 	scene.addLog("【行动】" + user_input)
-	scene.changeTextTo(scene.get_node("%speakerNameLabel"), scene.playerName)
+	scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【行动】")
 	scene.changeTextTo(scene.response_label, user_input)
 	var focus_npc_name = ""
 	var focus_npc_desc = ""
@@ -215,17 +215,18 @@ static func submit_action_input(scene: Node, raw_input: String, bypass_lock_chec
 		focus_npc_desc = str(scene.currentNpc.npcDescribe)
 	if focus_npc_name != "":
 		scene._record_current_chat_session("行动输入", scene.playerName, user_input)
+		scene.currentNpc.currentChat += "行动事实（已发生）：「" + user_input + "」\n"
 	var action_context = scene._build_shared_interaction_context(user_input, focus_npc_name, focus_npc_desc)
 	if scene.is_dialogue_only_mode():
 		var recent_chat = scene._clip_prompt_text(scene.get_current_chat_session_memory(focus_npc_name), scene.session_memory_max_chars)
-		action_context = "世界设定：" + scene._clip_prompt_text(scene.background, 900) + "\n当前地点：" + scene._clip_prompt_text(scene.currentSiteName, 80)
+		action_context = "本轮交互类型：行动事实（玩家输入已发生）\n世界设定：" + scene._clip_prompt_text(scene.background, 900) + "\n当前地点：" + scene._clip_prompt_text(scene.currentSiteName, 80)
 		if focus_npc_name != "":
 			action_context += "\n当前NPC：" + scene._clip_prompt_text(focus_npc_name + "；" + focus_npc_desc, 360)
 		if recent_chat != "":
-			action_context += "\n近期对话与事件：\n" + recent_chat
+			action_context += "\n近期对话与事件（仅用于确定承接状态，不改变行动事实）：\n" + recent_chat
 	var aprompts = [
 		{"role":"system","content": (scene.text_only_action_prompt if scene.is_dialogue_only_mode() else scene.action_prompt) + "\n" + action_context},
-		{"role":"user","content": user_input}]
+		{"role":"user","content": "【行动事实｜已发生】\n" + user_input + "\n【续写要求】从上述事实发生之后直接续写下一步结果；不要把这段内容写成台词或对NPC的请求。"}]
 	await scene.ask_ai(aprompts, scene.aiMode.action)
 
 static func on_dialogue_button_pressed(scene: Node) -> void:
@@ -484,6 +485,10 @@ static func recover_focus_after_submit(scene: Node, target_focus: String) -> voi
 	var retry = 0
 	while retry < 180:
 		await scene.get_tree().process_frame
+		# A previous submit may still have a deferred focus-recovery loop.
+		# Stop it as soon as a newer submit selected the other input bar.
+		if scene.preferred_input_focus != target:
+			return
 		if scene.ai_busy or scene.event_flow_lock or scene._has_active_event_panel():
 			retry += 1
 			continue

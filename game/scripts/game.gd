@@ -289,10 +289,13 @@ var background:String
 func _input(event):
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ENTER and not ai_busy:
-			if dialogue_container.visible and dialogue_input.has_focus():
-				_on_dialogue_button_pressed()
-			elif input_text_edit.has_focus():
+			# The action field wins if both controls report focus during a UI
+			# transition. This keeps Enter on the action bar from being routed
+			# through the NPC dialogue path.
+			if input_text_edit.has_focus():
 				_on_send_button_pressed()
+			elif dialogue_container.visible and dialogue_input.has_focus():
+				_on_dialogue_button_pressed()
 
 func changeStateInto(stateToChange: worldState):
 	await GameInteractionRuntimeUtils.change_state_into(self, stateToChange)
@@ -581,6 +584,7 @@ func ask_ai(message: Array, askmode: aiMode):
 		request_options["min_chars"] = max(0, dialogue_min_chars)
 	elif askmode == aiMode.action:
 		request_options["min_chars"] = max(0, action_narration_min_chars)
+		request_options["request_kind"] = "action_fact"
 	var body = [outbound_messages,null,"text",request_options]
 	match askmode:
 		aiMode.tools:
