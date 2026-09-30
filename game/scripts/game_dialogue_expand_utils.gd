@@ -394,6 +394,8 @@ static func npc_reply(scene: Node, reply: String, model_tool_calls: Array = []) 
 	scene._record_current_chat_session("对话回复", active_npc_name, display_reply)
 	scene.currentNpc.currentChat += active_npc_name + ":" + reply + "\n"
 	scene._remember_important_event("<对话>" + active_npc_name + "：" + display_reply, scene.currentSiteName, active_npc_name)
+	if scene.is_dialogue_only_mode():
+		return
 	var direct_tag_result = apply_direct_npc_tool_tags(scene, reply)
 	var handled_direct_tags: Array = direct_tag_result.get("handled_tags", [])
 	var tools_texts = scene.get_content_in_angle_brackets(reply)

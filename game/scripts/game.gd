@@ -34,6 +34,7 @@ const GameFlowRuntimeUtils = preload("res://scripts/game_flow_runtime_utils.gd")
 @onready var save_button = %SaveButton
 @onready var load_button = %LoadButton
 
+const DIALOGUE_ONLY_MODE := true
 enum worldState {explore, chat}
 enum aiMode {init_background,init_env,explore, chat, sum, tools, action, validate_entity, refine_event}
 
@@ -168,7 +169,7 @@ func _ready():
 	save_button.connect("pressed", _on_save_button_pressed)
 	load_button.connect("pressed", _on_load_button_pressed)
 	if input_text_edit != null:
-		input_text_edit.placeholder_text = "输入行动，留空则继续"
+		input_text_edit.placeholder_text = "纯对话模式：请先选择NPC"
 	if %npcIcon is TextureRect:
 		var npc_icon_rect := %npcIcon as TextureRect
 		npc_icon_rect.custom_minimum_size = Vector2(0, NPC_ICON_DISPLAY_HEIGHT)
@@ -186,8 +187,30 @@ func _ready():
 	changeTextTo(%siteName, "未定位")
 	player_update()
 	_setup_output_mode_controls()
+	_configure_dialogue_only_mode()
 	_apply_interaction_locks()
 	call_deferred("_focus_active_input")
+
+func is_dialogue_only_mode() -> bool:
+	return DIALOGUE_ONLY_MODE
+
+func _configure_dialogue_only_mode() -> void:
+	if !DIALOGUE_ONLY_MODE:
+		return
+	var action_input = get_node_or_null("%InputTextEdit")
+	if action_input != null:
+		action_input.visible = true
+		action_input.placeholder_text = "行动文字（仅提交文本，不触发系统效果）"
+	var backpack = get_node_or_null("%itemContainer")
+	if backpack != null and backpack.get_parent() != null and backpack.get_parent().get_parent() != null:
+		backpack.get_parent().get_parent().visible = false
+	var event_node = get_node_or_null("%event")
+	if event_node != null:
+		event_node.visible = false
+	var image_mode = get_node_or_null("%ImgModePanel")
+	if image_mode != null:
+		image_mode.visible = false
+	instant_gen_mode = false
 
 func ensure_deepseek_service_ready() -> bool:
 	var manager = get_node_or_null("DeepSeekService")
@@ -518,9 +541,9 @@ func ask_ai(message: Array, askmode: aiMode):
 	var body = [outbound_messages,null,"text",request_options]
 	match askmode:
 		aiMode.tools:
-			body = [outbound_messages,tools,"text",request_options]
+			body = [outbound_messages,null,"text",request_options]
 		aiMode.chat, aiMode.action:
-			body = [outbound_messages,tools,"text",request_options]
+			body = [outbound_messages,null,"text",request_options]
 		aiMode.explore:
 			body = [outbound_messages,null,"json_object",request_options]
 	var url = chat_url
@@ -626,6 +649,8 @@ func _build_tool_inference_user_prompt(interaction_kind: String, source_input: S
 	return GamePrompts.build_tool_inference_user_prompt(interaction_kind, source_input, reply_text, angle_tags_text, handled_direct_tags)
 
 func _request_tool_inference(interaction_kind: String, source_input: String, reply_text: String, angle_tags_text: String = "", handled_direct_tags: Array = []) -> void:
+	if DIALOGUE_ONLY_MODE:
+		return
 	await GameFlowRuntimeUtils.request_tool_inference(self, interaction_kind, source_input, reply_text, angle_tags_text, handled_direct_tags)
 
 func _is_location_query_dialogue(input_text: String) -> bool:
@@ -753,9 +778,13 @@ func _extract_named_people_from_dialogue(reply_text: String) -> Array:
 	return GameDialogueExpandUtils.extract_named_people_from_dialogue(self, reply_text)
 
 func _maybe_create_related_npc_from_dialogue(reply: String) -> void:
+	if DIALOGUE_ONLY_MODE:
+		return
 	GameDialogueExpandUtils.maybe_create_related_npc_from_dialogue(self, reply)
 
 func _maybe_create_unknown_npc_from_dialogue(reply: String) -> void:
+	if DIALOGUE_ONLY_MODE:
+		return
 	GameDialogueExpandUtils.maybe_create_unknown_npc_from_dialogue(self, reply)
 
 func npc_reply(reply: String, model_tool_calls: Array = []):
@@ -803,6 +832,8 @@ func _schedule_image_retry(prompt: String, target_site: String, retry_count: int
 	await GameImageRuntimeUtils.schedule_image_retry(self, prompt, target_site, retry_count, delay_sec)
 
 func gen_img(prompt: String, site_name: String = ""):
+	if DIALOGUE_ONLY_MODE:
+		return
 	var target_site = site_name.strip_edges()
 	if target_site == "":
 		target_site = currentSiteName
@@ -1067,6 +1098,8 @@ func _extract_npc_mentions(text: String) -> Array:
 	return GameMemoryUtils.extract_npc_mentions(npcs, text)
 
 func _remember_important_event(raw_text: String, site_name: String = "", focus_npc: String = "") -> void:
+	if DIALOGUE_ONLY_MODE:
+		return
 	var site = str(site_name).strip_edges()
 	if site == "":
 		site = currentSiteName
@@ -1262,6 +1295,8 @@ func _extract_target_time(text: String) -> Dictionary:
 	return GameParseUtils.extract_target_time(text)
 
 func _auto_initiate_npc_chat(npc_name: String, npc_describe: String) -> void:
+	if DIALOGUE_ONLY_MODE:
+		return
 	await GameProactiveNpcUtils.auto_initiate_npc_chat(self, npc_name, npc_describe)
 
 func _pick_crime_npc_from_action(action_input: String) -> Dictionary:
@@ -1279,9 +1314,13 @@ func _build_proactive_npc_pool(reason: String) -> Array:
 	return GameNpcPoolUtils.build_proactive_npc_pool(reason, _detect_setting_style_signals())
 
 func _spawn_context_npc(reason: String, forced_npc: Dictionary = {}, context_text: String = "") -> void:
+	if DIALOGUE_ONLY_MODE:
+		return
 	await GameProactiveNpcUtils.spawn_context_npc(self, reason, forced_npc, context_text)
 
 func _trigger_time_pass_npc_event(hours: float, action_context: String = "") -> bool:
+	if DIALOGUE_ONLY_MODE:
+		return false
 	if hours < 0.5:
 		return false
 	if randf() < ACTION_PROACTIVE_NPC_RATE:
@@ -1331,6 +1370,8 @@ func _extract_nav_target_from_text(text: String) -> String:
 	return GameActionUtils.extract_nav_target_from_text(text, currentSiteName, sites.keys())
 
 func _auto_apply_action_effects(action_input: String, action_reply: String, tool_tags: String) -> void:
+	if DIALOGUE_ONLY_MODE:
+		return
 	await GameAutoEffectUtils.auto_apply_action_effects(self, action_input, action_reply, tool_tags)
 
 func extract_json_from_text(input_string: String) -> Dictionary:
@@ -1351,12 +1392,16 @@ func create_NPC(npc_name: String, location: String, npc_describe: String) -> voi
 	GameEntityRuntimeUtils.create_NPC(self, npc_name, location, npc_describe)
 
 func prepare_npc_memory_for_chat(npc_name: String) -> void:
+	if DIALOGUE_ONLY_MODE:
+		return
 	_append_event_memories_to_npc_log(npc_name)
 
 func _has_trade_keywords(text: String) -> bool:
 	return GameNpcInferUtils.has_trade_keywords(text)
 
 func _queue_action_confirm(action_data: Dictionary) -> void:
+	if DIALOGUE_ONLY_MODE:
+		return
 	GameEntityRuntimeUtils.queue_action_confirm(self, action_data)
 
 func _npc_refused_request(reply_text: String) -> bool:
@@ -1393,6 +1438,8 @@ func _extract_npc_action_request(reply_text: String) -> Dictionary:
 	return GameNpcInferUtils.extract_npc_action_request(process_string(reply_text), _extract_angle_tags(reply_text), actor_name)
 
 func _auto_handle_action_search(action_input: String, action_reply: String) -> void:
+	if DIALOGUE_ONLY_MODE:
+		return
 	GameEntityRuntimeUtils.auto_handle_action_search(self, action_input, action_reply)
 
 func create_rumors(rumor_name: String, content: String) -> void:

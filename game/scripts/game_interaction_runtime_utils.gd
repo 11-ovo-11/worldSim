@@ -140,6 +140,10 @@ static func _is_action_explicitly_targeting_current_npc(scene: Node, action_text
 	return false
 
 static func on_send_button_pressed(scene: Node) -> void:
+	if scene.is_dialogue_only_mode():
+		if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
+			await submit_dialogue_input(scene, scene.input_text_edit.text, false)
+		return
 	if scene._is_runtime_transition_locked():
 		return
 	if _normalize_single_line_input(scene.input_text_edit.text) == "":
@@ -148,6 +152,8 @@ static func on_send_button_pressed(scene: Node) -> void:
 	await scene._submit_action_input(scene.input_text_edit.text, false)
 
 static func build_shared_interaction_context(scene: Node, interaction_text: String, focus_npc_name: String = "", focus_npc_desc: String = "") -> String:
+	if scene.is_dialogue_only_mode():
+		return ""
 	var identity_guidance = scene._clip_prompt_text(scene._build_identity_attitude_guidance(focus_npc_name, focus_npc_desc), 520)
 	var chat_session_mem = scene._clip_prompt_text(scene.get_current_chat_session_memory(focus_npc_name), 520)
 	var related_events = scene._clip_prompt_text(scene._build_related_event_memory_for_action(interaction_text, focus_npc_name), 480)
@@ -157,7 +163,7 @@ static func build_shared_interaction_context(scene: Node, interaction_text: Stri
 		"current_site_name": scene.currentSiteName,
 		"money": str(scene.money),
 		"player_name": scene.playerName,
-		"inventory_snapshot": scene._clip_prompt_text(scene._build_inventory_snapshot(), 200),
+		"inventory_snapshot": "",
 		"focus_npc_name": focus_npc_name,
 		"focus_npc_desc": scene._clip_prompt_text(focus_npc_desc, 220),
 		"identity_guidance": identity_guidance,
@@ -182,6 +188,10 @@ static func trigger_continue_flow(scene: Node) -> void:
 	await scene._submit_action_input(build_continue_action_text(), true)
 
 static func submit_action_input(scene: Node, raw_input: String, bypass_lock_check: bool = false) -> void:
+	if scene.is_dialogue_only_mode():
+		if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
+			await submit_dialogue_input(scene, raw_input, false)
+		return
 	var user_input = _normalize_single_line_input(raw_input)
 	if user_input == "" or scene.ai_busy:
 		return
@@ -239,7 +249,9 @@ static func submit_dialogue_input(scene: Node, raw_input: String, allow_continue
 	scene.changeTextTo(scene.get_node("%speakerNameLabel"), scene.playerName)
 	scene.changeTextTo(scene.response_label, user_input)
 	scene._record_current_chat_session("对话输入", scene.playerName, user_input)
-	var dialogue_context = scene._build_shared_interaction_context(user_input, str(scene.currentNpc.npcName), str(scene.currentNpc.npcDescribe))
+	var dialogue_context = ""
+	if !scene.is_dialogue_only_mode():
+		dialogue_context = scene._build_shared_interaction_context(user_input, str(scene.currentNpc.npcName), str(scene.currentNpc.npcDescribe))
 	await scene.currentNpc.chatWithNpc(user_input, dialogue_context)
 	scene.currentNpc.currentChat += "玩家：" + user_input + "\n"
 
@@ -294,16 +306,21 @@ static func show_current_npc_profile(scene: Node) -> void:
 	var desc = str(scene.currentNpc.npcDescribe).strip_edges()
 	if desc == "":
 		desc = "暂无详细介绍"
-	var mem = scene.get_relevant_event_memory_for_npc(npc_name, desc).strip_edges()
-	if mem == "":
-		mem = "- 暂无与该角色直接相关的重要事件"
-	var panel_text = "人物：" + npc_name + "\n介绍：" + desc + "\n相关重要事件：\n" + mem
+	var panel_text = "人物：" + npc_name + "\n介绍：" + desc
+	if !scene.is_dialogue_only_mode():
+		var mem = scene.get_relevant_event_memory_for_npc(npc_name, desc).strip_edges()
+		if mem == "":
+			mem = "- 暂无与该角色直接相关的重要事件"
+		panel_text += "\n相关重要事件：\n" + mem
 	scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【人物档案】")
 	scene.changeTextTo(scene.response_label, panel_text, 80)
 	scene.addLog("<查看了" + npc_name + "的人物档案>")
 
 static func request_leave_chat_confirm(scene: Node) -> void:
 	if scene.currentState != scene.worldState.chat or scene.currentNpc == null:
+		return
+	if scene.is_dialogue_only_mode():
+		scene._force_exit_chat_runtime()
 		return
 	var npc_name = str(scene.currentNpc.npcName).strip_edges()
 	scene.pending_action_confirm = {
@@ -320,6 +337,10 @@ static func request_site_switch(scene: Node, site_name: String) -> void:
 		return
 	var target = scene._resolve_site_alias(str(site_name).strip_edges())
 	if target == "":
+		return
+	if scene.is_dialogue_only_mode() and scene.currentState == scene.worldState.chat:
+		scene._force_exit_chat_runtime()
+		await scene.goto(target)
 		return
 	if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
 		var npc_name = str(scene.currentNpc.npcName).strip_edges()
@@ -382,6 +403,9 @@ static func request_npc_switch(scene: Node, npc_name: String) -> void:
 		return
 	if !scene.npcs.has(target_npc):
 		return
+	if scene.is_dialogue_only_mode() and scene.currentState == scene.worldState.chat and scene.currentNpc != null and str(scene.currentNpc.npcName) != target_npc:
+		await scene._start_chat_with_existing_npc(target_npc)
+		return
 	if scene.currentState == scene.worldState.chat and scene.currentNpc != null and str(scene.currentNpc.npcName) != target_npc:
 		var from_npc = str(scene.currentNpc.npcName).strip_edges()
 		scene.pending_action_confirm = {
@@ -397,6 +421,8 @@ static func request_npc_switch(scene: Node, npc_name: String) -> void:
 	await scene._start_chat_with_existing_npc(target_npc)
 
 static func request_npc_leave_confirm(scene: Node, npc_name: String) -> void:
+	if scene.is_dialogue_only_mode():
+		return
 	var target_npc = str(npc_name).strip_edges()
 	if target_npc == "":
 		return
