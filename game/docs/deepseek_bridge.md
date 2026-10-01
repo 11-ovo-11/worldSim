@@ -44,7 +44,7 @@ Godot 不直接请求 DeepSeek：密钥只保存在 Python 侧的 `key.py` / `im
   "pid": 12345,
   "ppid": 6789,
   "api_base_url": "https://api.deepseek.com",
-  "model": "deepseek-v4-flash",
+  "model": "deepseek-flash",
   "image_mode": "cloud"
 }
 ```
@@ -61,7 +61,8 @@ Godot 不直接请求 DeepSeek：密钥只保存在 Python 侧的 `key.py` / `im
 | --- | --- | --- |
 | `WORLD_SIM_CHAT_MODE` | `openai` | `openai` / `ollama` |
 | `WORLD_SIM_API_BASE_URL` | `https://api.deepseek.com` | 换源改这里 |
-| `WORLD_SIM_MODEL` | `deepseek-v4-flash` | 模型名 |
+| `WORLD_SIM_API_BASE_URLS` | 空 | 逗号分隔的备用兼容端点；DeepSeek 默认会自动尝试根路径和 `/v1` |
+| `WORLD_SIM_MODEL` | `deepseek-flash` | 模型名 |
 | `WORLD_SIM_PROVIDER_ATTEMPTS` | `3` | 单端点重试次数（连接类错误才重试） |
 | `WORLD_SIM_PROVIDER_TIMEOUT` | `45` | 单次请求超时（秒） |
 | `WORLD_SIM_HTTP_PROXY` / `WORLD_SIM_HTTPS_PROXY` | 空 | 需要代理时才设置 |

@@ -45,7 +45,9 @@ API_BASE_URL = str(os.getenv("WORLD_SIM_API_BASE_URL", "https://api.deepseek.com
 if not API_BASE_URL:
     API_BASE_URL = "https://api.deepseek.com"
 # model 示例：deepseek-chat / deepseek-r1 / Qwen/Qwen3-30B-A3B / moonshot-v1-8k
-API_MODEL_CHAT = str(os.getenv("WORLD_SIM_MODEL", "deepseek-v4-flash")).strip() or "deepseek-v4-flash"
+# DeepSeek 当前公开模型名使用 deepseek-flash；旧的 deepseek-v4-flash
+# 会导致启动自检/请求失败。仍允许通过 WORLD_SIM_MODEL 覆盖。
+API_MODEL_CHAT = str(os.getenv("WORLD_SIM_MODEL", "deepseek-flash")).strip() or "deepseek-flash"
 OPENAI_TIMEOUT_SECONDS = float(os.getenv("WORLD_SIM_PROVIDER_TIMEOUT", "45"))
 OPENAI_MAX_RETRIES = max(0, int(os.getenv("WORLD_SIM_PROVIDER_RETRIES", "1")))
 # 每个端点内部再重试几次，避免一次瞬时连接失败就把 5xx 抛给游戏。
@@ -65,6 +67,14 @@ DEEP_SEEK_KEY = key
 def _chat_base_url_candidates():
     """Return configured provider endpoints in priority order."""
     values = [API_BASE_URL]
+    normalized_base = API_BASE_URL.rstrip("/")
+    # DeepSeek accepts both endpoint forms. Trying /v1 after the root form
+    # handles networks or gateways that route only one of them.
+    if "api.deepseek.com" in normalized_base:
+        if normalized_base.endswith("/v1"):
+            values.append(normalized_base[:-3].rstrip("/"))
+        else:
+            values.append(normalized_base + "/v1")
     raw = str(os.getenv("WORLD_SIM_API_BASE_URLS", "")).strip()
     if raw:
         values.extend(part.strip().rstrip("/") for part in raw.replace(";", ",").split(","))
@@ -94,7 +104,7 @@ clientOpenAI = _new_openai_client(API_BASE_URL)
 
 # 原有的 Ollama 配置
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "deepseek-v4-flash"#"deepseek-v4-pro"
+MODEL_NAME = "deepseek-flash"#"deepseek-v4-pro"
 AGENT_MODEL_NAME = "qwen3:8b"
 chat_mode = str(os.getenv("WORLD_SIM_CHAT_MODE", "openai")).strip().lower() or "openai"
 CHAT_RESTART_THRESHOLD = int(os.getenv("CHAT_RESTART_THRESHOLD", "300"))
@@ -331,6 +341,20 @@ def _is_retryable_provider_error(error):
     return status in (408, 429, 500, 502, 503, 504) or any(marker in text for marker in retry_markers)
 
 
+def _provider_error_message(error):
+    """Return a useful, key-free diagnosis for provider connection failures."""
+    detail = str(error or "").strip()
+    lowered = detail.lower()
+    if "connection error" in lowered or "connecterror" in lowered or "timed out" in lowered:
+        return (
+            "模型服务请求失败：" + detail
+            + "；本地桥接正常，但当前网络无法连接模型端点。"
+            "请检查直连网络、系统代理，或设置 WORLD_SIM_HTTP_PROXY/WORLD_SIM_HTTPS_PROXY；"
+            "也可用 WORLD_SIM_API_BASE_URLS 配置兼容的备用端点。"
+        )
+    return "模型服务请求失败：" + detail
+
+
 def _chat_completion_with_fallback(**kwargs):
     """Try the configured endpoint (with a short retry), then explicit alternates."""
     global API_BASE_URL, clientOpenAI
@@ -357,7 +381,10 @@ def _chat_completion_with_fallback(**kwargs):
                     break
                 if attempt < OPENAI_ATTEMPTS_PER_ENDPOINT:
                     time.sleep(min(2.0, 0.4 * attempt))
-        if last_error is not None and not _is_retryable_provider_error(last_error):
+        # A 404 can mean this gateway expects the other base path form
+        # (root vs /v1), so continue to the next configured candidate.
+        last_status = getattr(getattr(last_error, "response", None), "status_code", None)
+        if last_error is not None and not _is_retryable_provider_error(last_error) and last_status != 404:
             break
     if last_error is not None:
         raise last_error
@@ -570,7 +597,7 @@ def chat():
                         "length_status": {"reason": "provider_refusal_fallback", "retried": False},
                     })
                 return jsonify({
-                    "error": f"模型服务请求失败：{str(e)}",
+                    "error": _provider_error_message(e),
                     "provider": API_BASE_URL,
                     "model": API_MODEL_CHAT,
                     "hint": "请检查 key.py 的密钥、WORLD_SIM_API_BASE_URL 以及本机到该地址的网络（代理）。",
@@ -993,7 +1020,7 @@ def check_chat_service():
             "status": "error",
             "message": "神经网络检查失败",
             "service": chat_mode,
-            "error": str(e)
+            "error": _provider_error_message(e)
         }), 500
 
 # 新增的完整服务状态检查端点
