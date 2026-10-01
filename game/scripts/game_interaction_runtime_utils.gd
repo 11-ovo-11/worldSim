@@ -230,7 +230,7 @@ static func submit_action_input(scene: Node, raw_input: String, bypass_lock_chec
 		if recent_chat != "":
 			action_context += "\n近期对话与事件（仅用于确定承接状态，不改变行动事实）：\n" + recent_chat
 	var aprompts = [
-		{"role":"system","content": (scene.text_only_action_prompt if scene.is_dialogue_only_mode() else scene.action_prompt) + "\n" + action_context},
+		{"role":"system","content": scene.text_only_action_prompt + "\n" + action_context},
 		{"role":"user","content": "【行动事实｜已发生】\n" + user_input + "\n【续写要求】从上述事实发生之后直接续写下一步结果；不要把这段内容写成台词或对NPC的请求。"}]
 	await scene.ask_ai(aprompts, scene.aiMode.action)
 

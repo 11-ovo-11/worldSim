@@ -33,33 +33,14 @@ static func _infer_fallback_effect(item_name: String, value: int) -> Dictionary:
 	return {"effect_type": "both_restore", "effect_value": clamp(v, 6, 20)}
 
 static func generate_item_profile(scene: Node, item_name: String) -> Dictionary:
-	var prompts = [
-		{"role": "system", "content": scene.item_profile_prompt},
-		{"role": "user", "content": "物品名：" + item_name}
-	]
-	var req = await scene._request_json(scene.chat_url, JSON.stringify([prompts, null, "json_object"]))
-	if !req.get("ok", false):
-		return {
-			"description": "这是一件实用的道具，可在冒险中派上用场。",
-			"image_prompt": "single game inventory item icon, clean background, detailed, centered, " + ITEM_NO_TEXT_CONSTRAINT,
-			"effect_type": "none",
-			"effect_value": 0
-		}
-
-	var text = req["data"].get("text", "")
-	if text is Dictionary:
-		text["image_prompt"] = _ensure_item_prompt_no_text(str(text.get("image_prompt", "")))
-		return text
-	if text is String:
-		var json_dic = scene.extract_json_from_text(text)
-		if json_dic != {}:
-			json_dic["image_prompt"] = _ensure_item_prompt_no_text(str(json_dic.get("image_prompt", "")))
-			return json_dic
+	# 纯文本模式不再请求道具设计模型；保留确定性回退，兼容旧存档加载。
 	return {
-		"description": "这是一件实用的道具，可在冒险中派上用场。",
-		"image_prompt": "single game inventory item icon, clean background, detailed, centered, " + ITEM_NO_TEXT_CONSTRAINT,
-		"effect_type": "none",
-		"effect_value": 0
+		"description": "这是一件实用的道具。",
+		"image_prompt": _ensure_item_prompt_no_text("single game inventory item icon of " + item_name + ", clean background, centered"),
+		"value": 50,
+		"rarity": "common",
+		"effect_type": "both_restore",
+		"effect_value": 8
 	}
 
 static func generate_item_texture(scene: Node, image_prompt: String) -> Texture2D:
@@ -91,17 +72,8 @@ static func generate_item_texture(scene: Node, image_prompt: String) -> Texture2
 	return ImageTexture.create_from_image(fitted)
 
 static func generate_validation_dialogue(scene: Node, scene_context: String, fallback: String) -> String:
-	var prompts = [
-		{"role": "system", "content": scene.validation_feedback_prompt},
-		{"role": "user", "content": scene_context}
-	]
-	var req = await scene._request_json(scene.chat_url, JSON.stringify([prompts, null, "text"]))
-	if !req.get("ok", false):
-		return fallback
-	var text = req["data"].get("text", "")
-	if text is String and text.strip_edges() != "":
-		return text.strip_edges()
-	return fallback
+	# 非对话协同已关闭，验证反馈直接使用调用方提供的本地文本。
+	return str(fallback).strip_edges()
 
 static func build_ultra_fast_item_prompt(base_prompt: String) -> String:
 	var cleaned = _ensure_item_prompt_no_text(base_prompt)

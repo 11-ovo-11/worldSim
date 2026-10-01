@@ -332,54 +332,6 @@ static func _create_entity_from_candidate(scene: Node, cand: Dictionary) -> void
 			scene.create_location(scene.currentSiteName + "-" + loc_to_create)
 		scene.create_NPC(npc_name, loc, desc)
 
-static func validate_and_create_entity_candidates(scene: Node, candidates: Array, full_context: String) -> void:
-	if candidates.is_empty():
-		return
-	var confident: Array = []
-	var need_ai: Array = []
-	for cand in candidates:
-		var kind = str(cand.get("kind", ""))
-		var name = str(cand.get("name", ""))
-		var ctx = str(cand.get("context", full_context))
-		var inferred = GameEntityUtils.infer_entity_kind(name, ctx)
-		if inferred == kind:
-			confident.append(cand)
-		elif inferred == "unknown":
-			need_ai.append(cand)
-	for cand in confident:
-		_create_entity_from_candidate(scene, cand)
-	if need_ai.is_empty():
-		return
-	var lines: Array = []
-	lines.append("对话上下文：" + full_context.left(150))
-	lines.append("")
-	lines.append("请逐行判断（每行只回复是或否）：")
-	for i in range(need_ai.size()):
-		var cand = need_ai[i]
-		var type_label = "人物" if str(cand.get("kind", "")) == "npc" else "地点"
-		lines.append(str(i + 1) + ". 「" + str(cand.get("name", "")) + "」在上述对话中是否为" + type_label + "？")
-	var prompts = [
-		{"role": "system", "content": GamePrompts.ENTITY_VALIDATE_PROMPT},
-		{"role": "user", "content": "\n".join(lines)}
-	]
-	scene.last_entity_validation_response = ""
-	await scene.ask_ai(prompts, scene.aiMode.validate_entity)
-	var val_text = str(scene.last_entity_validation_response).strip_edges()
-	if val_text == "":
-		for cand in need_ai:
-			_create_entity_from_candidate(scene, cand)
-		return
-	var answers = val_text.replace("\r\n", "\n").replace("\r", "\n").split("\n", false)
-	for i in range(need_ai.size()):
-		if i >= answers.size():
-			_create_entity_from_candidate(scene, need_ai[i])
-			continue
-		var ans = str(answers[i]).strip_edges()
-		if ans.find("是") != -1 and ans.find("否") == -1:
-			_create_entity_from_candidate(scene, need_ai[i])
-		else:
-			print("[实体验证] 跳过「", str(need_ai[i].get("name", "")), "」（AI判定非", str(need_ai[i].get("kind", "")), "）")
-
 static func npc_reply(scene: Node, reply: String, model_tool_calls: Array = []) -> void:
 	if scene.currentNpc == null or !is_instance_valid(scene.currentNpc):
 		return
@@ -394,29 +346,4 @@ static func npc_reply(scene: Node, reply: String, model_tool_calls: Array = []) 
 	scene._record_current_chat_session("对话回复", active_npc_name, display_reply)
 	scene.currentNpc.currentChat += active_npc_name + ":" + reply + "\n"
 	scene._remember_important_event("<对话>" + active_npc_name + "：" + display_reply, scene.currentSiteName, active_npc_name)
-	if scene.is_dialogue_only_mode():
-		return
-	var direct_tag_result = apply_direct_npc_tool_tags(scene, reply)
-	var handled_direct_tags: Array = direct_tag_result.get("handled_tags", [])
-	var tools_texts = scene.get_content_in_angle_brackets(reply)
-	var tool_hint = GameFlowRuntimeUtils.build_tool_call_hint_text(model_tool_calls)
-	if tool_hint != "":
-		tools_texts = (tools_texts + "\n" + tool_hint).strip_edges()
-	print("提取出的工具信息：", tools_texts)
-	await GameFlowRuntimeUtils.handle_model_tool_calls(scene, model_tool_calls, handled_direct_tags)
-	if model_tool_calls.is_empty():
-		var plain_reply = scene.process_string(reply)
-		var should_fallback_infer = false
-		if tools_texts.strip_edges() != "":
-			should_fallback_infer = true
-		elif GameNpcInferUtils.needs_tool_inference_from_context(str(scene.last_dialogue_input), plain_reply):
-			should_fallback_infer = true
-		if should_fallback_infer:
-			await scene._request_tool_inference("dialogue", scene.last_dialogue_input, reply, tools_texts, handled_direct_tags)
-	await scene._auto_apply_action_effects("", reply, tools_texts)
-	if !scene._has_active_event_panel():
-		var action_req = scene._extract_npc_action_request(reply)
-		if !action_req.is_empty():
-			scene._queue_action_confirm(action_req)
-		else:
-			scene._maybe_offer_intent_confirm_from_dialogue(reply)
+	# 纯文本对话模式到此结束：回复只负责显示和记忆，不解析标签、工具或实体。

@@ -1,18 +1,6 @@
 extends RefCounted
 class_name GameFlowRuntimeUtils
 
-static func request_tool_inference(scene: Node, interaction_kind: String, source_input: String, reply_text: String, angle_tags_text: String = "", handled_direct_tags: Array = []) -> void:
-	var plain_reply = scene.process_string(reply_text).strip_edges()
-	var plain_input = str(source_input).strip_edges()
-	var plain_tags = str(angle_tags_text).strip_edges()
-	if plain_reply == "" and plain_tags == "":
-		return
-	var prompts = [
-		{"role": "system", "content": scene.agent_prompt},
-		{"role": "user", "content": scene._build_tool_inference_user_prompt(interaction_kind, plain_input, plain_reply, plain_tags, handled_direct_tags)}
-	]
-	await scene.ask_ai(prompts, scene.aiMode.tools)
-
 static func _parse_tool_calls_raw(raw_value) -> Array:
 	if raw_value == null:
 		return []
@@ -125,14 +113,7 @@ static func goto(scene: Node, where: String) -> void:
 			scene._bg_debug("site json cache hit for " + where)
 	var site_data = scene._get_site_data(where)
 	var has_description = !site_data.is_empty() and str(site_data.get("地点描述", "")).strip_edges() != ""
-	var has_routes = false
-	if site_data.has("能前往的地点") and site_data["能前往的地点"] is Array:
-		for raw_route in site_data["能前往的地点"]:
-			var normalized_route = scene._resolve_site_alias(str(raw_route).strip_edges())
-			if normalized_route != "" and normalized_route != where:
-				has_routes = true
-				break
-	if has_description and has_routes:
+	if has_description:
 		print("地点已经存在")
 		scene.currentSiteName = where
 		var has_bg := false
@@ -157,19 +138,10 @@ static func goto(scene: Node, where: String) -> void:
 		scene.pending_explore_target = where
 		scene.explore_route_retry_count = 0
 		var prompts = [
-			{"role":"system","content": scene._build_explore_system_prompt()},
+			{"role":"system","content": scene._build_initial_scene_prompt()},
 			{"role":"user","content": "我想去"+where}]
 		scene.explore_needs_retry = false
 		await scene.ask_ai(prompts, scene.aiMode.explore)
-		if scene.explore_needs_retry and scene.currentSiteName != "":
-			scene.explore_needs_retry = false
-			var retry_target = scene.currentSiteName
-			scene._bg_debug("goto() retry explore for " + retry_target)
-			var retry_prompts = [
-				{"role":"system","content": scene._build_explore_system_prompt() + "\n再次强调：只能输出JSON，且\"能前往的地点\"不得为空。"},
-				{"role":"user","content": "我想去" + retry_target}
-			]
-			await scene.ask_ai(retry_prompts, scene.aiMode.explore)
 		scene.explore_needs_retry = false
 		var discovered_site = scene._resolve_site_alias(scene.currentSiteName)
 		if discovered_site == "":
@@ -525,7 +497,7 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 						continue
 					cleaned_routes.append(normalized_route)
 				jsonDic["能前往的地点"] = cleaned_routes
-				if cleaned_routes.is_empty() and scene.explore_route_retry_count < 1:
+				if !scene.is_dialogue_only_mode() and cleaned_routes.is_empty() and scene.explore_route_retry_count < 1:
 					scene.explore_route_retry_count += 1
 					scene._bg_debug("explore empty routes, signaling goto() to retry")
 					scene.explore_needs_retry = true
@@ -654,8 +626,6 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 					await scene.handle_npc_instruction(model_tool_calls)
 				elif data["text"] is String and str(data["text"]).strip_edges() == "没有方法被调用":
 					return
-			scene.aiMode.validate_entity:
-				scene.last_entity_validation_response = str(data.get("text", "")).strip_edges()
 			scene.aiMode.refine_event:
 				scene.last_event_refine_response = str(data.get("text", "")).strip_edges()
 	else:

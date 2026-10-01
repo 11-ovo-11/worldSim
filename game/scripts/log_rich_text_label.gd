@@ -5,6 +5,10 @@ var can_expand: bool = false
 var speed = 30.0
 
 func _ready() -> void:
+	# 日志支持鼠标拖选、Ctrl+C 复制和右键复制菜单；每条日志实例都复用此设置。
+	selection_enabled = true
+	shortcut_keys_enabled = true
+	context_menu_enabled = true
 	visible_ratio = 0
 	# 检查是否是第一个节点
 	var my_index = get_index()

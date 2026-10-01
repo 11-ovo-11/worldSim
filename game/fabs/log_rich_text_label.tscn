@@ -12,4 +12,7 @@ size_flags_horizontal = 3
 theme_override_styles/focus = SubResource("StyleBoxEmpty_w56hn")
 fit_content = true
 autowrap_mode = 1
+selection_enabled = true
+shortcut_keys_enabled = true
+context_menu_enabled = true
 script = ExtResource("1_w56hn")

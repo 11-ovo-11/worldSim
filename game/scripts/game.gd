@@ -36,7 +36,7 @@ const GameFlowRuntimeUtils = preload("res://scripts/game_flow_runtime_utils.gd")
 
 const DIALOGUE_ONLY_MODE := true
 enum worldState {explore, chat}
-enum aiMode {init_background,init_env,explore, chat, sum, tools, action, validate_entity, refine_event}
+enum aiMode {init_background,init_env,explore, chat, sum, tools, action, refine_event}
 
 var chat_url = "http://127.0.0.1:5000/chat"
 var agent_url = "http://127.0.0.1:5000/agent"
@@ -101,7 +101,6 @@ var world_context_chars_spin: SpinBox
 var max_output_chars_spin: SpinBox
 var img_watchdog_seq: int = 0
 var pending_entity_records: Dictionary = {"npcs": {}, "locations": {}}
-var last_entity_validation_response: String = ""
 var last_event_refine_response: String = ""
 var pending_event_refine_queue: Array = []
 var event_refine_inflight: bool = false
@@ -137,11 +136,6 @@ const PASSIVE_HP_RECOVERY_PER_HOUR: float = 1.2
 const ACTION_PROACTIVE_NPC_RATE: float = 0.2
 const NPC_ICON_DISPLAY_HEIGHT: int = 510
 
-var role_prompt = GamePrompts.ROLE_PROMPT
-var agent_prompt:String = GamePrompts.AGENT_PROMPT
-var item_profile_prompt:String = GamePrompts.ITEM_PROFILE_PROMPT
-var validation_feedback_prompt:String = GamePrompts.VALIDATION_FEEDBACK_PROMPT
-var action_prompt:String = GamePrompts.ACTION_PROMPT
 var text_only_action_prompt:String = GamePrompts.TEXT_ONLY_ACTION_PROMPT
 
 var ai_busy: bool = false
@@ -575,7 +569,6 @@ func player_update():
 	%energy.target_value = energy
 	%hp.target_value = hp
 	%reputation.target_value = reputation
-var tools: Array = GamePrompts.get_npc_tools()
 
 func ask_ai(message: Array, askmode: aiMode):
 	currentMode = askmode
@@ -702,14 +695,6 @@ func _extract_angle_tags(input_string: String) -> Array:
 
 func _apply_direct_npc_tool_tags(reply: String) -> Dictionary:
 	return GameDialogueExpandUtils.apply_direct_npc_tool_tags(self, reply)
-
-func _build_tool_inference_user_prompt(interaction_kind: String, source_input: String, reply_text: String, angle_tags_text: String = "", handled_direct_tags: Array = []) -> String:
-	return GamePrompts.build_tool_inference_user_prompt(interaction_kind, source_input, reply_text, angle_tags_text, handled_direct_tags)
-
-func _request_tool_inference(interaction_kind: String, source_input: String, reply_text: String, angle_tags_text: String = "", handled_direct_tags: Array = []) -> void:
-	if DIALOGUE_ONLY_MODE:
-		return
-	await GameFlowRuntimeUtils.request_tool_inference(self, interaction_kind, source_input, reply_text, angle_tags_text, handled_direct_tags)
 
 func _is_location_query_dialogue(input_text: String) -> bool:
 	return GameTextUtils.is_location_query_dialogue(input_text)
@@ -1046,8 +1031,8 @@ func _sanitize_item_profile(item_name: String, raw_profile: Dictionary) -> Dicti
 func _ensure_item_profile_record_before_trade(item_name: String) -> void:
 	await GameItemProfileUtils.ensure_item_profile_record_before_trade(self, item_name)
 
-func _build_explore_system_prompt() -> String:
-	return GameVisualUtils.build_explore_system_prompt(role_prompt, world_seed_input, background)
+func _build_initial_scene_prompt() -> String:
+	return GamePrompts.INITIAL_SCENE_PROMPT + "\n用户初始设定：" + world_seed_input + "\n世界设定：" + get_world_context_text()
 
 func ensure_item_profile_async(item_name: String) -> void:
 	await GameItemProfileUtils.ensure_item_profile_async(self, item_name)
