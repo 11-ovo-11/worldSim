@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dc5d5iwk6q3a6"
-path="res://.godot/imported/微信图片_20260826231933_190_4.jpg-f4686a37592c5ccd06dd4859f15ffaee.ctex"
+path="res://.godot/imported/微信图片_20260826231933_190_4.jpg-c0f5b45359fefdf2dcd2a82a70cb8eac.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://picture/session/npcs/微信图片_20260826231933_190_4.jpg"
-dest_files=["res://.godot/imported/微信图片_20260826231933_190_4.jpg-f4686a37592c5ccd06dd4859f15ffaee.ctex"]
+source_file="res://saves/slot_1/resources/npcs/微信图片_20260826231933_190_4.jpg"
+dest_files=["res://.godot/imported/微信图片_20260826231933_190_4.jpg-c0f5b45359fefdf2dcd2a82a70cb8eac.ctex"]
 
 [params]
 
