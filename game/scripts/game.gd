@@ -83,9 +83,11 @@ var has_saved_in_session: bool = false
 var dead_npc_names: Array = []
 var dialogue_min_chars: int = 250
 var action_narration_min_chars: int = 250
+@export_range(200, 6000, 100) var max_output_chars: int = 1600
 @export_range(4, 30, 1) var chat_history_max_lines: int = 12
-@export_range(600, 6000, 100) var chat_history_max_chars: int = 1800
-@export_range(800, 8000, 100) var session_memory_max_chars: int = 2400
+@export_range(600, 6000, 100) var chat_history_max_chars: int = 3000
+@export_range(800, 8000, 100) var session_memory_max_chars: int = 5000
+@export_range(300, 4000, 100) var world_context_max_chars: int = 1200
 var output_mode_debug_enabled: bool = false
 var output_length_button: Button
 var min_chars_dialog: AcceptDialog
@@ -95,6 +97,8 @@ var timeout_seconds_spin: SpinBox
 var chat_history_lines_spin: SpinBox
 var chat_history_chars_spin: SpinBox
 var session_memory_chars_spin: SpinBox
+var world_context_chars_spin: SpinBox
+var max_output_chars_spin: SpinBox
 var img_watchdog_seq: int = 0
 var pending_entity_records: Dictionary = {"npcs": {}, "locations": {}}
 var last_entity_validation_response: String = ""
@@ -227,19 +231,23 @@ func _load_user_settings() -> void:
 		return
 	dialogue_min_chars = clamp(int(config.get_value("output", "dialogue_min_chars", dialogue_min_chars)), 40, 2000)
 	action_narration_min_chars = clamp(int(config.get_value("output", "action_min_chars", action_narration_min_chars)), 40, 2000)
+	max_output_chars = clamp(int(config.get_value("output", "max_chars", max_output_chars)), 200, 6000)
 	ai_request_timeout_seconds = clamp(float(config.get_value("output", "timeout_seconds", ai_request_timeout_seconds)), 5.0, 120.0)
 	chat_history_max_lines = clamp(int(config.get_value("memory", "history_lines", chat_history_max_lines)), 4, 30)
 	chat_history_max_chars = clamp(int(config.get_value("memory", "history_chars", chat_history_max_chars)), 600, 6000)
 	session_memory_max_chars = clamp(int(config.get_value("memory", "session_chars", session_memory_max_chars)), 800, 8000)
+	world_context_max_chars = clamp(int(config.get_value("memory", "world_chars", world_context_max_chars)), 300, 4000)
 
 func _save_user_settings() -> void:
 	var config = ConfigFile.new()
 	config.set_value("output", "dialogue_min_chars", dialogue_min_chars)
 	config.set_value("output", "action_min_chars", action_narration_min_chars)
+	config.set_value("output", "max_chars", max_output_chars)
 	config.set_value("output", "timeout_seconds", ai_request_timeout_seconds)
 	config.set_value("memory", "history_lines", chat_history_max_lines)
 	config.set_value("memory", "history_chars", chat_history_max_chars)
 	config.set_value("memory", "session_chars", session_memory_max_chars)
+	config.set_value("memory", "world_chars", world_context_max_chars)
 	config.save(SETTINGS_FILE)
 
 func ensure_deepseek_service_ready() -> bool:
@@ -256,6 +264,8 @@ func _on_output_length_button_pressed() -> void:
 		return
 	if dialogue_min_chars_spin != null:
 		dialogue_min_chars_spin.value = dialogue_min_chars
+	if max_output_chars_spin != null:
+		max_output_chars_spin.value = max_output_chars
 	if action_min_chars_spin != null:
 		action_min_chars_spin.value = action_narration_min_chars
 	if timeout_seconds_spin != null:
@@ -266,18 +276,22 @@ func _on_output_length_button_pressed() -> void:
 		chat_history_chars_spin.value = chat_history_max_chars
 	if session_memory_chars_spin != null:
 		session_memory_chars_spin.value = session_memory_max_chars
-	min_chars_dialog.popup_centered(Vector2i(360, 240))
+	if world_context_chars_spin != null:
+		world_context_chars_spin.value = world_context_max_chars
+	min_chars_dialog.popup_centered(Vector2i(520, 720))
 
 func _on_min_chars_dialog_confirmed() -> void:
-	if dialogue_min_chars_spin == null or action_min_chars_spin == null or chat_history_lines_spin == null or chat_history_chars_spin == null or session_memory_chars_spin == null:
+	if dialogue_min_chars_spin == null or action_min_chars_spin == null or max_output_chars_spin == null or chat_history_lines_spin == null or chat_history_chars_spin == null or session_memory_chars_spin == null or world_context_chars_spin == null:
 		return
 	dialogue_min_chars = clamp(int(dialogue_min_chars_spin.value), 40, 2000)
 	action_narration_min_chars = clamp(int(action_min_chars_spin.value), 40, 2000)
+	max_output_chars = clamp(int(max_output_chars_spin.value), 200, 6000)
 	if timeout_seconds_spin != null:
 		ai_request_timeout_seconds = clamp(float(timeout_seconds_spin.value), 5.0, 120.0)
 	chat_history_max_lines = clamp(int(chat_history_lines_spin.value), 4, 30)
 	chat_history_max_chars = clamp(int(chat_history_chars_spin.value), 600, 6000)
 	session_memory_max_chars = clamp(int(session_memory_chars_spin.value), 800, 8000)
+	world_context_max_chars = clamp(int(world_context_chars_spin.value), 300, 4000)
 	_save_user_settings()
 
 func _notification(what: int) -> void:
@@ -327,17 +341,10 @@ func get_current_chat_session_memory(npc_name: String = "") -> String:
 		return ""
 	if current_chat_session_records.is_empty():
 		return ""
-	var lines: Array = []
-	for i in range(max(0, current_chat_session_records.size() - chat_history_max_lines), current_chat_session_records.size()):
-		var row_text = str(current_chat_session_records[i]).strip_edges()
-		if row_text == "":
-			continue
-		var row_limit = max(80, int(chat_history_max_chars / max(1, chat_history_max_lines)))
-		lines.append("- " + row_text.left(row_limit))
-	if lines.is_empty():
-		return ""
-	var joined = "当前会话最近记录：\n" + "\n".join(lines)
-	return _clip_prompt_text(joined, session_memory_max_chars)
+	return GameMemoryUtils.build_recent_context(current_chat_session_records, chat_history_max_lines, chat_history_max_chars)
+
+func get_world_context_text() -> String:
+	return str(background).strip_edges().left(world_context_max_chars)
 
 func _clip_prompt_text(text: String, _max_chars: int) -> String:
 	var src = str(text).strip_edges()
@@ -582,8 +589,10 @@ func ask_ai(message: Array, askmode: aiMode):
 	var request_options = {"min_chars": 0, "timeout_seconds": ai_request_timeout_seconds}
 	if askmode == aiMode.chat:
 		request_options["min_chars"] = max(0, dialogue_min_chars)
+		request_options["max_chars"] = max_output_chars
 	elif askmode == aiMode.action:
 		request_options["min_chars"] = max(0, action_narration_min_chars)
+		request_options["max_chars"] = max_output_chars
 		request_options["request_kind"] = "action_fact"
 	var body = [outbound_messages,null,"text",request_options]
 	match askmode:
@@ -633,7 +642,7 @@ func _decorate_messages_for_output_mode(message: Array, askmode: aiMode) -> Arra
 	var copied = message.duplicate(true)
 	var min_chars = dialogue_min_chars if askmode == aiMode.chat else action_narration_min_chars
 	min_chars = max(160, min_chars)
-	var constraint = "输出要求：本次回复至少" + str(min_chars) + "字，信息完整、自然，不要省略关键细节，不要用固定收尾句硬凑字数。"
+	var constraint = "输出要求：本次回复至少" + str(min_chars) + "字，最多" + str(max_output_chars) + "字，信息完整、自然，不要省略关键细节，不要用固定收尾句硬凑字数。"
 	copied.push_front({"role":"system", "content": constraint})
 	return copied
 
@@ -660,7 +669,9 @@ func _strip_angle_tags(text: String) -> String:
 func _expand_text_to_min_chars(text: String, _min_chars: int, _askmode: aiMode) -> String:
 	return text
 
-func _enforce_output_min_length(text: String, _askmode: aiMode) -> String:
+func _enforce_output_min_length(text: String, askmode: aiMode) -> String:
+	if askmode == aiMode.chat or askmode == aiMode.action:
+		return GameAiUtils.limit_output_chars(text, max_output_chars)
 	return text.strip_edges()
 
 func _enforce_action_narration_richness(text: String) -> String:

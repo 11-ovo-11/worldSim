@@ -4,6 +4,19 @@ class_name GameAiUtils
 static func safe_continuation_text() -> String:
 	return "对方略过了那段细节，直接把注意力转回眼前的互动。场景继续向前推进，角色的态度和先前的关系保持连贯。"
 
+static func limit_output_chars(text: String, maximum: int) -> String:
+	var limit = max(0, maximum)
+	var src = str(text).strip_edges()
+	if limit <= 0 or src.length() <= limit:
+		return src
+	var cut = src.left(limit)
+	var boundary = -1
+	for marker in ["。", "！", "？", "!", "?", "；", ";", "\n"]:
+		boundary = max(boundary, cut.rfind(marker))
+	if boundary >= int(limit * 0.6):
+		cut = cut.left(boundary + 1)
+	return cut.strip_edges()
+
 static func compact_prompt_content(text: String) -> String:
 	var src = str(text).replace("\r\n", "\n").replace("\r", "\n")
 	var rows = src.split("\n", false)

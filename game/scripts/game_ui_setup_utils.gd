@@ -32,6 +32,14 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		scene.action_min_chars_spin.max_value = 2000
 		scene.action_min_chars_spin.step = 10
 		scene.action_min_chars_spin.value = scene.action_narration_min_chars
+		var max_output_tip = Label.new()
+		max_output_tip.text = "最大文本输出字数\n（单次对话/行动回复上限，按字符计算）"
+		max_output_tip.add_theme_font_size_override("font_size", 13)
+		scene.max_output_chars_spin = SpinBox.new()
+		scene.max_output_chars_spin.min_value = 200
+		scene.max_output_chars_spin.max_value = 6000
+		scene.max_output_chars_spin.step = 100
+		scene.max_output_chars_spin.value = scene.max_output_chars
 		var timeout_tip = Label.new()
 		timeout_tip.text = "最长响应时间（秒）"
 		scene.timeout_seconds_spin = SpinBox.new()
@@ -40,30 +48,43 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		scene.timeout_seconds_spin.step = 5
 		scene.timeout_seconds_spin.value = scene.ai_request_timeout_seconds
 		var history_lines_tip = Label.new()
-		history_lines_tip.text = "对话记忆轮数"
+		history_lines_tip.text = "对话记忆轮数\n（保留最近多少条对话/行动记录）"
+		history_lines_tip.add_theme_font_size_override("font_size", 13)
 		scene.chat_history_lines_spin = SpinBox.new()
 		scene.chat_history_lines_spin.min_value = 4
 		scene.chat_history_lines_spin.max_value = 30
 		scene.chat_history_lines_spin.step = 1
 		scene.chat_history_lines_spin.value = scene.chat_history_max_lines
 		var history_chars_tip = Label.new()
-		history_chars_tip.text = "近期对话字符数"
+		history_chars_tip.text = "近期对话字符数\n（每次请求保留的近期记录总长度）"
+		history_chars_tip.add_theme_font_size_override("font_size", 13)
 		scene.chat_history_chars_spin = SpinBox.new()
 		scene.chat_history_chars_spin.min_value = 600
 		scene.chat_history_chars_spin.max_value = 6000
 		scene.chat_history_chars_spin.step = 100
 		scene.chat_history_chars_spin.value = scene.chat_history_max_chars
 		var session_chars_tip = Label.new()
-		session_chars_tip.text = "当前会话记忆字符数"
+		session_chars_tip.text = "当前会话记忆字符数\n（当前NPC会话在内存中保留的总长度）"
+		session_chars_tip.add_theme_font_size_override("font_size", 13)
 		scene.session_memory_chars_spin = SpinBox.new()
 		scene.session_memory_chars_spin.min_value = 800
 		scene.session_memory_chars_spin.max_value = 8000
 		scene.session_memory_chars_spin.step = 100
 		scene.session_memory_chars_spin.value = scene.session_memory_max_chars
+		var world_chars_tip = Label.new()
+		world_chars_tip.text = "世界设定字符数\n（每次请求带入的世界设定上限，过大可能挤占对话记忆）"
+		world_chars_tip.add_theme_font_size_override("font_size", 13)
+		scene.world_context_chars_spin = SpinBox.new()
+		scene.world_context_chars_spin.min_value = 300
+		scene.world_context_chars_spin.max_value = 4000
+		scene.world_context_chars_spin.step = 100
+		scene.world_context_chars_spin.value = scene.world_context_max_chars
 		box.add_child(dialogue_tip)
 		box.add_child(scene.dialogue_min_chars_spin)
 		box.add_child(action_tip)
 		box.add_child(scene.action_min_chars_spin)
+		box.add_child(max_output_tip)
+		box.add_child(scene.max_output_chars_spin)
 		box.add_child(timeout_tip)
 		box.add_child(scene.timeout_seconds_spin)
 		box.add_child(history_lines_tip)
@@ -72,6 +93,8 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		box.add_child(scene.chat_history_chars_spin)
 		box.add_child(session_chars_tip)
 		box.add_child(scene.session_memory_chars_spin)
+		box.add_child(world_chars_tip)
+		box.add_child(scene.world_context_chars_spin)
 		scene.min_chars_dialog.add_child(box)
 		scene.add_child(scene.min_chars_dialog)
 		scene.min_chars_dialog.confirmed.connect(scene._on_min_chars_dialog_confirmed)

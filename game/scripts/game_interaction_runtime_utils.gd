@@ -109,6 +109,11 @@ static func record_current_chat_session(scene: Node, kind: String, speaker: Stri
 	var max_records = max(8, int(scene.chat_history_max_lines))
 	if scene.current_chat_session_records.size() > max_records:
 		scene.current_chat_session_records = scene.current_chat_session_records.slice(scene.current_chat_session_records.size() - max_records)
+	var total_chars = 0
+	for row in scene.current_chat_session_records:
+		total_chars += str(row).length() + 1
+	while total_chars > scene.session_memory_max_chars and scene.current_chat_session_records.size() > 1:
+		total_chars -= str(scene.current_chat_session_records.pop_front()).length() + 1
 
 static func update_item_trade_price(scene: Node, item_name: String, per_unit_price: int) -> void:
 	if item_name == "" or per_unit_price <= 0:
@@ -218,8 +223,8 @@ static func submit_action_input(scene: Node, raw_input: String, bypass_lock_chec
 		scene.currentNpc.currentChat += "行动事实（已发生）：「" + user_input + "」\n"
 	var action_context = scene._build_shared_interaction_context(user_input, focus_npc_name, focus_npc_desc)
 	if scene.is_dialogue_only_mode():
-		var recent_chat = scene._clip_prompt_text(scene.get_current_chat_session_memory(focus_npc_name), scene.session_memory_max_chars)
-		action_context = "本轮交互类型：行动事实（玩家输入已发生）\n世界设定：" + scene._clip_prompt_text(scene.background, 900) + "\n当前地点：" + scene._clip_prompt_text(scene.currentSiteName, 80)
+		var recent_chat = scene.get_current_chat_session_memory(focus_npc_name)
+		action_context = "本轮交互类型：行动事实（玩家输入已发生）\n世界设定：" + scene.get_world_context_text() + "\n当前地点：" + scene._clip_prompt_text(scene.currentSiteName, 80)
 		if focus_npc_name != "":
 			action_context += "\n当前NPC：" + scene._clip_prompt_text(focus_npc_name + "；" + focus_npc_desc, 360)
 		if recent_chat != "":

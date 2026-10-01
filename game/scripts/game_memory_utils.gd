@@ -1,6 +1,39 @@
 extends RefCounted
 class_name GameMemoryUtils
 
+static func build_recent_context(records: Array, max_records: int, max_chars: int) -> String:
+	var budget = max(0, max_chars)
+	if budget == 0 or records.is_empty():
+		return ""
+	var picked: Array = []
+	var used = 0
+	var start = max(0, records.size() - max(1, max_records))
+	for i in range(records.size() - 1, start - 1, -1):
+		var row = str(records[i]).strip_edges()
+		if row == "":
+			continue
+		var separator_size = 1 if !picked.is_empty() else 0
+		var remaining = budget - used - separator_size
+		if remaining <= 0:
+			break
+		if row.length() > remaining:
+			if picked.is_empty():
+				# Keep both the setup and the immediate result of an unusually
+				# long latest response instead of retaining only one side.
+				if remaining >= 32:
+					var head = max(8, int(floor(float(remaining - 1) * 0.45)))
+					var tail = max(8, remaining - head - 1)
+					picked.push_front(row.left(head) + "…" + row.substr(row.length() - tail))
+				else:
+					picked.push_front(row.substr(row.length() - remaining))
+				break
+			# The newest records already use the available budget; do not
+			# append an older full record past the configured limit.
+			break
+		picked.push_front(row)
+		used += row.length() + separator_size
+	return "\n".join(picked)
+
 static func extract_npc_mentions(npcs: Dictionary, text: String) -> Array:
 	var found: Array = []
 	var t = str(text)

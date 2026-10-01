@@ -53,11 +53,43 @@ def sanitize_refusal_output(text):
     return _refusal_fallback_text()
 
 
-def ensure_minimum_text(messages, text, minimum, generate, deadline):
+def limit_output_text(text, maximum):
+    """Trim text to a visible-character limit, preferring a complete sentence."""
+    maximum = max(0, min(8000, int(maximum or 0)))
+    source = str(text or "").strip()
+    if maximum <= 0 or visible_length(source) <= maximum:
+        return source
+    parts = re.findall(r"<[^>]*>|.", source, flags=re.S)
+    out = []
+    count = 0
+    for part in parts:
+        if part.startswith("<") and part.endswith(">"):
+            out.append(part)
+            continue
+        if count >= maximum:
+            break
+        out.append(part)
+        count += 0 if part.isspace() else 1
+    candidate = "".join(out).strip()
+    punctuation = "。！？!?；;\n"
+    boundary = -1
+    for marker in punctuation:
+        boundary = max(boundary, candidate.rfind(marker))
+    if boundary >= int(maximum * 0.6):
+        candidate = candidate[:boundary + 1]
+    return candidate.strip()
+
+
+def ensure_minimum_text(messages, text, minimum, generate, deadline, maximum=0):
     """One text-only rewrite. Keep original action tags and never execute tools."""
     minimum = max(0, min(2000, int(minimum)))
+    maximum = max(0, min(8000, int(maximum or 0)))
+    original_count = visible_length(text)
+    if maximum:
+        minimum = min(minimum, maximum)
+        text = limit_output_text(text, maximum)
     count = visible_length(text)
-    status = {"minimum": minimum, "actual": count, "retried": False}
+    status = {"minimum": minimum, "maximum": maximum, "actual": count, "retried": False, "truncated": False}
     refusal_recovery = looks_like_meta_refusal(text)
     # A short but complete scene is preferable to a second pass that turns
     # specific dialogue into an event summary. Retry only severe truncation.
@@ -65,10 +97,11 @@ def ensure_minimum_text(messages, text, minimum, generate, deadline):
         status["met"] = not minimum or count >= minimum
         if minimum and count < minimum and count:
             status["reason"] = "preserved_original"
+        status["truncated"] = bool(maximum and original_count > maximum)
         return text, status
     remaining = deadline - time.monotonic()
     if remaining < 2:
-        text = sanitize_refusal_output(text)
+        text = limit_output_text(sanitize_refusal_output(text), maximum)
         status.update(met=False, reason="timeout_budget")
         return text, status
     tags = re.findall(r"<[^>]*>", text)
@@ -85,6 +118,7 @@ def ensure_minimum_text(messages, text, minimum, generate, deadline):
     status["retried"] = True
     try:
         candidate = sanitize_refusal_output(re.sub(r"<[^>]*>", "", generate(repair_messages, remaining) or "").strip())
+        candidate = limit_output_text(candidate, maximum)
         if candidate and (refusal_recovery or visible_length(candidate) > count):
             text = candidate + ("\n" + "\n".join(tags) if tags else "")
     except Exception:

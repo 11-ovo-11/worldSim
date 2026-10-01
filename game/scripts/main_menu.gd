@@ -92,6 +92,13 @@ func _on_start_http_request_request_completed(result, _response_code, _headers, 
 	if response.has("service"):
 		check_text+="_to_"+response["service"]
 		print("服务类型: ", response["service"])
+	if response.has("error"):
+		# 例如 “Connection error.”：让玩家和日志都能看到真正的失败原因，
+		# 而不是只有一个“神经网络检查失败”。
+		var service_error = str(response["error"]).strip_edges()
+		if service_error != "":
+			check_text += "（" + service_error.left(120) + "）"
+			print("服务错误: ", service_error)
 	add_start_log(check_text)
 
 func add_start_log(logText:String,right:bool = false):

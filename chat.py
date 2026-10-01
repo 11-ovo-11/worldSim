@@ -48,7 +48,18 @@ if not API_BASE_URL:
 API_MODEL_CHAT = str(os.getenv("WORLD_SIM_MODEL", "deepseek-v4-flash")).strip() or "deepseek-v4-flash"
 OPENAI_TIMEOUT_SECONDS = float(os.getenv("WORLD_SIM_PROVIDER_TIMEOUT", "45"))
 OPENAI_MAX_RETRIES = max(0, int(os.getenv("WORLD_SIM_PROVIDER_RETRIES", "1")))
+# 每个端点内部再重试几次，避免一次瞬时连接失败就把 5xx 抛给游戏。
+OPENAI_ATTEMPTS_PER_ENDPOINT = max(1, int(os.getenv("WORLD_SIM_PROVIDER_ATTEMPTS", "3")))
 # =========================================================================
+
+# ==================== 本地桥接自我标识 ====================
+# Godot 启动器（res://scripts/deepseek_service_manager.gd）靠这些字段判断 5000 端口上
+# 应答的是不是当前这份服务：协议号太低 = 旧版残留进程，pid 用于结束残留进程，
+# 避免多个 chat.py 同时占用同一端口（Windows 允许它们同时监听）。
+# 修改这里时必须同步修改 GDScript 里的 REQUIRED_BRIDGE_PROTOCOL。
+BRIDGE_PROTOCOL = 2
+BRIDGE_VERSION = "2"
+# =========================================================
 
 DEEP_SEEK_KEY = key
 def _chat_base_url_candidates():
@@ -321,23 +332,33 @@ def _is_retryable_provider_error(error):
 
 
 def _chat_completion_with_fallback(**kwargs):
-    """Try the configured endpoint, then explicitly configured alternates."""
+    """Try the configured endpoint (with a short retry), then explicit alternates."""
     global API_BASE_URL, clientOpenAI
     last_error = None
     for base_url in _chat_base_url_candidates():
         client = clientOpenAI if base_url == API_BASE_URL else _new_openai_client(base_url)
-        try:
-            response = client.chat.completions.create(**kwargs)
-            if base_url != API_BASE_URL:
-                API_BASE_URL = base_url
-                clientOpenAI = client
-                print(f"[CHAT_PROVIDER] switched endpoint to {base_url}")
-            return response
-        except Exception as error:
-            last_error = error
-            print(f"[CHAT_PROVIDER] endpoint failed: {base_url} error={_truncate_text(error, 240)}")
-            if not _is_retryable_provider_error(error):
-                break
+        for attempt in range(1, OPENAI_ATTEMPTS_PER_ENDPOINT + 1):
+            try:
+                response = client.chat.completions.create(**kwargs)
+                if base_url != API_BASE_URL:
+                    API_BASE_URL = base_url
+                    clientOpenAI = client
+                    print(f"[CHAT_PROVIDER] switched endpoint to {base_url}")
+                return response
+            except Exception as error:
+                last_error = error
+                retryable = _is_retryable_provider_error(error)
+                print(
+                    f"[CHAT_PROVIDER] endpoint failed: {base_url} attempt={attempt}/"
+                    f"{OPENAI_ATTEMPTS_PER_ENDPOINT} retryable={retryable} "
+                    f"error={_truncate_text(error, 240)}"
+                )
+                if not retryable:
+                    break
+                if attempt < OPENAI_ATTEMPTS_PER_ENDPOINT:
+                    time.sleep(min(2.0, 0.4 * attempt))
+        if last_error is not None and not _is_retryable_provider_error(last_error):
+            break
     if last_error is not None:
         raise last_error
     raise RuntimeError("没有可用的模型服务端点")
@@ -458,6 +479,9 @@ def chat():
     options = body[3] if len(body) > 3 and isinstance(body[3], dict) else {}
     user_msg = _apply_action_fact_protocol(user_msg, options.get("request_kind", ""))
     minimum = max(0, min(2000, int(options.get("min_chars", 0)))) if output_format == "text" else 0
+    maximum = max(0, min(8000, int(options.get("max_chars", 0)))) if output_format == "text" else 0
+    if maximum:
+        minimum = min(minimum, maximum)
     deadline = time.monotonic() + max(3, min(120, float(options.get("timeout_seconds", 30)))) - 1
     if not user_msg:
         return jsonify({"error": "消息不能为空"}), 400
@@ -481,7 +505,7 @@ def chat():
                     repaired = requests.post(OLLAMA_URL, json=repair_payload, timeout=timeout)
                     repaired.raise_for_status()
                     return repaired.json().get("response", "")
-                text, length_status = ensure_minimum_text(user_msg, text, minimum, repair_ollama, deadline)
+                text, length_status = ensure_minimum_text(user_msg, text, minimum, repair_ollama, deadline, maximum)
                 print("文本生成完成")
                 return jsonify({"text": text, "length_status": length_status})
             except Exception as e:
@@ -520,7 +544,7 @@ def chat():
                         stream=False, timeout=timeout,
                     )
                     return repaired.choices[0].message.content
-                text, length_status = ensure_minimum_text(user_msg, text, minimum, repair_openai, deadline)
+                text, length_status = ensure_minimum_text(user_msg, text, minimum, repair_openai, deadline, maximum)
                 print("ai:", {"text": text, "tool_calls": tool_calls})
                 return jsonify({"text": text, "tool_calls": tool_calls, "length_status": length_status})
             except Exception as e:
@@ -533,7 +557,12 @@ def chat():
                         "tool_calls": [],
                         "length_status": {"reason": "provider_refusal_fallback", "retried": False},
                     })
-                return jsonify({"error": f"DeepSeek API请求失败: {str(e)}"}), 533
+                return jsonify({
+                    "error": f"模型服务请求失败：{str(e)}",
+                    "provider": API_BASE_URL,
+                    "model": API_MODEL_CHAT,
+                    "hint": "请检查 key.py 的密钥、WORLD_SIM_API_BASE_URL 以及本机到该地址的网络（代理）。",
+                }), 502
                 
         case _:
             return jsonify({"error": f"不支持的聊天模式: {chat_mode}"}), 400
@@ -777,8 +806,24 @@ def test_chat():
 
 @app.route("/health", methods=["GET"])
 def health_check():
-    """健康检查端点"""
-    return jsonify({"status": "healthy", "chat_mode": chat_mode})
+    """健康检查端点。
+
+    Godot 启动器不仅看状态码，还用下面这些字段确认应答的是“当前这份服务”：
+    protocol 低于启动器要求的版本说明是旧版残留进程，pid 用于结束该残留进程。
+    """
+    return jsonify({
+        "status": "healthy",
+        "chat_mode": chat_mode,
+        "protocol": BRIDGE_PROTOCOL,
+        "version": BRIDGE_VERSION,
+        "pid": os.getpid(),
+        # .venv\Scripts\python.exe 在 Windows 上是个启动器，它会派生出真正运行
+        # 本脚本的子进程，因此 Godot 用 create_process 拿到的 pid 其实是这里的 ppid。
+        "ppid": os.getppid(),
+        "api_base_url": API_BASE_URL,
+        "model": API_MODEL_CHAT,
+        "image_mode": IMAGE_MODE,
+    })
 
 @app.route("/", methods=["GET"])
 def index():

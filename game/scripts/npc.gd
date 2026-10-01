@@ -60,13 +60,10 @@ func _tail_lines(text: String, max_lines: int, max_chars: int) -> String:
 	for i in range(start_idx, rows.size()):
 		var row = str(rows[i]).strip_edges()
 		if row != "":
-			picked.append(_clip_text(row, 180))
+			picked.append(row)
 	if picked.is_empty():
 		return ""
-	var joined = "\n".join(picked)
-	if joined.length() <= max_chars:
-		return joined
-	return joined.substr(joined.length() - max_chars, max_chars).strip_edges()
+	return GameMemoryUtils.build_recent_context(picked, max_lines, max_chars)
 
 func _compact_rumors() -> String:
 	if scene == null:
@@ -119,7 +116,9 @@ func build_base_prompt(include_rumors: bool = false) -> String:
 		history_chars = max(600, int(scene.chat_history_max_chars))
 		session_chars = max(800, int(scene.session_memory_max_chars))
 	if scene != null and scene.has_method("get_current_chat_session_memory"):
-		session_memory = _tail_lines(str(scene.get_current_chat_session_memory(npcName)), history_lines, session_chars)
+		session_memory = str(scene.get_current_chat_session_memory(npcName))
+		if session_memory.length() > session_chars:
+			session_memory = session_memory.substr(session_memory.length() - session_chars).strip_edges()
 	# One recent-history source per request. Session records already contain both sides
 	# of this conversation; currentChat is only a fallback for older saved games.
 	var chat_context = session_memory if session_memory != "" else _tail_lines(currentChat, history_lines, history_chars)
@@ -129,7 +128,7 @@ func build_base_prompt(include_rumors: bool = false) -> String:
 	var built = chat_prompt_template.format({
 		"chat_head": chat_prompt_head.replace("120字", str(min_chars) + "字"),
 		"role_prompt": _clip_text(str(role_pormt), 360),
-		"background": _clip_text(scene.background, 420),
+		"background": scene.get_world_context_text(),
 		"site": _clip_text(scene.currentSiteName, 70),
 		"time": _clip_text(scene.timePrompt, 70),
 		"weather": _clip_text(scene.weatherPrompt, 70),
