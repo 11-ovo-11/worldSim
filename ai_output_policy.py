@@ -81,34 +81,49 @@ def limit_output_text(text, maximum):
 
 
 def ensure_minimum_text(messages, text, minimum, generate, deadline, maximum=0):
-    """One text-only rewrite. Keep original action tags and never execute tools."""
+    """Rewrite over-budget text before applying a hard visible-character cap."""
     minimum = max(0, min(2000, int(minimum)))
     maximum = max(0, min(8000, int(maximum or 0)))
-    original_count = visible_length(text)
+    source_text = str(text or "").strip()
+    original_count = visible_length(source_text)
+    over_budget = bool(maximum and original_count > maximum)
     if maximum:
         minimum = min(minimum, maximum)
-        text = limit_output_text(text, maximum)
+    # Keep the complete provider response while preparing a compression pass.
+    # Previously this was clipped before repair, so the model never saw the
+    # omitted ending and the UI received an incomplete scene.
+    text = source_text
     count = visible_length(text)
     status = {"minimum": minimum, "maximum": maximum, "actual": count, "retried": False, "truncated": False}
     refusal_recovery = looks_like_meta_refusal(text)
-    # A short but complete scene is preferable to a second pass that turns
-    # specific dialogue into an event summary. Retry only severe truncation.
-    if not refusal_recovery and (not minimum or count >= minimum or not count or count >= minimum * 0.65):
+    # A short but complete scene is preferable to a second pass, but an
+    # over-budget response must be rewritten before any hard clipping.
+    if not over_budget and not refusal_recovery and (not minimum or count >= minimum or not count or count >= minimum * 0.65):
         status["met"] = not minimum or count >= minimum
         if minimum and count < minimum and count:
             status["reason"] = "preserved_original"
-        status["truncated"] = bool(maximum and original_count > maximum)
         return text, status
     remaining = deadline - time.monotonic()
     if remaining < 2:
         text = limit_output_text(sanitize_refusal_output(text), maximum)
-        status.update(met=False, reason="timeout_budget")
+        status.update(actual=visible_length(text), met=visible_length(text) >= minimum, reason="timeout_budget")
+        status["truncated"] = over_budget
         return text, status
     tags = re.findall(r"<[^>]*>", text)
+    if over_budget:
+        repair_instruction = (
+            f"上一版正文有{count}个非空白字符，超过硬性上限{maximum}字。"
+            f"请压缩重写为不超过{maximum}字，并在上限内保留玩家输入已经造成的事实、关键动作、角色即时回应和当前结果。"
+            "必须在完整句子处主动收束，不要等系统截断；不得删除事件结论，不得用总结或重复句填充。"
+        )
+    elif refusal_recovery:
+        repair_instruction = "上一版偏离了角色并出现了元话语。"
+    else:
+        repair_instruction = f"上一版正文只有{count}个非空白字符，要求至少{minimum}个。"
     repair_messages = list(messages) + [
         {"role": "assistant", "content": re.sub(r"<[^>]*>", "", text)},
         {"role": "user", "content": (
-            (f"上一版正文只有{count}个非空白字符，要求至少{minimum}个。" if not refusal_recovery else "上一版偏离了角色并出现了元话语。")
+            repair_instruction
             + "请在虚构游戏语境中输出自然的角色内修订版，保留已有事实、角色立场、拒绝和互动结果；"
             "只跳过无法展开的局部细节，改写为含蓄概述或继续描写相邻的对话、动作和结果；"
             "不要解释跳过原因，不评论政策或安全规则，不返回空内容。"
@@ -119,12 +134,16 @@ def ensure_minimum_text(messages, text, minimum, generate, deadline, maximum=0):
     try:
         candidate = sanitize_refusal_output(re.sub(r"<[^>]*>", "", generate(repair_messages, remaining) or "").strip())
         candidate = limit_output_text(candidate, maximum)
-        if candidate and (refusal_recovery or visible_length(candidate) > count):
+        if candidate and (refusal_recovery or over_budget or visible_length(candidate) > count):
             text = candidate + ("\n" + "\n".join(tags) if tags else "")
+            status["reason"] = "rewritten_to_budget" if over_budget else status.get("reason", "")
     except Exception:
         status["reason"] = "repair_failed"
     if looks_like_meta_refusal(text):
         text = sanitize_refusal_output(text)
         status["reason"] = "refusal_sanitized"
+    if maximum and visible_length(text) > maximum:
+        text = limit_output_text(text, maximum)
+        status["truncated"] = True
     status.update(actual=visible_length(text), met=visible_length(text) >= minimum)
     return text, status

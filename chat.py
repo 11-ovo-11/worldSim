@@ -480,6 +480,13 @@ def chat():
     user_msg = _apply_action_fact_protocol(user_msg, options.get("request_kind", ""))
     minimum = max(0, min(2000, int(options.get("min_chars", 0)))) if output_format == "text" else 0
     maximum = max(0, min(8000, int(options.get("max_chars", 0)))) if output_format == "text" else 0
+    requested_max_tokens = max(0, min(8192, int(options.get("max_tokens", 0)))) if output_format == "text" else 0
+    if maximum:
+        # Character budget is the user-facing limit. A matching token ceiling
+        # prevents providers from producing a long answer that must be clipped
+        # after generation; the repair pass still enforces the exact character cap.
+        requested_max_tokens = requested_max_tokens or maximum
+        requested_max_tokens = max(128, min(8192, requested_max_tokens))
     if maximum:
         minimum = min(minimum, maximum)
     deadline = time.monotonic() + max(3, min(120, float(options.get("timeout_seconds", 30)))) - 1
@@ -494,6 +501,8 @@ def chat():
 
                 "stream": False
             }
+            if requested_max_tokens:
+                payload["options"] = {"num_predict": requested_max_tokens}
 
             try:
                 r = requests.post(OLLAMA_URL, json=payload)
@@ -520,6 +529,8 @@ def chat():
                     "tools": tools,
                     "stream": False,
                 }
+                if requested_max_tokens:
+                    request_kwargs["max_tokens"] = requested_max_tokens
                 # DeepSeek 的普通文本请求不应携带 response_format=text；
                 # 只在明确要求 JSON 时传递结构化输出参数。
                 if output_format in ("json_object", "json_schema"):
@@ -542,6 +553,7 @@ def chat():
                     repaired = _chat_completion_with_fallback(
                         model=API_MODEL_CHAT, messages=messages,
                         stream=False, timeout=timeout,
+                        **({"max_tokens": requested_max_tokens} if requested_max_tokens else {}),
                     )
                     return repaired.choices[0].message.content
                 text, length_status = ensure_minimum_text(user_msg, text, minimum, repair_openai, deadline, maximum)

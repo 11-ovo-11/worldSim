@@ -583,9 +583,11 @@ func ask_ai(message: Array, askmode: aiMode):
 	if askmode == aiMode.chat:
 		request_options["min_chars"] = max(0, dialogue_min_chars)
 		request_options["max_chars"] = max_output_chars
+		request_options["max_tokens"] = max(128, max_output_chars)
 	elif askmode == aiMode.action:
 		request_options["min_chars"] = max(0, action_narration_min_chars)
 		request_options["max_chars"] = max_output_chars
+		request_options["max_tokens"] = max(128, max_output_chars)
 		request_options["request_kind"] = "action_fact"
 	var body = [outbound_messages,null,"text",request_options]
 	match askmode:
@@ -635,7 +637,7 @@ func _decorate_messages_for_output_mode(message: Array, askmode: aiMode) -> Arra
 	var copied = message.duplicate(true)
 	var min_chars = dialogue_min_chars if askmode == aiMode.chat else action_narration_min_chars
 	min_chars = min(max(160, min_chars), max_output_chars)
-	var constraint = "输出要求：本次回复至少" + str(min_chars) + "字，最多" + str(max_output_chars) + "字，信息完整、自然，不要省略关键细节，不要用固定收尾句硬凑字数。"
+	var constraint = "输出要求：本次回复正文的可见字符总数必须控制在" + str(min_chars) + "至" + str(max_output_chars) + "字以内（包含叙述、对白和标点，不包含系统消息）。这是硬性上限，不得超出。生成前先压缩组织内容，接近上限时立即用完整句子收束；禁止写到上限后再被截断，禁止用重复句凑字数。信息要完整、自然，保留当前行动、角色回应和立即结果。"
 	copied.push_front({"role":"system", "content": constraint})
 	return copied
 
