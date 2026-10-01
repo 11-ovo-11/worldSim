@@ -641,7 +641,7 @@ func _decorate_messages_for_output_mode(message: Array, askmode: aiMode) -> Arra
 		return message
 	var copied = message.duplicate(true)
 	var min_chars = dialogue_min_chars if askmode == aiMode.chat else action_narration_min_chars
-	min_chars = max(160, min_chars)
+	min_chars = min(max(160, min_chars), max_output_chars)
 	var constraint = "输出要求：本次回复至少" + str(min_chars) + "字，最多" + str(max_output_chars) + "字，信息完整、自然，不要省略关键细节，不要用固定收尾句硬凑字数。"
 	copied.push_front({"role":"system", "content": constraint})
 	return copied
