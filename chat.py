@@ -9,10 +9,12 @@ from flask_cors import CORS
 from threading import Lock
 import os 
 import openai
+import httpx
 from openai import OpenAI
 import gc
 from key import key
 from image_key import image_key
+from provider_debug import exception_details, redact, safe_url, write_failure_report
 
 # Honor values passed by the Godot launcher and optional system/provider proxy
 # settings. OpenAI's HTTP client and requests both inherit these variables.
@@ -59,8 +61,8 @@ OPENAI_ATTEMPTS_PER_ENDPOINT = max(1, int(os.getenv("WORLD_SIM_PROVIDER_ATTEMPTS
 # 应答的是不是当前这份服务：协议号太低 = 旧版残留进程，pid 用于结束残留进程，
 # 避免多个 chat.py 同时占用同一端口（Windows 允许它们同时监听）。
 # 修改这里时必须同步修改 GDScript 里的 REQUIRED_BRIDGE_PROTOCOL。
-BRIDGE_PROTOCOL = 2
-BRIDGE_VERSION = "2"
+BRIDGE_PROTOCOL = 3
+BRIDGE_VERSION = "3-network-debug"
 # =========================================================
 
 DEEP_SEEK_KEY = key
@@ -85,16 +87,21 @@ def _chat_base_url_candidates():
     return out
 
 
-def _new_openai_client(base_url):
-    return OpenAI(
-        api_key=DEEP_SEEK_KEY,
-        base_url=base_url,
-        timeout=OPENAI_TIMEOUT_SECONDS,
-        max_retries=OPENAI_MAX_RETRIES,
-    )
+def _new_openai_client(base_url, trust_env=None):
+    options = {
+        "api_key": DEEP_SEEK_KEY,
+        "base_url": base_url,
+        "timeout": OPENAI_TIMEOUT_SECONDS,
+        "max_retries": OPENAI_MAX_RETRIES,
+    }
+    if trust_env is not None:
+        options["http_client"] = httpx.Client(trust_env=trust_env, timeout=OPENAI_TIMEOUT_SECONDS)
+    return OpenAI(**options)
 
 
-clientOpenAI = _new_openai_client(API_BASE_URL)
+# Start with a true direct connection. The request loop also tries the
+# environment/system-proxy route when direct access is unavailable.
+clientOpenAI = _new_openai_client(API_BASE_URL, trust_env=False)
 
 #def comfy_headers():
    # headers = {"Content-Type": "application/json"}
@@ -325,7 +332,7 @@ def _build_image_size_candidates(target_type: str, width: int, height: int) -> l
 
 def _rebuild_openai_client():
     global clientOpenAI
-    clientOpenAI = _new_openai_client(API_BASE_URL)
+    clientOpenAI = _new_openai_client(API_BASE_URL, trust_env=False)
 
 
 def _is_retryable_provider_error(error):
@@ -359,36 +366,74 @@ def _chat_completion_with_fallback(**kwargs):
     """Try the configured endpoint (with a short retry), then explicit alternates."""
     global API_BASE_URL, clientOpenAI
     last_error = None
+    attempts = []
     for base_url in _chat_base_url_candidates():
-        client = clientOpenAI if base_url == API_BASE_URL else _new_openai_client(base_url)
-        for attempt in range(1, OPENAI_ATTEMPTS_PER_ENDPOINT + 1):
-            try:
-                response = client.chat.completions.create(**kwargs)
-                if base_url != API_BASE_URL:
-                    API_BASE_URL = base_url
-                    clientOpenAI = client
-                    print(f"[CHAT_PROVIDER] switched endpoint to {base_url}")
-                return response
-            except Exception as error:
-                last_error = error
-                retryable = _is_retryable_provider_error(error)
-                print(
-                    f"[CHAT_PROVIDER] endpoint failed: {base_url} attempt={attempt}/"
-                    f"{OPENAI_ATTEMPTS_PER_ENDPOINT} retryable={retryable} "
-                    f"error={_truncate_text(error, 240)}"
-                )
-                if not retryable:
-                    break
-                if attempt < OPENAI_ATTEMPTS_PER_ENDPOINT:
-                    time.sleep(min(2.0, 0.4 * attempt))
-        # A 404 can mean this gateway expects the other base path form
-        # (root vs /v1), so continue to the next configured candidate.
+        # Direct access is attempted first so a stale Windows proxy cannot
+        # break users who are no longer running their VPN/proxy service.
+        transports = [("direct", clientOpenAI if base_url == API_BASE_URL else _new_openai_client(base_url, False)),
+                      ("environment_proxy", _new_openai_client(base_url, True))]
+        for transport_name, client in transports:
+            transport_attempts = 1 if transport_name == "direct" else OPENAI_ATTEMPTS_PER_ENDPOINT
+            for attempt in range(1, transport_attempts + 1):
+                started = time.monotonic()
+                try:
+                    response = client.chat.completions.create(**kwargs)
+                    if base_url != API_BASE_URL:
+                        API_BASE_URL = base_url
+                        clientOpenAI = client
+                        print(f"[CHAT_PROVIDER] switched endpoint to {base_url} via {transport_name}")
+                    return response
+                except Exception as error:
+                    last_error = error
+                    retryable = _is_retryable_provider_error(error)
+                    attempts.append({"endpoint": safe_url(base_url), "transport": transport_name, "attempt": attempt,
+                                     "elapsed_seconds": round(time.monotonic() - started, 3),
+                                     "retryable": retryable,
+                                     **exception_details(error, (DEEP_SEEK_KEY, image_key))})
+                    print(
+                        f"[CHAT_PROVIDER] endpoint failed: {base_url} transport={transport_name} attempt={attempt}/"
+                        f"{transport_attempts} retryable={retryable} "
+                        f"error={redact(_truncate_text(error, 240), (DEEP_SEEK_KEY, image_key))}"
+                    )
+                    if not retryable:
+                        break
+                    if attempt < transport_attempts:
+                        time.sleep(min(2.0, 0.4 * attempt))
+            # A 404 can mean this gateway expects the other base path form
+            # (root vs /v1), while connection failures should try the other
+            # transport before giving up.
+            last_status = getattr(getattr(last_error, "response", None), "status_code", None)
+            if last_error is not None and not _is_retryable_provider_error(last_error) and last_status not in (404,):
+                break
         last_status = getattr(getattr(last_error, "response", None), "status_code", None)
         if last_error is not None and not _is_retryable_provider_error(last_error) and last_status != 404:
             break
     if last_error is not None:
+        try:
+            last_error._worldsim_attempts = attempts
+        except Exception:
+            pass
         raise last_error
     raise RuntimeError("没有可用的模型服务端点")
+
+
+def _provider_failure_payload(error):
+    context = {
+        "endpoint": safe_url(API_BASE_URL), "candidates": [safe_url(url) for url in _chat_base_url_candidates()],
+        "model": API_MODEL_CHAT, "bridge_protocol": BRIDGE_PROTOCOL, "bridge_version": BRIDGE_VERSION,
+        "provider_timeout_seconds": OPENAI_TIMEOUT_SECONDS, "sdk_retries": OPENAI_MAX_RETRIES,
+        "attempts_per_endpoint": OPENAI_ATTEMPTS_PER_ENDPOINT,
+        "transport_attempt_order": ["direct", "environment_proxy"],
+        "route": request.path,
+    }
+    # Only request metadata is recorded. Never log prompts, request headers or keys.
+    body = request.get_json(silent=True)
+    if isinstance(body, list) and len(body) >= 3:
+        context["output_format"] = body[2]
+        context["message_count"] = len(body[0]) if isinstance(body[0], list) else 0
+    debug = write_failure_report(error, context, getattr(error, "_worldsim_attempts", ()), (DEEP_SEEK_KEY, image_key))
+    return {"error": redact(_provider_error_message(error), (DEEP_SEEK_KEY, image_key)),
+            "provider": safe_url(API_BASE_URL), "model": API_MODEL_CHAT, **debug}
 
 
 def _apply_action_fact_protocol(messages, request_kind):
@@ -596,12 +641,7 @@ def chat():
                         "tool_calls": [],
                         "length_status": {"reason": "provider_refusal_fallback", "retried": False},
                     })
-                return jsonify({
-                    "error": _provider_error_message(e),
-                    "provider": API_BASE_URL,
-                    "model": API_MODEL_CHAT,
-                    "hint": "请检查 key.py 的密钥、WORLD_SIM_API_BASE_URL 以及本机到该地址的网络（代理）。",
-                }), 502
+                return jsonify(_provider_failure_payload(e)), 502
                 
         case _:
             return jsonify({"error": f"不支持的聊天模式: {chat_mode}"}), 400
@@ -838,7 +878,7 @@ def test_chat():
         result["model"] = API_MODEL_CHAT
         result["success"] = True
     except Exception as e:
-        result["error"] = str(e)
+        result.update(_provider_failure_payload(e))
         result["success"] = False
     print(f"[TEST_CHAT] result={result}")
     return jsonify(result)
@@ -1020,7 +1060,7 @@ def check_chat_service():
             "status": "error",
             "message": "神经网络检查失败",
             "service": chat_mode,
-            "error": _provider_error_message(e)
+            **_provider_failure_payload(e)
         }), 500
 
 # 新增的完整服务状态检查端点

@@ -8,7 +8,7 @@ const STARTUP_WAIT_SECONDS := 45.0
 # 必须与 chat.py 里的 BRIDGE_PROTOCOL 保持一致。
 # 应答的协议号低于该值，说明 5000 端口上跑的是旧版 chat.py（没有自我标识），
 # 这类残留进程会让游戏请求打到错误的进程上并显示“服务器错误”。
-const REQUIRED_BRIDGE_PROTOCOL := 2
+const REQUIRED_BRIDGE_PROTOCOL := 3
 const MAX_BRIDGE_PURGE_ROUNDS := 5
 const PURGE_WAIT_SECONDS := 3.0
 const PROBE_TIMEOUT_SECONDS := 3.0

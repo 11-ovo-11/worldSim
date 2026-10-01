@@ -1134,7 +1134,8 @@ func report_ai_error(message: String) -> void:
 	var detail = str(message).strip_edges()
 	if detail == "":
 		detail = "未知错误"
-	addLog("【AI错误】" + detail.left(360), true)
+	print("【AI错误】", detail)
+	addLog("【AI错误】" + detail, true)
 
 func _is_important_log(log_text: String) -> bool:
 	return GameEventUtils.is_important_log(log_text)

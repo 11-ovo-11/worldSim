@@ -39,8 +39,8 @@ Godot 不直接请求 DeepSeek：密钥只保存在 Python 侧的 `key.py` / `im
 {
   "status": "healthy",
   "chat_mode": "openai",
-  "protocol": 2,
-  "version": "2",
+  "protocol": 3,
+  "version": "3-network-debug",
   "pid": 12345,
   "ppid": 6789,
   "api_base_url": "https://api.deepseek.com",
@@ -49,7 +49,7 @@ Godot 不直接请求 DeepSeek：密钥只保存在 Python 侧的 `key.py` / `im
 }
 ```
 
-- `protocol`：启动器要求 `>= REQUIRED_BRIDGE_PROTOCOL`（当前 2）。版本落后 = 残留进程，会被结束。
+- `protocol`：启动器要求 `>= REQUIRED_BRIDGE_PROTOCOL`（当前 3）。版本落后 = 残留进程，会被结束。
 - `pid`：真正运行 `chat.py` 的解释器进程。
 - `ppid`：Windows 上 `.venv/Scripts/python.exe` 只是启动器，它会派生出真正的解释器；
   Godot 用 `create_process` 拿到的是启动器的 pid，所以两个都要报。
@@ -73,5 +73,8 @@ Godot 不直接请求 DeepSeek：密钥只保存在 Python 侧的 `key.py` / `im
   `桥接已就绪（pid=…，model=…，端点=…）` 说明用的是哪个进程、哪个端点。
 - 界面/日志出现 `服务器错误 <码>：<原因>`：`502` 表示桥接在，但请求模型失败
   （密钥、端点或本机网络/代理问题），具体原因随响应一起显示。
+- 连接失败时会自动先尝试直连，再尝试环境/系统代理；完整诊断会写入
+  `logs/network/<报告编号>.json` 和 `logs/network/latest.json`，内容包含 DNS、TCP、TLS、
+  无密钥 HTTPS 探测、代理状态、异常链和 Python 包版本，不包含 API 密钥或对话内容。
 - 想手动重启桥接：关掉游戏后执行
   `.\.venv\Scripts\python.exe chat.py`；游戏启动时会复用这个进程。

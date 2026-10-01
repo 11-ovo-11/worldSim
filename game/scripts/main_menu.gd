@@ -100,6 +100,14 @@ func _on_start_http_request_request_completed(result, _response_code, _headers, 
 			check_text += "（" + service_error.left(120) + "）"
 			print("服务错误: ", service_error)
 	add_start_log(check_text)
+	if response.has("debug_report"):
+		var debug_log = load("res://fabs/log_rich_text_label.tscn").instantiate() as RichTextLabel
+		debug_log.text = "【连接调试】\n文件：" + str(response.get("debug_file", "")) + "\n" + str(response["debug_report"])
+		%startLog.add_child(debug_log)
+		debug_log.visible_ratio = 1.0
+		debug_log.set("expanded", true)
+		debug_log.set_process(false)
+		print(debug_log.text)
 
 func add_start_log(logText:String,right:bool = false):
 	var newLog = load("res://fabs/log_rich_text_label.tscn").instantiate() as RichTextLabel

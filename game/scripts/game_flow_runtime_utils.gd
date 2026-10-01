@@ -365,17 +365,14 @@ static func extract_server_error_text(body) -> String:
 	if parser.parse(raw) == OK:
 		var data = parser.get_data()
 		if data is Dictionary:
+			var debug_report = str(data.get("debug_report", "")).strip_edges()
+			if debug_report != "":
+				return str(data.get("error", "请求失败")) + "\n调试编号：" + str(data.get("debug_id", "")) + "\n完整诊断文件：" + str(data.get("debug_file", "")) + "\n" + debug_report
 			for key in ["error", "message", "hint", "detail"]:
 				var value = str((data as Dictionary).get(key, "")).strip_edges()
 				if value != "":
-					return _clip_server_error_text(value)
-	return _clip_server_error_text(raw)
-
-static func _clip_server_error_text(text: String) -> String:
-	var clipped := str(text).strip_edges()
-	if clipped.length() > 280:
-		clipped = clipped.left(280) + "..."
-	return clipped
+					return value
+	return raw
 
 static func on_request_completed(scene: Node, result, response_code, _header, body) -> void:
 	if scene._ignore_next_request_completed:
@@ -408,7 +405,7 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 	if response_code != 200:
 		var server_detail = extract_server_error_text(body)
 		scene.report_ai_error("服务器错误 " + str(response_code) + ("：" + server_detail if server_detail != "" else ""))
-		var label_detail = server_detail.left(60) if server_detail != "" else ""
+		var label_detail = server_detail if server_detail != "" else ""
 		scene.changeTextTo(scene.response_label, "服务器错误 " + str(response_code) + ("：" + label_detail if label_detail != "" else ""))
 		if scene.currentMode == scene.aiMode.init_env and scene.has_node("mainMenu") and scene.get_node("mainMenu").has_method("if_weather_failed"):
 			scene.get_node("mainMenu").if_weather_failed("环境创建服务器错误(" + str(response_code) + ")" + ("：" + label_detail if label_detail != "" else "") + "，已使用默认天气。")

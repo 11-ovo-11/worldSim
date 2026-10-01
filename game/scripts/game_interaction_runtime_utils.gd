@@ -600,9 +600,12 @@ static func clear_children(_scene: Node, node: Node) -> void:
 static func addLog(scene: Node, logText: String, instant: bool = false) -> void:
 	var newLog = scene.LOG_LABEL_SCENE.instantiate()
 	newLog.text = logText
-	if instant and newLog is RichTextLabel:
-		newLog.visible_ratio = 1.0
 	scene.get_node("%logContainer").add_child(newLog)
+	if instant and newLog is RichTextLabel:
+		# _ready() 会将 visible_ratio 归零；插入树后设置，确保长诊断立刻可见。
+		newLog.visible_ratio = 1.0
+		newLog.set("expanded", true)
+		newLog.set_process(false)
 	if scene.get_node("%logContainer").get_child_count() > scene.max_visible_logs:
 		var overflow = scene.get_node("%logContainer").get_child_count() - scene.max_visible_logs
 		for i in range(overflow):
