@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://dan3qemb2cwhe"]
 
+[ext_resource type="Script" uid="uid://1aorv7y0ppiw" path="res://scripts/deepseek_service_manager.gd" id="1_deepseek_service"]
 [ext_resource type="Script" uid="uid://dccxc0ayjp3ct" path="res://scripts/game.gd" id="1_ig7tw"]
-[ext_resource type="Script" path="res://scripts/deepseek_service_manager.gd" id="1_deepseek_service"]
 [ext_resource type="Theme" uid="uid://cw27y3q15da6g" path="res://assets/main.tres" id="1_ycdy4"]
 [ext_resource type="Texture2D" uid="uid://dxvfctw51bsus" path="res://icon.svg" id="2_0xm2m"]
 [ext_resource type="PackedScene" uid="uid://c08dcgwadp4u" path="res://fabs/水平分割线.tscn" id="3_7mycd"]
@@ -76,7 +76,7 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 0, 0, 1)
 
-[node name="DeepSeekService" type="Node" parent="."]
+[node name="DeepSeekService" type="Node" parent="." unique_id=1530737102]
 script = ExtResource("1_deepseek_service")
 
 [node name="HTTPRequest" type="HTTPRequest" parent="." unique_id=1648532]
@@ -519,8 +519,8 @@ size_flags_vertical = 3
 
 [node name="npcIcon" type="TextureRect" parent="mainContainer/HBoxContainer/VBoxContainer/ScrollContainer/HBoxContainer" unique_id=1665040662]
 unique_name_in_owner = true
-clip_contents = true
 custom_minimum_size = Vector2(0, 510)
+clip_contents = true
 layout_mode = 2
 size_flags_vertical = 0
 texture = ExtResource("2_0xm2m")
