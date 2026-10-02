@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from ai_output_policy import ensure_minimum_text, sanitize_refusal_output
+from ai_output_policy import ensure_minimum_text
 import requests
 import base64
 import time
@@ -635,12 +635,10 @@ def chat():
                 print(f"DeepSeek API请求失败: {str(e)}")
                 error_text = str(e).lower()
                 if any(token in error_text for token in ("refusal", "content_filter", "safety", "policy")):
-                    fallback = sanitize_refusal_output("抱歉，我无法生成这部分内容。")
                     return jsonify({
-                        "text": fallback,
-                        "tool_calls": [],
-                        "length_status": {"reason": "provider_refusal_fallback", "retried": False},
-                    })
+                        "error": "模型拒绝生成：" + _truncate_text(str(e), 800),
+                        "refusal": True,
+                    }), 422
                 return jsonify(_provider_failure_payload(e)), 502
                 
         case _:

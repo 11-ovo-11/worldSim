@@ -423,11 +423,6 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 		var raw_response_text = data.get("text", "")
 		var response_text := str(raw_response_text).strip_edges() if raw_response_text is String else ""
 		if response_text == "" and model_tool_calls.is_empty():
-			if scene.currentMode == scene.aiMode.chat and scene.currentNpc != null and scene.currentState == scene.worldState.chat:
-				# Keep the player's turn in the conversation even when the provider
-				# returns no usable text.
-				await scene.npc_reply(GameAiUtils.safe_continuation_text())
-				return
 			scene.report_ai_error("模型返回空内容。")
 			scene.changeTextTo(scene.response_label, "模型返回空内容，请重试。")
 			if scene.currentMode == scene.aiMode.init_env and scene.has_node("mainMenu") and scene.get_node("mainMenu").has_method("if_weather_failed"):
@@ -542,7 +537,9 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 					raw_chat_text = ""
 				var chat_text = scene._enforce_output_min_length(str(raw_chat_text), scene.aiMode.chat)
 				if chat_text.strip_edges() == "":
-					chat_text = GameAiUtils.safe_continuation_text()
+					scene.report_ai_error("模型处理后没有可显示内容。")
+					scene.changeTextTo(scene.response_label, "模型处理后没有可显示内容，请重试。")
+					return
 				if scene.runtime_operation_lock or scene.currentState != scene.worldState.chat or scene.currentNpc == null:
 					return
 				var req_npc = str(scene.get_meta("chat_request_npc_name", "")).strip_edges()
@@ -565,7 +562,10 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 				action_reply = scene._enforce_action_narration_richness(action_reply)
 				if scene.is_dialogue_only_mode():
 					if action_reply.strip_edges() == "":
-						action_reply = GameAiUtils.safe_continuation_text()
+						scene.report_ai_error("模型处理后没有可显示内容。")
+						scene.changeTextTo(scene.response_label, "模型处理后没有可显示内容，请重试。")
+						scene._set_event_flow_lock(false)
+						return
 					scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【叙事】")
 					scene.changeTextTo(scene.response_label, scene.process_display_string(action_reply))
 					if scene.currentState == scene.worldState.chat and scene.currentNpc != null:

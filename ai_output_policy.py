@@ -34,23 +34,15 @@ def _remove_meta_refusal_sentences(text):
     return cleaned
 
 
-def _refusal_fallback_text():
-    """A short in-world bridge used only when the provider returned refusal text alone."""
-    return (
-        "对方略过了那段细节，直接把注意力转回眼前的互动。"
-        "场景继续向前推进，角色的态度和先前的关系保持连贯。"
-    )
-
-
 def sanitize_refusal_output(text):
-    """Never expose provider policy/refusal wording in the game dialogue panel."""
+    """Preserve provider refusal wording so the caller can diagnose the response."""
     value = str(text or "").strip()
     if not looks_like_meta_refusal(value):
         return value
     cleaned = _remove_meta_refusal_sentences(value)
     if cleaned and not looks_like_meta_refusal(cleaned):
         return cleaned
-    return _refusal_fallback_text()
+    return value
 
 
 def limit_output_text(text, maximum):
