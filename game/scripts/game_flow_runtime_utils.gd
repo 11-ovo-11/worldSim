@@ -566,18 +566,21 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 						scene.changeTextTo(scene.response_label, "模型处理后没有可显示内容，请重试。")
 						scene._set_event_flow_lock(false)
 						return
+					var action_display_text = scene.process_display_string(action_reply)
 					scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【叙事】")
-					scene.changeTextTo(scene.response_label, scene.process_display_string(action_reply))
+					scene.changeTextTo(scene.response_label, action_display_text)
+					scene.record_ai_reply("叙事", action_display_text)
 					if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
-						var action_memory = scene.process_display_string(action_reply)
-						scene._record_current_chat_session("行动", "叙事", action_memory)
-						scene.currentNpc.currentChat += "行动：" + action_memory + "\n"
+						scene._record_current_chat_session("行动", "叙事", action_display_text)
+						scene.currentNpc.currentChat += "行动：" + action_display_text + "\n"
 					scene._set_event_flow_lock(false)
 					return
 				if action_reply is String and action_reply.strip_edges() != "":
 					scene._set_event_flow_lock(true)
+					var narration_display_text = scene.process_display_string(action_reply)
 					scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【旁白】")
-					scene.changeTextTo(scene.response_label, scene.process_display_string(action_reply))
+					scene.changeTextTo(scene.response_label, narration_display_text)
+					scene.record_ai_reply("旁白", narration_display_text)
 					if scene._is_instant_gen_active():
 						scene.addLog("<即时生成触发：来源=行动输出>")
 						scene._bg_debug("instant trigger from action, site=" + str(scene.currentSiteName) + ", text_len=" + str(action_reply.length()))

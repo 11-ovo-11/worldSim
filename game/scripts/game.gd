@@ -23,6 +23,7 @@ const GameImageRuntimeUtils = preload("res://scripts/game_image_runtime_utils.gd
 const GameProactiveNpcUtils = preload("res://scripts/game_proactive_npc_utils.gd")
 const GameSaveLoadUtils = preload("res://scripts/game_save_load_utils.gd")
 const GameFlowRuntimeUtils = preload("res://scripts/game_flow_runtime_utils.gd")
+const GameDialogueHistoryUtils = preload("res://scripts/game_dialogue_history_utils.gd")
 
 @onready var input_text_edit = %InputTextEdit
 @onready var send_button = %SendButton
@@ -76,6 +77,9 @@ var pending_action_confirm: Dictionary = {}
 var important_event_memories: Array = []
 var current_chat_session_npc: String = ""
 var current_chat_session_records: Array = []
+# 仅供界面查看，不送入 AI 上下文，也不写入存档。
+var recent_ai_replies: Array = []
+var showing_dialogue_history: bool = false
 var pending_explore_target: String = ""
 var explore_route_retry_count: int = 0
 var bg_debug_enabled: bool = true
@@ -176,6 +180,8 @@ func _ready():
 	dialogue_button.connect("pressed", _on_dialogue_button_pressed)
 	save_button.connect("pressed", _on_save_button_pressed)
 	load_button.connect("pressed", _on_load_button_pressed)
+	%DialogueHistoryButton.pressed.connect(_on_dialogue_history_button_pressed)
+	clear_dialogue_history()
 	if input_text_edit != null:
 		input_text_edit.placeholder_text = "纯对话模式：请先选择NPC"
 	if %npcIcon is TextureRect:
@@ -202,6 +208,19 @@ func _ready():
 
 func is_dialogue_only_mode() -> bool:
 	return DIALOGUE_ONLY_MODE
+
+func _exit_tree() -> void:
+	recent_ai_replies.clear()
+	showing_dialogue_history = false
+
+func record_ai_reply(speaker: String, text: String) -> void:
+	GameDialogueHistoryUtils.record_reply(self, speaker, text)
+
+func clear_dialogue_history() -> void:
+	GameDialogueHistoryUtils.clear_history(self)
+
+func _on_dialogue_history_button_pressed() -> void:
+	GameDialogueHistoryUtils.toggle_view(self)
 
 func _configure_dialogue_only_mode() -> void:
 	if !DIALOGUE_ONLY_MODE:
@@ -964,6 +983,8 @@ func _restore_session_resources_from_save() -> void:
 	)
 
 func _handle_exit_cleanup() -> void:
+	# 游戏结束/退出时不保留仅供界面查看的最近回复。
+	clear_dialogue_history()
 	GameStorageUtils.handle_exit_cleanup(has_saved_in_session, SESSION_RESOURCE_DIR)
 
 func _save_image_png(image: Image, dir: String, file_name: String) -> void:

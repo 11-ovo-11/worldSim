@@ -64,7 +64,7 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		scene.chat_history_chars_spin.step = 100
 		scene.chat_history_chars_spin.value = scene.chat_history_max_chars
 		var session_chars_tip = Label.new()
-		session_chars_tip.text = "当前会话记忆字符数\n（当前NPC会话在内存中保留的总长度）"
+		session_chars_tip.text = "当前会话记忆字符数\n（当前NPC会话在内存中保留的上限，存档时保存；对话历史按钮独立保留最近三条完整AI回复）"
 		session_chars_tip.add_theme_font_size_override("font_size", 13)
 		scene.session_memory_chars_spin = SpinBox.new()
 		scene.session_memory_chars_spin.min_value = 800

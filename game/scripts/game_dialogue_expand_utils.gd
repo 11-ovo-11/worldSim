@@ -344,6 +344,7 @@ static func npc_reply(scene: Node, reply: String, model_tool_calls: Array = []) 
 	if scene.currentNpc == null or !is_instance_valid(scene.currentNpc) or str(scene.currentNpc.npcName).strip_edges() != active_npc_name:
 		return
 	scene._record_current_chat_session("对话回复", active_npc_name, display_reply)
+	scene.record_ai_reply(active_npc_name, display_reply)
 	scene.currentNpc.currentChat += active_npc_name + ":" + reply + "\n"
 	scene._remember_important_event("<对话>" + active_npc_name + "：" + display_reply, scene.currentSiteName, active_npc_name)
 	# 纯文本对话模式到此结束：回复只负责显示和记忆，不解析标签、工具或实体。

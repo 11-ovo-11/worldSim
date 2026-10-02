@@ -150,6 +150,7 @@ func _on_button_button_down() -> void:
 					start_mode = ""
 					$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 			elif normalized == "new":
+				scene.clear_dialogue_history()
 				start_mode = "new"
 				pending_character_brief = ""
 				player_role_display = ""
@@ -510,6 +511,7 @@ func _run_init_watchdog() -> void:
 		add_start_log("⏳ AI思考中，请稍候（已等待 " + str(secs) + " 秒）...")
 
 func _init_world(location:String):
+	scene.clear_dialogue_history()
 	scene.world_seed_input = location
 	_start_init_watchdog()
 	var prompts = [

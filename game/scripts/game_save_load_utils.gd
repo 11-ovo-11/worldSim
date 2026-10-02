@@ -101,6 +101,8 @@ static func load_game(scene: Node) -> bool:
 		return false
 	file.close()
 	var data = json.get_data()
+	# 切换存档时间线时清空本次运行的展示历史，避免混入读档前的回复。
+	scene.clear_dialogue_history()
 
 	scene.world_seed_input = data.get("world_seed_input", "")
 	scene.background = data.get("background", "")
