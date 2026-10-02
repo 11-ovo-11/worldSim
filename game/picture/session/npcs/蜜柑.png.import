@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cpjfp6i013iin"
-path="res://.godot/imported/蜜柑.png-4538dffbd23c63bdb1c48a66fdea5a66.ctex"
+path="res://.godot/imported/蜜柑.png-286bf6a35a0d4fd0fcaf22685b45a2b2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/蜜柑.png"
-dest_files=["res://.godot/imported/蜜柑.png-4538dffbd23c63bdb1c48a66fdea5a66.ctex"]
+source_file="res://picture/session/npcs/蜜柑.png"
+dest_files=["res://.godot/imported/蜜柑.png-286bf6a35a0d4fd0fcaf22685b45a2b2.ctex"]
 
 [params]
 

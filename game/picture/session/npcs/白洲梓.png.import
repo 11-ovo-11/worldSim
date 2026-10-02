@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bvp2gjpfwocku"
-path="res://.godot/imported/白洲梓.png-83318d601c7714bbcdc1b2daca5a6130.ctex"
+path="res://.godot/imported/白洲梓.png-61ac3a12bee9b5b310d014d9376053af.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://saves/slot_1/resources/npcs/白洲梓.png"
-dest_files=["res://.godot/imported/白洲梓.png-83318d601c7714bbcdc1b2daca5a6130.ctex"]
+source_file="res://picture/session/npcs/白洲梓.png"
+dest_files=["res://.godot/imported/白洲梓.png-61ac3a12bee9b5b310d014d9376053af.ctex"]
 
 [params]
 
