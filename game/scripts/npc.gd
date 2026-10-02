@@ -1,5 +1,6 @@
 extends Node
 class_name npc
+const GamePrompts = preload("res://scripts/game_prompts.gd")
 var npcName:String = ""
 var npcDescribe:String = ""
 var npcLog:String = ""
@@ -138,7 +139,12 @@ func build_base_prompt(include_rumors: bool = false) -> String:
 	})
 	# Keep the behavioral instructions and the latest conversation intact.
 	# Optional impressions/history have their own limits above.
-	return built
+	var style_prompt = GamePrompts.NARRATIVE_STYLE_GUIDE
+	if scene != null and scene.has_method("get_narrative_style_prompt"):
+		style_prompt = scene.get_narrative_style_prompt()
+	if style_prompt.strip_edges() == "":
+		return built
+	return style_prompt + "\n" + built
 
 # 重构后的函数
 func start_chat() -> void:

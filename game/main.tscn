@@ -66,6 +66,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("1_ycdy4")
 script = ExtResource("1_ig7tw")
+prompt_enable_narrative_style = false
 
 [node name="ColorRect" type="ColorRect" parent="." unique_id=1296139349]
 layout_mode = 1

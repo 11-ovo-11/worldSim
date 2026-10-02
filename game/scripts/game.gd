@@ -88,6 +88,10 @@ var action_narration_min_chars: int = 250
 @export_range(600, 6000, 100) var chat_history_max_chars: int = 3000
 @export_range(800, 8000, 100) var session_memory_max_chars: int = 5000
 @export_range(300, 4000, 100) var world_context_max_chars: int = 1200
+@export_group("AI提示词段落开关")
+@export var prompt_enable_narrative_style: bool = true
+@export var prompt_enable_initial_scene: bool = true
+@export var prompt_enable_action: bool = true
 var output_mode_debug_enabled: bool = false
 var output_length_button: Button
 var min_chars_dialog: AcceptDialog
@@ -135,8 +139,6 @@ const PASSIVE_ENERGY_RECOVERY_PER_HOUR: float = 4.0
 const PASSIVE_HP_RECOVERY_PER_HOUR: float = 1.2
 const ACTION_PROACTIVE_NPC_RATE: float = 0.2
 const NPC_ICON_DISPLAY_HEIGHT: int = 510
-
-var text_only_action_prompt:String = GamePrompts.TEXT_ONLY_ACTION_PROMPT
 
 var ai_busy: bool = false
 var text_update_seq: int = 0
@@ -1033,8 +1035,34 @@ func _sanitize_item_profile(item_name: String, raw_profile: Dictionary) -> Dicti
 func _ensure_item_profile_record_before_trade(item_name: String) -> void:
 	await GameItemProfileUtils.ensure_item_profile_record_before_trade(self, item_name)
 
+func _join_prompt_parts(parts: Array) -> String:
+	var usable: Array = []
+	for part in parts:
+		var text = str(part).strip_edges()
+		if text != "":
+			usable.append(text)
+	return "\n\n".join(usable)
+
+func get_narrative_style_prompt() -> String:
+	if not prompt_enable_narrative_style:
+		return ""
+	return GamePrompts.NARRATIVE_STYLE_GUIDE
+
+func get_text_only_action_prompt() -> String:
+	var parts: Array = []
+	if prompt_enable_narrative_style:
+		parts.append(GamePrompts.NARRATIVE_STYLE_GUIDE)
+	if prompt_enable_action:
+		parts.append(GamePrompts.TEXT_ONLY_ACTION_PROMPT)
+	return _join_prompt_parts(parts)
+
 func _build_initial_scene_prompt() -> String:
-	return GamePrompts.INITIAL_SCENE_PROMPT + "\n用户初始设定：" + world_seed_input + "\n世界设定：" + get_world_context_text()
+	var prompt_parts: Array = []
+	if prompt_enable_initial_scene:
+		prompt_parts.append(GamePrompts.INITIAL_SCENE_PROMPT)
+	prompt_parts.append("用户初始设定：" + world_seed_input)
+	prompt_parts.append("世界设定：" + get_world_context_text())
+	return _join_prompt_parts(prompt_parts)
 
 func ensure_item_profile_async(item_name: String) -> void:
 	await GameItemProfileUtils.ensure_item_profile_async(self, item_name)
