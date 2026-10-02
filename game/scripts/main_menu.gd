@@ -1,4 +1,5 @@
 extends CanvasLayer
+const GamePrompts = preload("res://scripts/game_prompts.gd")
 enum startState {chooseMode, getName, getEra, getLocation, validateSetup, persuadeSetup}
 var currentState = startState.chooseMode
 var last_conflict_reason: String = ""
@@ -404,19 +405,6 @@ func _input(event):
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ENTER and not $HBoxContainer/VBoxContainer/TextEdit/Button.disabled:
 			_on_button_button_down()
-var conflict_check_prompt = """你是"角色设定一致性审查器"。
-任务：判断"角色设定"与"初始地点"在同一世界观下是否自洽。
-审查维度：时代一致性、科技水平一致性、职业与环境可达性、常识物理可行性。
-原则：
-1) 保守判定：若缺少关键前提（如现实职业直接出现在太空地点却无科幻解释），判定不兼容。
-2) 不能脑补合理化，不得擅自补充"未来科技/穿越/魔法"来强行兼容。
-3) 若存在冲突，reason 要指出"缺什么前提"而非只说不行。
-4) 严禁以伦理、道德、价值观、内容敏感性为由判定不兼容——你只审查世界观自洽性，不做内容审核。
-5) 只要世界观自洽（时代/科技/地点/职业逻辑成立），无论角色设定的道德倾向如何，都应判定 compatible: true。
-
-严格只输出 JSON：
-{"compatible": true/false, "reason": "不超过40字中文"}
-不要输出任何额外文本。"""
 
 func _send_conflict_check(char_name: String, location: String) -> void:
 	var profile = player_role_profile if player_role_profile.strip_edges() != "" else char_name
@@ -425,7 +413,7 @@ func _send_conflict_check(char_name: String, location: String) -> void:
 		_handle_conflict_check_result(JSON.stringify({"compatible": false, "reason": local_reason}))
 		return
 	var messages = [
-		{"role": "system", "content": conflict_check_prompt},
+		{"role": "system", "content": GamePrompts.CONFLICT_CHECK_PROMPT},
 		{"role": "user", "content": "角色设定：" + profile + "\n时代背景：" + player_era + "\n初始地点：" + location}
 	]
 	var body_data = JSON.stringify([messages, null, "text"])
@@ -442,7 +430,7 @@ func _send_conflict_check(char_name: String, location: String) -> void:
 func _send_conflict_check_with_argument(argument: String) -> void:
 	var profile = player_role_profile if player_role_profile.strip_edges() != "" else playerName
 	var messages = [
-		{"role": "system", "content": conflict_check_prompt},
+		{"role": "system", "content": GamePrompts.CONFLICT_CHECK_PROMPT},
 		{"role": "user", "content": "角色设定：" + profile + "\n时代背景：" + player_era + "\n初始地点：" + playerLocation},
 		{"role": "assistant", "content": "{\"compatible\": false, \"reason\": \"" + last_conflict_reason.replace("\"", "'") + "\"}"},
 		{"role": "user", "content": "玩家补充说明：" + argument + "\n请重新判断兼容性。"}
@@ -505,22 +493,6 @@ func _handle_conflict_check_result(reply_text: String) -> void:
 		currentState = startState.persuadeSetup
 		$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 
-var world_init_prompt = """
-你是一个小说家，擅长世界观构建。你必须严格遵循用户输入，不得擅自替换题材。
-硬性约束：
-1) 若用户输入涉及现代日常题材（大学/高校/校园/都市/学生/职场等），必须保持对应的现代现实风格。
-2) 严格区分大学与中学——【大学】特征：大学生、宿舍楼、食堂、图书馆、社团、自习室、操场、学院、专业课；【中学/高中】特征：班级、班主任、高考压力、寄宿制。若用户提到"大学""高校""university""college"，绝对禁止生成高中/中学内容。
-3) 不得默认加入赛博朋克、机器人、义体、外星、末日等元素，除非用户明确提出。
-4) 你输出的世界观描述必须足够具体，能直接约束后续地点与NPC生成风格。
-
-现在请根据用户提供的信息生成一个精简、高效、可直接用于后续故事开发的世界观设定。请将世界观组织成以下三个明确的部分，确保语言凝练，富有启发性。
-世界概览：
-（用2-3句话精准描述这个世界的核心概念、基调与核心冲突。）
-人群状态：
-（描述社会中大多数普通人的生存状态、主流思想或共同特质。可回答：他们如何生活？信仰什么？恐惧什么？）
-环境与天气：
-（描述世界的物理环境和天气现象。回答：环境有何特点？天气是常态化的异常，还是循环往复的极端？它如何影响人们的生活？）
-"""
 func _start_init_watchdog() -> void:
 	_init_watchdog_active = true
 	_run_init_watchdog()
@@ -541,14 +513,14 @@ func _init_world(location:String):
 	scene.world_seed_input = location
 	_start_init_watchdog()
 	var prompts = [
-		{"role":"system","content": world_init_prompt},
+		{"role":"system","content": GamePrompts.WORLD_INIT_PROMPT},
 		{"role":"user","content": location}]
 	await scene.ask_ai(prompts, scene.aiMode.init_background)
 	add_start_log("世界初始化完成...")
 	await get_tree().create_timer(1).timeout
 	add_start_log("正在创建环境...")
 	var prompts_env = [
-		{"role":"system","content": env_promt},
+		{"role":"system","content": GamePrompts.ENVIRONMENT_INIT_PROMPT},
 		{"role":"user","content": scene.background}]
 	scene.ask_ai(prompts_env, scene.aiMode.init_env)
 	pass
@@ -579,84 +551,3 @@ func if_weather_failed(reason: String = ""):
 	add_start_log("⚠ " + rs)
 	await get_tree().create_timer(0.4).timeout
 	await if_weather_ok()
-
-var env_promt = """
-你是气象专家，请根据用户提供的世界观设定，生成适合该世界观的天气系统参数。这些参数将用于一个拟真的天气模拟系统。
-参数说明指南
-1. 参数范围设定
-wind_range: 根据世界的地理环境和气候特点设定风速范围(km/h)
-	平静内陆: [0, 20]
-	沿海地区: [0, 50]
-	多风高原: [5, 80]
-	风暴频发: [10, 120]
-
-temperature_range: 根据世界的气候带设定温度范围(摄氏度)
-	寒带: [-30, 10]
-	温带: [-10, 30]
-	亚热带: [0, 40]
-	热带: [15, 45]
-	极端气候: 根据具体情况调整
-
-humidity_range: 根据世界的降水模式和地理环境设定湿度范围(%)
-	干旱地区: [10, 60]
-	湿润地区: [40, 95]
-	热带雨林: [60, 100]
-
-2. 天气持续时间基准
-	天气持续时间应为正整数
-	根据世界的天气模式设定每种天气的典型持续时间：
-	稳定天气(如晴天): 较长持续时间(120-180)
-	过渡天气(如多云): 中等持续时间(60-120)
-	不稳定天气(如雷雨): 较短持续时间(20-60)
-
-3. 天气转换概率
-	根据世界的天气规律设定合理的转换概率：
-	常见天气序列(如晴→多云→阴→雨)设置较高概率
-	不合理转换(如雪→雷雨)设置较低或零概率
-	保持天气稳定性的概率通常较高
-	极端天气转换应有合理的过渡
-	转换概率总和为1
-	不要缺少某种天气类型
-
-4. 当前状态
-	根据世界的典型气候设定合理的初始天气状态。
-
-注意：
-	请基于以下方面分析世界观并推导参数：
-	地理环境(海洋、大陆、山地、沙漠等)
-	气候类型(热带、温带、寒带等)
-	季节变化模式
-	特殊气候现象
-	世界的魔法/科技水平(如果适用)
-	生态系统的特点
-	请确保所有参数范围合理且符合世界观逻辑
-	可用的天气只有"sunny", "cloudy", "overcast", "rain", "snow", "thunder"
-输出要求
-以JSON格式输出以下数据，仅回复json数据，不要输出任何其他内容：
-
-{
-	"wind_range": [min_wind, max_wind],
-	"temperature_range": [min_temp, max_temp],
-	"humidity_range": [min_humidity, max_humidity],
-	"current_weather": "weather_type",
-	"current_temperature": current_temp,
-	"current_humidity": current_humidity,
-	"current_wind_speed": current_wind,
-	"weather_duration_base": {
-		"sunny": duration,
-		"cloudy": duration,
-		"overcast": duration,
-		"rain": duration,
-		"snow": duration,
-		"thunder": duration
-	},
-	"weather_transition_probability": {
-		"sunny": {"sunny": prob, "cloudy": prob, "overcast": prob, "rain": prob, "snow": prob, "thunder": prob},
-		"cloudy": {"sunny": prob, "cloudy": prob, "overcast": prob, "rain": prob, "snow": prob, "thunder": prob},
-		"overcast": {"sunny": prob, "cloudy": prob, "overcast": prob, "rain": prob, "snow": prob, "thunder": prob},
-		"rain": {"sunny": prob, "cloudy": prob, "overcast": prob, "rain": prob, "snow": prob, "thunder": prob},
-		"snow": {"sunny": prob, "cloudy": prob, "overcast": prob, "rain": prob, "snow": prob, "thunder": prob},
-		"thunder": {"sunny": prob, "cloudy": prob, "overcast": prob, "rain": prob, "snow": prob, "thunder": prob}
-	}
-}
-"""

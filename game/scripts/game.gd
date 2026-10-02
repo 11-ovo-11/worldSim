@@ -1035,34 +1035,16 @@ func _sanitize_item_profile(item_name: String, raw_profile: Dictionary) -> Dicti
 func _ensure_item_profile_record_before_trade(item_name: String) -> void:
 	await GameItemProfileUtils.ensure_item_profile_record_before_trade(self, item_name)
 
-func _join_prompt_parts(parts: Array) -> String:
-	var usable: Array = []
-	for part in parts:
-		var text = str(part).strip_edges()
-		if text != "":
-			usable.append(text)
-	return "\n\n".join(usable)
-
 func get_narrative_style_prompt() -> String:
 	if not prompt_enable_narrative_style:
 		return ""
 	return GamePrompts.NARRATIVE_STYLE_GUIDE
 
 func get_text_only_action_prompt() -> String:
-	var parts: Array = []
-	if prompt_enable_narrative_style:
-		parts.append(GamePrompts.NARRATIVE_STYLE_GUIDE)
-	if prompt_enable_action:
-		parts.append(GamePrompts.TEXT_ONLY_ACTION_PROMPT)
-	return _join_prompt_parts(parts)
+	return GamePrompts.build_action_prompt(prompt_enable_narrative_style, prompt_enable_action)
 
 func _build_initial_scene_prompt() -> String:
-	var prompt_parts: Array = []
-	if prompt_enable_initial_scene:
-		prompt_parts.append(GamePrompts.INITIAL_SCENE_PROMPT)
-	prompt_parts.append("用户初始设定：" + world_seed_input)
-	prompt_parts.append("世界设定：" + get_world_context_text())
-	return _join_prompt_parts(prompt_parts)
+	return GamePrompts.build_initial_scene_prompt(prompt_enable_initial_scene, world_seed_input, get_world_context_text())
 
 func ensure_item_profile_async(item_name: String) -> void:
 	await GameItemProfileUtils.ensure_item_profile_async(self, item_name)
@@ -1200,7 +1182,7 @@ func _enqueue_important_event_refine(job: Dictionary) -> void:
 func _build_event_refine_prompt(raw_event_text: String) -> Array:
 	var user_text = "请将下面事件精练为1句话，保留关键人物、地点、结果，不要虚构，不要套话，不超过60字：\n" + raw_event_text.left(360)
 	return [
-		{"role": "system", "content": "你是事件记录助手。只输出精练后的事件一句话，不要解释。"},
+		{"role": "system", "content": GamePrompts.EVENT_REFINE_PROMPT},
 		{"role": "user", "content": user_text}
 	]
 
