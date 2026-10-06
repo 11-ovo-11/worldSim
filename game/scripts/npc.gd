@@ -17,7 +17,7 @@ const NPC_LOG_MAX_CHARS := 420
 const PLAYER_IDENTITY_MAX_CHARS := 120
 const BASE_PROMPT_MAX_CHARS := 3600
 # 在类顶部定义提示词模板
-var chat_prompt_template = GamePrompts.NPC_CHAT_PROMPT_TEMPLATE
+var dialogue_context_template = GamePrompts.NPC_DIALOGUE_CONTEXT_TEMPLATE
 
 func _clip_text(text: String, max_chars: int) -> String:
 	var src = str(text).strip_edges()
@@ -106,8 +106,11 @@ func build_base_prompt(include_rumors: bool = false) -> String:
 	var include_style = true
 	if scene != null and scene.has_method("get_narrative_style_prompt"):
 		include_style = scene.get_narrative_style_prompt().strip_edges() != ""
-	var prompt_head = GamePrompts.build_npc_dialogue_prompt(min_chars, include_style)
-	var built = chat_prompt_template.format({
+	var max_chars = 6000
+	if scene != null:
+		max_chars = max(200, int(scene.max_output_chars))
+	var prompt_head = GamePrompts.build_npc_dialogue_prompt(min_chars, max_chars, include_style)
+	var built = dialogue_context_template.format({
 		"chat_head": prompt_head,
 		"role_prompt": _clip_text(str(role_pormt), 360),
 		"background": scene.get_world_context_text(),

@@ -1,18 +1,47 @@
 extends RefCounted
 class_name GameAiUtils
 
+static func visible_output_length(text: String) -> int:
+	var plain = strip_angle_tags(str(text))
+	var count := 0
+	for ch in plain:
+		if ch not in [" ", "\t", "\r", "\n"]:
+			count += 1
+	return count
+
+static func _clip_plain_output(plain: String, limit: int) -> String:
+	var out := ""
+	var visible := 0
+	var boundary := -1
+	for ch in plain:
+		out += ch
+		if ch not in [" ", "\t", "\r", "\n"]:
+			visible += 1
+		for marker in ["。", "！", "？", "!", "?", "；", ";", "\n"]:
+			if ch == marker:
+				boundary = out.length()
+		if visible >= limit:
+			break
+	if boundary >= int(limit * 0.6):
+		return out.left(boundary).strip_edges()
+	return out.strip_edges()
+
 static func limit_output_chars(text: String, maximum: int) -> String:
 	var limit = max(0, maximum)
 	var src = str(text).strip_edges()
-	if limit <= 0 or src.length() <= limit:
+	if limit <= 0 or visible_output_length(src) <= limit:
 		return src
-	var cut = src.left(limit)
-	var boundary = -1
-	for marker in ["。", "！", "？", "!", "?", "；", ";", "\n"]:
-		boundary = max(boundary, cut.rfind(marker))
-	if boundary >= int(limit * 0.6):
-		cut = cut.left(boundary + 1)
-	return cut.strip_edges()
+	# 后端已经优先要求模型重写到预算内；这里仅作为最后兜底，
+	# 按可见字符计数并优先保留完整句子，避免空白或标签触发误裁剪。
+	var tags: Array[String] = []
+	var regex = RegEx.new()
+	if regex.compile("<[^>]*>") == OK:
+		for match_obj in regex.search_all(src):
+			tags.append(str(match_obj.get_string(0)))
+	var clipped = _clip_plain_output(strip_angle_tags(src), limit)
+	if tags.is_empty():
+		return clipped
+	return (clipped + "\n" + "\n".join(tags)).strip_edges()
 
 static func compact_prompt_content(text: String) -> String:
 	var src = str(text).replace("\r\n", "\n").replace("\r", "\n")

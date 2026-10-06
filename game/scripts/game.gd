@@ -247,6 +247,8 @@ func _load_user_settings() -> void:
 	dialogue_min_chars = clamp(int(config.get_value("output", "dialogue_min_chars", dialogue_min_chars)), 40, 2000)
 	action_narration_min_chars = clamp(int(config.get_value("output", "action_min_chars", action_narration_min_chars)), 40, 2000)
 	max_output_chars = clamp(int(config.get_value("output", "max_chars", max_output_chars)), 200, 6000)
+	dialogue_min_chars = min(dialogue_min_chars, max_output_chars)
+	action_narration_min_chars = min(action_narration_min_chars, max_output_chars)
 	ai_request_timeout_seconds = clamp(float(config.get_value("output", "timeout_seconds", ai_request_timeout_seconds)), 5.0, 120.0)
 	chat_history_max_lines = clamp(int(config.get_value("memory", "history_lines", chat_history_max_lines)), 4, 30)
 	chat_history_max_chars = clamp(int(config.get_value("memory", "history_chars", chat_history_max_chars)), 600, 6000)
@@ -301,6 +303,8 @@ func _on_min_chars_dialog_confirmed() -> void:
 	dialogue_min_chars = clamp(int(dialogue_min_chars_spin.value), 40, 2000)
 	action_narration_min_chars = clamp(int(action_min_chars_spin.value), 40, 2000)
 	max_output_chars = clamp(int(max_output_chars_spin.value), 200, 6000)
+	dialogue_min_chars = min(dialogue_min_chars, max_output_chars)
+	action_narration_min_chars = min(action_narration_min_chars, max_output_chars)
 	if timeout_seconds_spin != null:
 		ai_request_timeout_seconds = clamp(float(timeout_seconds_spin.value), 5.0, 120.0)
 	chat_history_max_lines = clamp(int(chat_history_lines_spin.value), 4, 30)
@@ -659,7 +663,22 @@ func _decorate_messages_for_output_mode(message: Array, askmode: aiMode) -> Arra
 	var min_chars = dialogue_min_chars if askmode == aiMode.chat else action_narration_min_chars
 	min_chars = min(max(160, min_chars), max_output_chars)
 	var constraint = "输出要求：本次回复正文的可见字符总数必须控制在" + str(min_chars) + "至" + str(max_output_chars) + "字以内（包含叙述、对白和标点，不包含系统消息）。这是硬性上限，不得超出。生成前先压缩组织内容，接近上限时立即用完整句子收束；禁止写到上限后再被截断，禁止用重复句凑字数。信息要完整、自然，保留当前行动、角色回应和立即结果。"
-	copied.push_front({"role":"system", "content": constraint})
+	# 统一文本模板已经包含长度约束；所有其他请求也合并到已有
+	# system 消息中，避免一个 NPC 请求产生多段 system 提示。
+	var first_system_index = -1
+	for i in range(copied.size()):
+		var row = copied[i]
+		if row is Dictionary and str(row.get("role", "")) == "system":
+			first_system_index = i
+			break
+	if first_system_index == -1:
+		copied.push_front({"role":"system", "content": constraint})
+	else:
+		var first_system = copied[first_system_index]
+		var first_content = str(first_system.get("content", ""))
+		if first_content.find("统一文本交互限制提示词") == -1:
+			first_system["content"] = constraint + "\n" + first_content
+			copied[first_system_index] = first_system
 	return copied
 
 func _compact_prompt_content(text: String) -> String:
@@ -1062,7 +1081,7 @@ func get_narrative_style_prompt() -> String:
 	return GamePrompts.NARRATIVE_STYLE_GUIDE
 
 func get_text_only_action_prompt() -> String:
-	return GamePrompts.build_action_prompt(prompt_enable_narrative_style, prompt_enable_action)
+	return GamePrompts.build_action_prompt(prompt_enable_narrative_style, prompt_enable_action, action_narration_min_chars, max_output_chars)
 
 func _build_initial_scene_prompt() -> String:
 	return GamePrompts.build_initial_scene_prompt(prompt_enable_initial_scene, world_seed_input, get_world_context_text())

@@ -587,7 +587,7 @@ def chat():
                     repaired.raise_for_status()
                     return repaired.json().get("response", "")
                 text, length_status = ensure_minimum_text(user_msg, text, minimum, repair_ollama, deadline, maximum)
-                print("文本生成完成")
+                print("文本生成完成", length_status)
                 return jsonify({"text": text, "length_status": length_status})
             except Exception as e:
                 return jsonify({"error": f"Ollama请求失败: {str(e)}"}), 500
@@ -609,7 +609,9 @@ def chat():
                     request_kwargs["response_format"] = {"type": output_format}
                 response = _chat_completion_with_fallback(**request_kwargs)
                 # 获取消息
-                message = response.choices[0].message
+                choice = response.choices[0]
+                message = choice.message
+                finish_reason = str(getattr(choice, "finish_reason", "") or "").strip().lower()
                 text = message.content if message.content is not None else ""
                 refusal_text = getattr(message, "refusal", "") or ""
                 if str(text).strip() == "" and str(refusal_text).strip() != "":
@@ -628,8 +630,11 @@ def chat():
                         **({"max_tokens": requested_max_tokens} if requested_max_tokens else {}),
                     )
                     return repaired.choices[0].message.content
-                text, length_status = ensure_minimum_text(user_msg, text, minimum, repair_openai, deadline, maximum)
-                print("ai:", {"text": text, "tool_calls": tool_calls})
+                text, length_status = ensure_minimum_text(
+                    user_msg, text, minimum, repair_openai, deadline, maximum,
+                    force_repair=finish_reason == "length",
+                )
+                print("ai:", {"text": text, "tool_calls": tool_calls, "length_status": length_status})
                 return jsonify({"text": text, "tool_calls": tool_calls, "length_status": length_status})
             except Exception as e:
                 print(f"DeepSeek API请求失败: {str(e)}")

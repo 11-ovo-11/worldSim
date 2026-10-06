@@ -33,7 +33,7 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		scene.action_min_chars_spin.step = 10
 		scene.action_min_chars_spin.value = scene.action_narration_min_chars
 		var max_output_tip = Label.new()
-		max_output_tip.text = "最大文本输出字数\n（单次对话/行动回复上限，按字符计算）"
+		max_output_tip.text = "最大文本输出字数\n（单次对话/行动回复的可见字符硬上限，后端会先重写收束）"
 		max_output_tip.add_theme_font_size_override("font_size", 13)
 		scene.max_output_chars_spin = SpinBox.new()
 		scene.max_output_chars_spin.min_value = 200
