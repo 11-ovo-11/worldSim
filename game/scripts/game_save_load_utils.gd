@@ -61,6 +61,7 @@ static func save_game(scene: Node) -> void:
 		"important_event_memories": scene.important_event_memories,
 		"current_chat_session_npc": scene.current_chat_session_npc,
 		"current_chat_session_records": scene.current_chat_session_records,
+		"interaction_history_records": scene.interaction_history_records,
 		"pending_entity_records": scene.pending_entity_records,
 		"dead_npc_names": scene.dead_npc_names,
 		"dialogue_min_chars": scene.dialogue_min_chars,
@@ -134,6 +135,9 @@ static func load_game(scene: Node) -> bool:
 	# silently replace the values chosen in the settings dialog.
 	if scene.has_method("_load_user_settings"):
 		scene._load_user_settings()
+	# 旧存档没有共享历史时，从原有 NPC 会话历史恢复；不使用三条展示缓存。
+	var loaded_interactions = data.get("interaction_history_records", scene.current_chat_session_records)
+	scene.restore_interaction_history(loaded_interactions if loaded_interactions is Array else [])
 
 	var p = data.get("player", {})
 	scene.playerName = p.get("name", scene.playerName)

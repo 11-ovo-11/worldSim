@@ -287,7 +287,7 @@ static func display_base64_image(scene: Node, base64_string: String, site_name: 
 		var npc_img = scene._base64_to_image(base64_string)
 		if npc_img != null:
 			var fitted_npc_img = scene._fit_image_to_target_slot(npc_img, "npc")
-			var npc_tex = ImageTexture.create_from_image(fitted_npc_img)
+			var npc_tex = GameImageUtils.create_portrait_texture(fitted_npc_img)
 			scene.npcImgs[npc_n] = npc_tex
 			scene._save_image_png(fitted_npc_img, scene.NPC_IMG_DIR, npc_n)
 			var npc_icon = scene.get_node("%npcIcon")

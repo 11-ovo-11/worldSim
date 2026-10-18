@@ -77,6 +77,8 @@ var pending_action_confirm: Dictionary = {}
 var important_event_memories: Array = []
 var current_chat_session_npc: String = ""
 var current_chat_session_records: Array = []
+# 非 NPC 对话状态的行动上下文，跨退出/切换 NPC 保留，独立于界面三条历史。
+var interaction_history_records: Array = []
 # 仅供界面查看，不送入 AI 上下文，也不写入存档。
 var recent_ai_replies: Array = []
 var showing_dialogue_history: bool = false
@@ -187,7 +189,8 @@ func _ready():
 	if %npcIcon is TextureRect:
 		var npc_icon_rect := %npcIcon as TextureRect
 		npc_icon_rect.custom_minimum_size = Vector2(0, NPC_ICON_DISPLAY_HEIGHT)
-		npc_icon_rect.stretch_mode = TextureRect.STRETCH_SCALE
+		npc_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		npc_icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		npc_icon_rect.mouse_filter = Control.MOUSE_FILTER_STOP
 		npc_icon_rect.gui_input.connect(_on_npc_icon_gui_input)
 	_prepare_session_resource_dir()
@@ -210,10 +213,12 @@ func is_dialogue_only_mode() -> bool:
 	return DIALOGUE_ONLY_MODE
 
 func _exit_tree() -> void:
+	interaction_history_records.clear()
 	recent_ai_replies.clear()
 	showing_dialogue_history = false
 
 func record_ai_reply(speaker: String, text: String) -> void:
+	_record_interaction_history("AI回复", speaker, text)
 	GameDialogueHistoryUtils.record_reply(self, speaker, text)
 
 func clear_dialogue_history() -> void:
@@ -354,6 +359,19 @@ func _compact_current_context_for_recovery() -> void:
 func _record_current_chat_session(kind: String, speaker: String, text: String) -> void:
 	GameInteractionRuntimeUtils.record_current_chat_session(self, kind, speaker, text)
 
+func _record_interaction_history(kind: String, speaker: String, text: String) -> void:
+	var body = text.strip_edges()
+	if body.is_empty():
+		return
+	interaction_history_records.append("[" + kind + "]" + speaker + "：" + body)
+	restore_interaction_history(interaction_history_records)
+
+func restore_interaction_history(records: Array) -> void:
+	interaction_history_records = GameMemoryUtils.bound_interaction_records(records, max(8, chat_history_max_lines), session_memory_max_chars)
+
+func get_interaction_history_memory() -> String:
+	return GameMemoryUtils.build_recent_context(interaction_history_records, chat_history_max_lines, min(chat_history_max_chars, session_memory_max_chars))
+
 func get_current_chat_session_memory(npc_name: String = "") -> String:
 	var target_name = npc_name.strip_edges()
 	if target_name != "" and target_name != current_chat_session_npc:
@@ -464,7 +482,9 @@ func _apply_npc_icon_texture(texture: Texture2D) -> void:
 	if !(npc_icon is TextureRect):
 		return
 	var icon := npc_icon as TextureRect
-	icon.texture = texture
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture = GameImageUtils.prepare_portrait_texture(texture)
 	icon.custom_minimum_size = GameImageUtils.get_scaled_size_for_fixed_height(texture, NPC_ICON_DISPLAY_HEIGHT)
 
 func _fit_image_to_target_slot(raw_image: Image, target_type: String) -> Image:
@@ -1010,7 +1030,7 @@ func _save_image_png(image: Image, dir: String, file_name: String) -> void:
 	GameStorageUtils.save_image_png(image, dir, file_name)
 
 func _load_image_png(dir: String, file_name: String) -> Texture2D:
-	return GameStorageUtils.load_image_png(dir, file_name)
+	return GameStorageUtils.load_image_png(dir, file_name, dir == NPC_IMG_DIR or dir == SAVE_NPC_IMG_DIR)
 
 func _restore_runtime_image_caches_from_disk() -> void:
 	siteImgs.clear()

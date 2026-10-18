@@ -1,6 +1,26 @@
 extends RefCounted
 class_name GameMemoryUtils
 
+static func bound_interaction_records(records: Array, max_records: int, max_chars: int) -> Array:
+	var picked: Array = []
+	var used := 0
+	for i in range(records.size() - 1, -1, -1):
+		if not records[i] is String:
+			continue
+		var row = str(records[i]).strip_edges()
+		if row.is_empty():
+			continue
+		var remaining = max(0, max_chars) - used - (1 if not picked.is_empty() else 0)
+		if remaining <= 0 or picked.size() >= max(1, max_records):
+			break
+		if row.length() > remaining:
+			if picked.is_empty():
+				picked.push_front(build_recent_context([row], 1, remaining))
+			break
+		picked.push_front(row)
+		used += row.length() + (1 if picked.size() > 1 else 0)
+	return picked
+
 static func build_recent_context(records: Array, max_records: int, max_chars: int) -> String:
 	var budget = max(0, max_chars)
 	if budget == 0 or records.is_empty():

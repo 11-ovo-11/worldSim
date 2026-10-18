@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>鳄鱼骑行日</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f0dc;color:#244f43;font-family:system-ui,sans-serif}main{width:min(1000px,96vw)}header{padding:24px 30px 0}small{font-size:12px;letter-spacing:4px;color:#768c72}h1{font-size:clamp(26px,4vw,42px);margin:10px 0}p{color:#7b8d76;margin:0}svg{width:100%;display:block}button{border:0;border-radius:25px;background:#285c48;color:#fff;padding:12px 24px;font:inherit;cursor:pointer;margin:0 30px 24px}.spin{animation:spin 1.2s linear infinite}.ground{animation:travel 3s linear infinite}.bob{animation:bob .6s ease-in-out infinite alternate}.tail{transform-origin:400px 295px;animation:wag 1.2s ease-in-out infinite alternate}.paused *{animation-play-state:paused!important}@keyframes spin{to{transform:rotate(360deg)}}@keyframes travel{to{transform:translateX(-300px)}}@keyframes bob{to{transform:translateY(-3px)}}@keyframes wag{to{transform:rotate(5deg)}}
+</style>
+<main><header><small>A LITTLE CROCODILE ADVENTURE</small><h1>今天，骑车去兜风。</h1><p>微风、绿野，还有一辆四轮自行车。</p></header>
+<svg id="scene" viewBox="0 0 960 580" role="img" aria-label="绿色鳄鱼骑着黄色四轮自行车，四个轮子旋转，双腿蹬踏，尾巴摆动">
+<defs>
+ <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#d3eff0"/><stop offset="1" stop-color="#f7f5dd"/></linearGradient>
+ <linearGradient id="skin" x2="1" y2="1"><stop stop-color="#87c879"/><stop offset="1" stop-color="#429b60"/></linearGradient>
+ <clipPath id="clip"><rect x="20" y="25" width="920" height="530" rx="32"/></clipPath>
+ <g id="wheel"><circle r="49" fill="#334e48"/><circle r="39" fill="#f8edcc" stroke="#a3b7a1" stroke-width="4"/><g stroke="#8da799" stroke-width="3"><path d="M-37 0H37M0-37V37M-26-26L26 26M-26 26L26-26"/></g><circle r="9" fill="#efb945" stroke="#334e48" stroke-width="4"/><path d="M-23-39A45 45 0 0 1 16-42" fill="none" stroke="#6e877b" stroke-width="4" stroke-linecap="round"/></g>
+ <g id="grass" stroke="#79a77a" stroke-width="3" stroke-linecap="round"><path d="M0 0l-4-9M0 0l6-13M130 17l-4-8M130 17l7-10M245-8l3-9"/><path d="M75 0h17M213 24h10" stroke="#dce6b9"/></g>
+</defs>
+<g clip-path="url(#clip)">
+ <rect x="20" y="25" width="920" height="530" fill="url(#sky)"/>
+ <circle cx="785" cy="119" r="42" fill="#ffda77"/>
+ <g fill="white" opacity=".8"><path d="M100 136a25 25 0 0 1 34-25 34 34 0 0 1 66 9 21 21 0 0 1 0 42h-92a14 14 0 0 1-8-26"/><path d="M617 90a19 19 0 0 1 28-18 27 27 0 0 1 50 11 16 16 0 0 1 0 32h-74a13 13 0 0 1-4-25"/></g>
+ <path d="M0 353Q144 254 300 339T610 330T980 308V555H0" fill="#bddba5"/>
+ <path d="M0 399Q190 319 370 383T730 369T980 383V555H0" fill="#99c78c"/>
+ <path d="M0 444Q470 420 980 440V508H0" fill="#e9d7a7"/>
+ <path d="M0 510Q460 476 980 508V580H0" fill="#c2d69c"/>
+ <g class="ground"><use href="#grass" x="0" y="525"/><use href="#grass" x="300" y="525"/><use href="#grass" x="600" y="525"/><use href="#grass" x="900" y="525"/><g stroke="#c8b98e" stroke-width="4" stroke-linecap="round"><path d="M30 463h24M190 482h16M330 463h24M490 482h16M630 463h24M790 482h16M930 463h24M1090 482h16"/></g></g>
+ <ellipse cx="480" cy="470" rx="225" ry="15" fill="#5c785a" opacity=".18"/>
+ <!-- 远侧的两个轮子 -->
+ <g transform="translate(393 386) scale(.88)"><g class="spin"><use href="#wheel"/></g></g>
+ <g transform="translate(657 386) scale(.88)"><g class="spin"><use href="#wheel"/></g></g>
+ <g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M393 386L448 310L510 386H393L548 313H627L657 386" stroke="#bc8d37" stroke-width="9"/><path d="M335 424L393 386M599 424L657 386M390 348L448 310M452 424L510 386" stroke="#6f7961" stroke-width="8"/></g>
+ <!-- 近侧的两个轮子 -->
+ <g transform="translate(335 424)"><g class="spin"><use href="#wheel"/></g></g>
+ <g transform="translate(599 424)"><g class="spin"><use href="#wheel"/></g></g>
+ <g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M335 424L390 348L452 424H335L490 351H569L452 424M569 351L599 424" stroke="#8e713b" stroke-width="13"/><path d="M335 424L390 348L452 424H335L490 351H569L452 424M569 351L599 424" stroke="#f5bf45" stroke-width="8"/><path d="M390 348L380 315M569 351L551 287L579 264H607" stroke="#416356" stroke-width="8"/><path d="M364 315H404M592 264H616" stroke="#304f43" stroke-width="12"/></g>
+ <path d="M447 412L336 415Q324 423 337 433L451 438" fill="none" stroke="#71826a" stroke-width="3"/>
+ <g class="bob" stroke="#316c48" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <path class="tail" d="M415 277Q345 305 282 270Q247 250 231 223Q239 298 324 320Q373 333 418 308" fill="url(#skin)"/>
+  <path d="M391 279L380 256L404 261L403 237L426 247L437 224L455 240" fill="#398752"/>
+  <path d="M392 293Q378 252 431 230L470 208Q504 197 520 227Q534 253 506 277L456 316Q412 334 392 293" fill="url(#skin)"/>
+  <path d="M441 298Q483 280 501 237L516 245Q501 290 455 317" fill="#ccdd95" stroke="none"/>
+  <path d="M494 244Q490 186 518 172Q540 158 562 185L638 190Q662 191 663 209Q663 233 635 234H540L521 257" fill="url(#skin)"/>
+  <path d="M544 219Q598 232 650 217" fill="none"/>
+  <path d="M579 226l7 10 7-10M611 226l6 9 7-11" fill="#fff8d8" stroke-width="2"/>
+  <ellipse cx="545" cy="180" rx="16" ry="22" fill="#89c77b"/>
+  <ellipse cx="548" cy="179" rx="9" ry="13" fill="#fffced" stroke="none"/>
+  <ellipse cx="552" cy="181" rx="4" ry="7" fill="#284c3c" stroke="none"/>
+  <circle cx="553" cy="178" r="1.5" fill="white" stroke="none"/>
+  <circle cx="645" cy="202" r="3" fill="#316c48" stroke="none"/>
+  <path d="M498 249Q526 279 566 264L602 263" fill="none" stroke-width="18"/>
+  <path d="M498 249Q526 279 566 264L602 263" fill="none" stroke="#80bd70" stroke-width="11"/>
+  <path d="M597 261l2 8M605 260l2 8" fill="none" stroke-width="2"/>
+  <g fill="#398b54" stroke="none"><ellipse cx="410" cy="279" rx="5" ry="8"/><ellipse cx="429" cy="257" rx="4" ry="6"/><ellipse cx="457" cy="240" rx="4" ry="7"/></g>
+  <path d="M501 235Q478 222 450 234L418 222L434 247Q470 253 504 242" fill="#ed845b" stroke="#b65d43" stroke-width="2"><animate attributeName="d" dur="1.2s" repeatCount="indefinite" values="M501 235Q478 222 450 234L418 222L434 247Q470 253 504 242;M501 235Q478 251 450 241L418 249L435 228Q470 224 504 242;M501 235Q478 222 450 234L418 222L434 247Q470 253 504 242"/></path>
+  <path d="M501 233Q513 244 531 243L526 254Q507 251 495 242Z" fill="#f29867" stroke="#b65d43" stroke-width="2"/>
+ </g>
+ <!-- 两条腿和踏板保持同一周期 -->
+ <path fill="none" stroke="#377d50" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="d" dur="1.2s" repeatCount="indefinite" values="M430 306L471 362L428 424;M430 306L477 350L452 400;M430 306L508 369L476 424;M430 306L486 385L452 448;M430 306L471 362L428 424"/></path>
+ <path fill="none" stroke="#80bd70" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="d" dur="1.2s" repeatCount="indefinite" values="M420 306L496 369L476 424;M420 306L480 388L452 448;M420 306L454 368L428 424;M420 306L468 346L452 400;M420 306L496 369L476 424"/></path>
+ <g transform="translate(452 424)"><circle r="17" fill="#f5e7bf" stroke="#6f8066" stroke-width="4"/><g class="spin" stroke="#3e5b49" stroke-width="5" stroke-linecap="round"><path d="M-24 0H24"/><circle cx="-24" r="5" fill="#efa744"/><circle cx="24" r="5" fill="#efa744"/></g><circle r="5" fill="#3e5b49"/></g>
+</g></svg>
+<button id="toggle" type="button" aria-pressed="false">暂停兜风</button></main>
+<script>
+const scene=document.getElementById('scene'),button=document.getElementById('toggle');
+let paused=false;
+button.addEventListener('click',()=>{paused=!paused;scene.classList.toggle('paused',paused);if(paused)scene.pauseAnimations();else scene.unpauseAnimations();button.textContent=paused?'继续兜风':'暂停兜风';button.setAttribute('aria-pressed',String(paused));});
+</script>
+</html>

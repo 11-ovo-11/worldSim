@@ -196,6 +196,26 @@ static func trigger_continue_flow(scene: Node) -> void:
 		return
 	await scene._submit_action_input(build_continue_action_text(), true)
 
+static func build_action_messages(scene: Node, user_input: String) -> Array:
+	# 保持 NPC 对话内行动的原有请求结构；外部行动只补上共享历史。
+	var focus_npc_name = ""
+	var focus_npc_desc = ""
+	if scene.currentState == scene.worldState.chat and is_instance_valid(scene.currentNpc):
+		focus_npc_name = str(scene.currentNpc.npcName)
+		focus_npc_desc = str(scene.currentNpc.npcDescribe)
+	var action_context = scene._build_shared_interaction_context(user_input, focus_npc_name, focus_npc_desc)
+	if scene.is_dialogue_only_mode():
+		var recent_chat = scene.get_current_chat_session_memory(focus_npc_name) if focus_npc_name != "" else scene.get_interaction_history_memory()
+		action_context = "本轮交互类型：行动事实（玩家输入已发生）\n世界设定：" + scene.get_world_context_text() + "\n当前地点：" + scene._clip_prompt_text(scene.currentSiteName, 80)
+		if focus_npc_name != "":
+			action_context += "\n当前NPC：" + scene._clip_prompt_text(focus_npc_name + "；" + focus_npc_desc, 360)
+		if recent_chat != "":
+			action_context += "\n近期对话与事件（仅用于确定承接状态，不改变行动事实）：\n" + recent_chat
+	return [
+		{"role": "system", "content": scene.get_text_only_action_prompt() + "\n" + action_context},
+		{"role": "user", "content": "【行动事实｜已发生】\n" + user_input + "\n【续写要求】从上述事实发生之后直接续写下一步结果；不要把这段内容写成台词或对NPC的请求。"},
+	]
+
 static func submit_action_input(scene: Node, raw_input: String, bypass_lock_check: bool = false) -> void:
 	var user_input = _normalize_single_line_input(raw_input)
 	if user_input == "" or scene.ai_busy:
@@ -209,29 +229,11 @@ static func submit_action_input(scene: Node, raw_input: String, bypass_lock_chec
 	scene.addLog("【行动】" + user_input)
 	scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【行动】")
 	scene.changeTextTo(scene.response_label, user_input)
-	var focus_npc_name = ""
-	var focus_npc_desc = ""
-	var explicitly_target_npc = _is_action_explicitly_targeting_current_npc(scene, user_input)
-	# In a chat, the action bar is the same scene with a different input mode.
-	# Carry the active NPC context by default so action replies retain the
-	# character voice and immediate relationship state of the dialogue path.
-	if scene.currentState == scene.worldState.chat and scene.currentNpc != null:
-		focus_npc_name = str(scene.currentNpc.npcName)
-		focus_npc_desc = str(scene.currentNpc.npcDescribe)
-	if focus_npc_name != "":
+	scene._record_interaction_history("行动输入", scene.playerName, user_input)
+	if scene.currentState == scene.worldState.chat and is_instance_valid(scene.currentNpc):
 		scene._record_current_chat_session("行动输入", scene.playerName, user_input)
 		scene.currentNpc.currentChat += "行动事实（已发生）：「" + user_input + "」\n"
-	var action_context = scene._build_shared_interaction_context(user_input, focus_npc_name, focus_npc_desc)
-	if scene.is_dialogue_only_mode():
-		var recent_chat = scene.get_current_chat_session_memory(focus_npc_name)
-		action_context = "本轮交互类型：行动事实（玩家输入已发生）\n世界设定：" + scene.get_world_context_text() + "\n当前地点：" + scene._clip_prompt_text(scene.currentSiteName, 80)
-		if focus_npc_name != "":
-			action_context += "\n当前NPC：" + scene._clip_prompt_text(focus_npc_name + "；" + focus_npc_desc, 360)
-		if recent_chat != "":
-			action_context += "\n近期对话与事件（仅用于确定承接状态，不改变行动事实）：\n" + recent_chat
-	var aprompts = [
-		{"role":"system","content": scene.get_text_only_action_prompt() + "\n" + action_context},
-		{"role":"user","content": "【行动事实｜已发生】\n" + user_input + "\n【续写要求】从上述事实发生之后直接续写下一步结果；不要把这段内容写成台词或对NPC的请求。"}]
+	var aprompts = build_action_messages(scene, user_input)
 	await scene.ask_ai(aprompts, scene.aiMode.action)
 
 static func on_dialogue_button_pressed(scene: Node) -> void:
@@ -261,6 +263,7 @@ static func submit_dialogue_input(scene: Node, raw_input: String, allow_continue
 	scene.dialogue_input.text = ""
 	scene.changeTextTo(scene.get_node("%speakerNameLabel"), scene.playerName)
 	scene.changeTextTo(scene.response_label, user_input)
+	scene._record_interaction_history(record_kind, scene.playerName, user_input)
 	scene._record_current_chat_session(record_kind, scene.playerName, user_input)
 	var dialogue_context = ""
 	if !scene.is_dialogue_only_mode():

@@ -79,17 +79,19 @@ static func find_image_path(dir_path: String, file_name: String) -> String:
 			return candidate
 	return ""
 
-static func load_image_texture(dir_path: String, file_name: String) -> Texture2D:
+static func load_image_texture(dir_path: String, file_name: String, portrait: bool = false) -> Texture2D:
 	var path = find_image_path(dir_path, file_name)
 	if path == "":
 		return null
 	var img = Image.load_from_file(path)
 	if img != null:
+		if portrait:
+			return GameImageUtils.create_portrait_texture(img)
 		return ImageTexture.create_from_image(img)
 	return null
 
-static func load_image_png(dir_path: String, file_name: String) -> Texture2D:
-	return load_image_texture(dir_path, file_name)
+static func load_image_png(dir_path: String, file_name: String, portrait: bool = false) -> Texture2D:
+	return load_image_texture(dir_path, file_name, portrait)
 
 static func save_json_dict(dir_path: String, file_name: String, data: Dictionary, indent: String = "") -> void:
 	ensure_dir(dir_path)

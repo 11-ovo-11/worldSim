@@ -1,6 +1,42 @@
 extends RefCounted
 class_name GameImageUtils
 
+const PORTRAIT_TEXTURE_READY := &"worldsim_portrait_ready"
+const PORTRAIT_TEXTURE_CACHE := &"worldsim_portrait_display_texture"
+
+static func create_portrait_texture(raw_image: Image) -> ImageTexture:
+	if raw_image == null or raw_image.is_empty():
+		return null
+	# 保留原图尺寸和第零层像素，只为显示副本生成缩小采样层。
+	var display_image: Image = raw_image.duplicate()
+	if display_image.is_compressed() and display_image.decompress() != OK:
+		return null
+	if not display_image.has_mipmaps():
+		display_image.generate_mipmaps()
+	var texture = ImageTexture.create_from_image(display_image)
+	texture.set_meta(PORTRAIT_TEXTURE_READY, true)
+	return texture
+
+static func prepare_portrait_texture(texture: Texture2D) -> Texture2D:
+	if texture == null or bool(texture.get_meta(PORTRAIT_TEXTURE_READY, false)):
+		return texture
+	if texture.has_meta(PORTRAIT_TEXTURE_CACHE):
+		var cached = texture.get_meta(PORTRAIT_TEXTURE_CACHE)
+		if cached is Texture2D:
+			return cached
+	# 兼容直接导入的纹理与旧缓存；重复切换 NPC 时复用显示纹理。
+	var image = texture.get_image()
+	if image == null or image.is_empty():
+		return texture
+	if image.has_mipmaps():
+		texture.set_meta(PORTRAIT_TEXTURE_READY, true)
+		return texture
+	var prepared = create_portrait_texture(image)
+	if prepared == null:
+		return texture
+	texture.set_meta(PORTRAIT_TEXTURE_CACHE, prepared)
+	return prepared
+
 static func resolve_image_slot_size(target_type: String, npc_size: Vector2, npc_min_size: Vector2, bg_size: Vector2, bg_min_size: Vector2) -> Vector2i:
 	if target_type == "npc":
 		var nw = int(max(npc_size.x, npc_min_size.x))
