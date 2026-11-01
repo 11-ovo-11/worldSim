@@ -93,6 +93,22 @@ static func load_image_texture(dir_path: String, file_name: String, portrait: bo
 static func load_image_png(dir_path: String, file_name: String, portrait: bool = false) -> Texture2D:
 	return load_image_texture(dir_path, file_name, portrait)
 
+static func persist_generated_background(image: Image, site: String, save_file: String, scene_dir: String, active_fingerprint: String) -> bool:
+	# Never overwrite resources belonging to another/newer save or a new game.
+	if active_fingerprint.is_empty() or not FileAccess.file_exists(save_file):
+		return false
+	if FileAccess.get_sha256(save_file) != active_fingerprint:
+		return false
+	var file = FileAccess.open(save_file, FileAccess.READ)
+	if file == null:
+		return false
+	var data = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not data is Dictionary or not data.get("sites", {}) is Dictionary or not data["sites"].has(site):
+		return false
+	ensure_dir(scene_dir)
+	return image.save_png(scene_dir.path_join(sanitize_filename(site) + ".png")) == OK
+
 static func save_json_dict(dir_path: String, file_name: String, data: Dictionary, indent: String = "") -> void:
 	ensure_dir(dir_path)
 	var path = dir_path + sanitize_filename(file_name) + ".json"

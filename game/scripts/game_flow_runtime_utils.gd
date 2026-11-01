@@ -548,12 +548,6 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 					scene.addLog("<已忽略过期对话响应：来源=" + req_npc + "，当前=" + active_npc + ">")
 					return
 				await scene.npc_reply(chat_text, model_tool_calls)
-				if scene._is_instant_gen_active():
-					scene.addLog("<即时生成触发：来源=对话输出>")
-					scene._bg_debug("instant trigger from chat, site=" + str(scene.currentSiteName) + ", text_len=" + str(chat_text.length()))
-					GameImageRuntimeUtils.trigger_instant_scene_image(scene, chat_text)
-				else:
-					scene._bg_debug("instant skipped from chat (mode disabled)")
 			scene.aiMode.action:
 				var raw_action_text = data.get("text", "")
 				if !(raw_action_text is String):
@@ -581,12 +575,6 @@ static func on_request_completed(scene: Node, result, response_code, _header, bo
 					scene.changeTextTo(scene.get_node("%speakerNameLabel"), "【旁白】")
 					scene.changeTextTo(scene.response_label, narration_display_text)
 					scene.record_ai_reply("旁白", narration_display_text)
-					if scene._is_instant_gen_active():
-						scene.addLog("<即时生成触发：来源=行动输出>")
-						scene._bg_debug("instant trigger from action, site=" + str(scene.currentSiteName) + ", text_len=" + str(action_reply.length()))
-						GameImageRuntimeUtils.trigger_instant_scene_image(scene, action_reply)
-					else:
-						scene._bg_debug("instant skipped from action (mode disabled)")
 					var tool_tags = scene.get_content_in_angle_brackets(action_reply)
 					var tool_hint = build_tool_call_hint_text(model_tool_calls)
 					if tool_hint != "":

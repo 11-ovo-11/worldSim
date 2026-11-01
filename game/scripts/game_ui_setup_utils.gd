@@ -16,8 +16,9 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		if scene.continue_button != null and !scene.continue_button.pressed.is_connected(scene._on_continue_button_pressed):
 			scene.continue_button.pressed.connect(scene._on_continue_button_pressed)
 		scene.min_chars_dialog = AcceptDialog.new()
-		scene.min_chars_dialog.title = "输出设置"
+		scene.min_chars_dialog.title = "对话与图片设置"
 		var box = VBoxContainer.new()
+		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var dialogue_tip = Label.new()
 		dialogue_tip.text = "对话最小字数"
 		scene.dialogue_min_chars_spin = SpinBox.new()
@@ -95,7 +96,27 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		box.add_child(scene.session_memory_chars_spin)
 		box.add_child(world_chars_tip)
 		box.add_child(scene.world_context_chars_spin)
-		scene.min_chars_dialog.add_child(box)
+		scene.instant_background_checkbox = CheckButton.new()
+		scene.instant_background_checkbox.text = "即时生成场景背景"
+		scene.instant_background_checkbox.button_pressed = scene.instant_gen_mode
+		box.add_child(scene.instant_background_checkbox)
+		var image_hint = Label.new()
+		image_hint.text = "AI回复后交给本机Codex命令行生图并替换背景，不阻塞输入。\n需Codex登录和生图权限，耗时可能数十秒；关闭后保留最后一张背景。"
+		image_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		image_hint.add_theme_font_size_override("font_size", 13)
+		box.add_child(image_hint)
+		scene.instant_background_status_label = Label.new()
+		scene.instant_background_status_label.text = "已开启：AI回复后生成背景" if scene.instant_gen_mode else "已关闭即时生图"
+		scene.instant_background_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		scene.instant_background_status_label.add_theme_font_size_override("font_size", 13)
+		box.add_child(scene.instant_background_status_label)
+		# Keep long help/status text scrollable instead of stretching the dialog
+		# past the window (autowrap labels need a bounded initial width).
+		var settings_scroll = ScrollContainer.new()
+		settings_scroll.custom_minimum_size = Vector2(560, 560)
+		settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		settings_scroll.add_child(box)
+		scene.min_chars_dialog.add_child(settings_scroll)
 		scene.add_child(scene.min_chars_dialog)
 		scene.min_chars_dialog.confirmed.connect(scene._on_min_chars_dialog_confirmed)
 	var _img_mode_panel = scene.get_node_or_null("%ImgModePanel")
@@ -103,27 +124,5 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		_img_mode_panel = scene.get_node_or_null("mainContainer/HBoxContainer/VBoxContainer/backgroundImg/ImgModePanel")
 	if _img_mode_panel == null:
 		return
-	var _btn_instant = scene._get_instant_gen_button()
-	if _btn_instant == null:
-		return
-	_btn_instant.toggle_mode = true
-	var _apply_img_mode := func(is_instant: bool) -> void:
-		var last_mode = bool(scene.get_meta("last_img_mode", bool(scene.instant_gen_mode)))
-		var mode_changed = is_instant != last_mode
-		scene.instant_gen_mode = is_instant
-		_btn_instant.set_pressed_no_signal(is_instant)
-		scene._bg_debug("img mode toggled instant=" + str(is_instant))
-		if mode_changed:
-			scene.addLog("<图片模式切换：" + ("即时生成" if is_instant else "只生成场景") + ">")
-			if is_instant:
-				scene.addLog("<即时生成已开启：将在每次对话/行动输出后尝试更新背景>")
-		scene.set_meta("last_img_mode", is_instant)
-		if !is_instant:
-			GameImageRuntimeUtils.apply_scene_background_for_current_site(scene)
-	var _wired = bool(scene.get_meta("img_mode_signal_wired", false))
-	if !_wired or !_btn_instant.toggled.is_connected(_apply_img_mode):
-		_btn_instant.toggled.connect(_apply_img_mode)
-		scene.set_meta("img_mode_signal_wired", true)
-	if !scene.has_meta("last_img_mode"):
-		scene.set_meta("last_img_mode", bool(scene.instant_gen_mode))
-	_apply_img_mode.call(bool(_btn_instant.button_pressed or scene.instant_gen_mode))
+	# The binary setting above is the only control; hide the old image button.
+	_img_mode_panel.visible = false

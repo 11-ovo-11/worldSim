@@ -16,7 +16,8 @@ Godot 不直接请求 DeepSeek：密钥只保存在 Python 侧的 `key.py` / `im
 | 文件 | 职责 |
 | --- | --- |
 | `chat.py` | 本地后端：`/chat`（文本+工具调用）、`/generate_image`、`/health` 等 |
-| `key.py` / `image_key.py` | 密钥，只有 Python 读取 |
+| `key.py` / `image_key.py` | 旧文本/图片密钥，只有 Python 读取 |
+| `instant_image_service.py` / `codex_image_service.py` | 即时场景图：默认 Codex CLI 内置生图，显式选择时才用公开图片 API |
 | `game/scripts/deepseek_service_manager.gd` | 启动器：确保 5000 端口上有“当前版本”的桥接在跑 |
 | `game/scripts/game.gd` | `chat_url = http://127.0.0.1:5000/chat`，所有对话/行动请求发往这里 |
 | `game/scripts/main_menu.gd` | 启动自检：调用 `/check_chat_service`、`/check_image_service` |
@@ -39,8 +40,8 @@ Godot 不直接请求 DeepSeek：密钥只保存在 Python 侧的 `key.py` / `im
 {
   "status": "healthy",
   "chat_mode": "openai",
-  "protocol": 3,
-  "version": "3-network-debug",
+  "protocol": 5,
+  "version": "5-instant-codex-backgrounds",
   "pid": 12345,
   "ppid": 6789,
   "api_base_url": "https://api.deepseek.com",
@@ -49,7 +50,7 @@ Godot 不直接请求 DeepSeek：密钥只保存在 Python 侧的 `key.py` / `im
 }
 ```
 
-- `protocol`：启动器要求 `>= REQUIRED_BRIDGE_PROTOCOL`（当前 3）。版本落后 = 残留进程，会被结束。
+- `protocol`：启动器要求 `>= REQUIRED_BRIDGE_PROTOCOL`（当前 5）。版本落后 = 残留进程，会被结束。
 - `pid`：真正运行 `chat.py` 的解释器进程。
 - `ppid`：Windows 上 `.venv/Scripts/python.exe` 只是启动器，它会派生出真正的解释器；
   Godot 用 `create_process` 拿到的是启动器的 pid，所以两个都要报。

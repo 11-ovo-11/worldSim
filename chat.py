@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from ai_output_policy import ensure_minimum_text
+from instant_image_service import generate_background, configuration_status
 import requests
 import base64
 import time
@@ -61,8 +62,8 @@ OPENAI_ATTEMPTS_PER_ENDPOINT = max(1, int(os.getenv("WORLD_SIM_PROVIDER_ATTEMPTS
 # 应答的是不是当前这份服务：协议号太低 = 旧版残留进程，pid 用于结束残留进程，
 # 避免多个 chat.py 同时占用同一端口（Windows 允许它们同时监听）。
 # 修改这里时必须同步修改 GDScript 里的 REQUIRED_BRIDGE_PROTOCOL。
-BRIDGE_PROTOCOL = 3
-BRIDGE_VERSION = "3-network-debug"
+BRIDGE_PROTOCOL = 5
+BRIDGE_VERSION = "5-instant-codex-backgrounds"
 # =========================================================
 
 DEEP_SEEK_KEY = key
@@ -649,6 +650,19 @@ def chat():
         case _:
             return jsonify({"error": f"不支持的聊天模式: {chat_mode}"}), 400
 
+@app.route("/generate_instant_background", methods=["POST"])
+def generate_instant_background():
+    payload, status = generate_background(request.get_json(silent=True))
+    # Do not log prompts, images, or API credentials.
+    print("[INSTANT_IMAGE]", status, {k: payload.get(k) for k in ("model", "elapsed_ms", "cached", "provider_request_id", "error")})
+    return jsonify(payload), status
+
+
+@app.route("/instant_image_status", methods=["GET"])
+def instant_image_status():
+    return jsonify(configuration_status())
+
+
 @app.route("/generate_image", methods=["POST"])
 def generate_image():
 
@@ -918,7 +932,9 @@ def index():
             "/check_chat_service",
             "/service_status",
             "/chat",
-            "/generate_image"
+            "/generate_image",
+            "/generate_instant_background",
+            "/instant_image_status"
         ]
     })
 

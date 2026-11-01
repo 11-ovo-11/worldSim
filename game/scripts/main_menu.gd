@@ -45,7 +45,8 @@ func _ready() -> void:
 
 # 检查图片生成服务状态
 func check_image_service():
-	var url = "http://127.0.0.1:5000/check_image_service"
+	# Free local configuration check; do not pay for a startup test image.
+	var url = "http://127.0.0.1:5000/instant_image_status"
 	var error = start_http_request.request(url)
 	if error != OK:
 		add_start_log("图片服务检查请求失败: "+ str(error))
@@ -150,6 +151,7 @@ func _on_button_button_down() -> void:
 					start_mode = ""
 					$HBoxContainer/VBoxContainer/TextEdit/Button.disabled = false
 			elif normalized == "new":
+				scene.reset_instant_background()
 				scene.interaction_history_records.clear()
 				scene.clear_dialogue_history()
 				start_mode = "new"
@@ -512,6 +514,7 @@ func _run_init_watchdog() -> void:
 		add_start_log("⏳ AI思考中，请稍候（已等待 " + str(secs) + " 秒）...")
 
 func _init_world(location:String):
+	scene.reset_instant_background()
 	scene.interaction_history_records.clear()
 	scene.clear_dialogue_history()
 	scene.world_seed_input = location

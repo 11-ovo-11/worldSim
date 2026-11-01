@@ -10,3 +10,4 @@ wheels/
 .venv
 key.py
 logs/network/
+logs/instant_images/

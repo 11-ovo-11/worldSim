@@ -73,6 +73,7 @@ static func save_game(scene: Node) -> void:
 		file.store_string(JSON.stringify(save_data, "\t"))
 		file.close()
 		scene.has_saved_in_session = true
+		scene.active_save_fingerprint = FileAccess.get_sha256(scene.SAVE_FILE)
 		scene.addLog("<游戏已保存>")
 	else:
 		scene.addLog("<保存失败：" + str(FileAccess.get_open_error()) + ">")
@@ -102,6 +103,7 @@ static func load_game(scene: Node) -> bool:
 		return false
 	file.close()
 	var data = json.get_data()
+	scene.reset_instant_background()
 	# 切换存档时间线时清空本次运行的展示历史，避免混入读档前的回复。
 	scene.clear_dialogue_history()
 
@@ -232,5 +234,6 @@ static func load_game(scene: Node) -> bool:
 		scene.changeTextTo(scene.get_node("%siteName"), "未定位")
 
 	scene.has_saved_in_session = false
+	scene.active_save_fingerprint = FileAccess.get_sha256(scene.SAVE_FILE)
 	scene.addLog("<读档完成>")
 	return true

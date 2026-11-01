@@ -24,6 +24,7 @@ const GameProactiveNpcUtils = preload("res://scripts/game_proactive_npc_utils.gd
 const GameSaveLoadUtils = preload("res://scripts/game_save_load_utils.gd")
 const GameFlowRuntimeUtils = preload("res://scripts/game_flow_runtime_utils.gd")
 const GameDialogueHistoryUtils = preload("res://scripts/game_dialogue_history_utils.gd")
+const InstantBackground = preload("res://scripts/instant_background_service.gd")
 
 @onready var input_text_edit = %InputTextEdit
 @onready var send_button = %SendButton
@@ -42,6 +43,12 @@ enum aiMode {init_background,init_env,explore, chat, sum, tools, action, refine_
 var chat_url = "http://127.0.0.1:5000/chat"
 var agent_url = "http://127.0.0.1:5000/agent"
 var image_api_url = "http://localhost:5000/generate_image"
+var instant_background_url = "http://127.0.0.1:5000/generate_instant_background"
+var instant_background_service: Node
+var instant_background_checkbox: CheckButton
+var instant_background_status_label: Label
+# Only update image resources in the save that this game actually saved/loaded.
+var active_save_fingerprint: String = ""
 
 const PICTURE_DIR = "D:/毕设/worldSim/game/picture/"
 const SESSION_RESOURCE_DIR = PICTURE_DIR + "session/"
@@ -198,12 +205,17 @@ func _ready():
 	# %backgroundImg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	# 原先使用 Nearest 过滤会强化像素感，这里改回线性以更接近原图显示。
 	%backgroundImg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	%backgroundImg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	# %backgroundImg.material = preload("res://assets/asciiShader.gdshader")
 	# 关闭背景图的 ASCII/后处理材质，直接显示生成原图。
 	%backgroundImg.material = null
 	changeTextTo(%siteName, "未定位")
 	player_update()
 	_load_user_settings()
+	instant_background_service = InstantBackground.new()
+	instant_background_service.name = "InstantBackgroundService"
+	add_child(instant_background_service)
+	instant_background_service.configure(self)
 	_setup_output_mode_controls()
 	_configure_dialogue_only_mode()
 	_apply_interaction_locks()
@@ -220,6 +232,16 @@ func _exit_tree() -> void:
 func record_ai_reply(speaker: String, text: String) -> void:
 	_record_interaction_history("AI回复", speaker, text)
 	GameDialogueHistoryUtils.record_reply(self, speaker, text)
+	if is_instance_valid(instant_background_service):
+		instant_background_service.submit_reply(text)
+
+func reset_instant_background() -> void:
+	if is_instance_valid(instant_background_service):
+		instant_background_service.reset()
+	active_save_fingerprint = ""
+
+func persist_instant_background_to_active_save(image: Image, site: String) -> void:
+	GameStorageUtils.persist_generated_background(image, site, SAVE_FILE, SAVE_SCENE_IMG_DIR, active_save_fingerprint)
 
 func clear_dialogue_history() -> void:
 	GameDialogueHistoryUtils.clear_history(self)
@@ -243,7 +265,6 @@ func _configure_dialogue_only_mode() -> void:
 	var image_mode = get_node_or_null("%ImgModePanel")
 	if image_mode != null:
 		image_mode.visible = false
-	instant_gen_mode = false
 
 func _load_user_settings() -> void:
 	var config = ConfigFile.new()
@@ -259,6 +280,7 @@ func _load_user_settings() -> void:
 	chat_history_max_chars = clamp(int(config.get_value("memory", "history_chars", chat_history_max_chars)), 600, 6000)
 	session_memory_max_chars = clamp(int(config.get_value("memory", "session_chars", session_memory_max_chars)), 800, 8000)
 	world_context_max_chars = clamp(int(config.get_value("memory", "world_chars", world_context_max_chars)), 300, 4000)
+	instant_gen_mode = bool(config.get_value("images", "instant_background", false))
 
 func _save_user_settings() -> void:
 	var config = ConfigFile.new()
@@ -270,6 +292,7 @@ func _save_user_settings() -> void:
 	config.set_value("memory", "history_chars", chat_history_max_chars)
 	config.set_value("memory", "session_chars", session_memory_max_chars)
 	config.set_value("memory", "world_chars", world_context_max_chars)
+	config.set_value("images", "instant_background", instant_gen_mode)
 	config.save(SETTINGS_FILE)
 
 func ensure_deepseek_service_ready() -> bool:
@@ -300,7 +323,9 @@ func _on_output_length_button_pressed() -> void:
 		session_memory_chars_spin.value = session_memory_max_chars
 	if world_context_chars_spin != null:
 		world_context_chars_spin.value = world_context_max_chars
-	min_chars_dialog.popup_centered(Vector2i(520, 720))
+	if instant_background_checkbox != null:
+		instant_background_checkbox.set_pressed_no_signal(instant_gen_mode)
+	min_chars_dialog.popup_centered(Vector2i(620, 820))
 
 func _on_min_chars_dialog_confirmed() -> void:
 	if dialogue_min_chars_spin == null or action_min_chars_spin == null or max_output_chars_spin == null or chat_history_lines_spin == null or chat_history_chars_spin == null or session_memory_chars_spin == null or world_context_chars_spin == null:
@@ -316,6 +341,13 @@ func _on_min_chars_dialog_confirmed() -> void:
 	chat_history_max_chars = clamp(int(chat_history_chars_spin.value), 600, 6000)
 	session_memory_max_chars = clamp(int(session_memory_chars_spin.value), 800, 8000)
 	world_context_max_chars = clamp(int(world_context_chars_spin.value), 300, 4000)
+	if instant_background_checkbox != null:
+		var was_enabled = instant_gen_mode
+		instant_gen_mode = instant_background_checkbox.button_pressed
+		if is_instance_valid(instant_background_service) and was_enabled != instant_gen_mode:
+			instant_background_service.set_enabled(instant_gen_mode)
+			if instant_gen_mode and not recent_ai_replies.is_empty():
+				instant_background_service.submit_reply(str(recent_ai_replies[-1].get("text", "")))
 	_save_user_settings()
 
 func _notification(what: int) -> void:
@@ -443,14 +475,6 @@ func _get_instant_gen_button() -> BaseButton:
 	return null
 
 func _is_instant_gen_active() -> bool:
-	if DIALOGUE_ONLY_MODE:
-		return false
-	var btn = _get_instant_gen_button()
-	if btn != null:
-		var pressed = bool(btn.button_pressed)
-		if instant_gen_mode != pressed:
-			instant_gen_mode = pressed
-		return pressed
 	return bool(instant_gen_mode)
 
 func _build_image_request_payload(prompt: String, target_site: String) -> Dictionary:
