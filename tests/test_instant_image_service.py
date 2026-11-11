@@ -75,7 +75,8 @@ class InstantImageTests(unittest.TestCase):
         with patch.dict(os.environ, {"WORLD_SIM_OPENAI_IMAGE_MODEL": "gpt-image-1-mini"}):
             service.generate_background({"prompt": "a" * 4000, "target_name": "library", "width": 8000}, post)
         self.assertEqual(post.call_args.kwargs["json"]["size"], "1536x1024")
-        self.assertEqual(len(post.call_args.kwargs["json"]["prompt"]), 1400)
+        self.assertEqual(len(post.call_args.kwargs["json"]["prompt"]), 4000)
+        self.assertEqual(service.generate_background({"prompt": "a" * 12001, "target_name": "library"}, post)[1], 400)
         self.assertEqual(service.generate_background(None, post)[1], 400)
         self.assertEqual(service.generate_background({}, post)[1], 400)
 
@@ -89,7 +90,12 @@ class InstantImageTests(unittest.TestCase):
         status = client.get("/instant_image_status").get_json()
         self.assertTrue(status["configured"])
         self.assertNotIn(os.environ["OPENAI_API_KEY"], str(status))
-        self.assertEqual(client.get("/health").get_json()["protocol"], 5)
+        self.assertEqual(client.get("/health").get_json()["protocol"], 8)
+        from 生图诊断 import emit
+        emit("fixture", "进度", "测试进度")
+        debug = client.get("/instant_image_debug?after=0").get_json()
+        self.assertTrue(any(row["request_id"] == "fixture" for row in debug["events"]))
+        self.assertEqual(client.get('/instant_image_debug?after=' + str(debug['cursor'])).get_json()["events"], [])
 
 
 if __name__ == "__main__":

@@ -46,10 +46,12 @@ def generate_openai_background(data, post=None):
         return {"success": False, "error": "即时生图未配置 OpenAI API 密钥。请在本机设置 OPENAI_API_KEY 后重启游戏。", **config}, 503
     if not isinstance(data, dict):
         return {"success": False, "error": "图片请求必须是 JSON 对象。"}, 400
-    prompt = str(data.get("prompt", "")).strip()[:1400]
+    prompt = str(data.get("prompt", "")).strip()
     target = str(data.get("target_name", "")).strip()[:100]
     if not prompt or not target:
         return {"success": False, "error": "缺少场景或图片提示词。"}, 400
+    if len(prompt) > 12000:
+        return {"success": False, "error": "画面资料超过12000字符，请精简本轮输入。"}, 400
     model = config["model"]
     # Older GPT Image models require standard sizes; never lower quality by
     # stretching a tiny unsupported image, or silently substitute providers.

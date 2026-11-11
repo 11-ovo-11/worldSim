@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cofuar5o0d1df"
-path="res://.godot/imported/多萝西.png-d5340ad903d923afaa9f8cccffe3f614.ctex"
+uid="uid://bwigi6vvkcjbe"
+path="res://.godot/imported/黍.jpg-904d0a509993f8af3aa97837f65c902a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://picture/session/npcs/多萝西.png"
-dest_files=["res://.godot/imported/多萝西.png-d5340ad903d923afaa9f8cccffe3f614.ctex"]
+source_file="res://saves/slot_1/resources/npcs/黍.jpg"
+dest_files=["res://.godot/imported/黍.jpg-904d0a509993f8af3aa97837f65c902a.ctex"]
 
 [params]
 

@@ -375,6 +375,7 @@ static func extract_server_error_text(body) -> String:
 	return raw
 
 static func on_request_completed(scene: Node, result, response_code, _header, body) -> void:
+	scene.add_debug("文本响应", "HTTP=" + str(response_code) + "，网络结果=" + str(result) + "，字节=" + str(body.size()) + "，耗时=%.1f秒" % (float(Time.get_ticks_msec() - scene.ai_request_started_ms) / 1000.0))
 	if scene._ignore_next_request_completed:
 		scene._ignore_next_request_completed = false
 		scene.set_ai_busy(false)

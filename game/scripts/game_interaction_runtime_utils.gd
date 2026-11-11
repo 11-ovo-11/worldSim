@@ -234,7 +234,7 @@ static func submit_action_input(scene: Node, raw_input: String, bypass_lock_chec
 		scene._record_current_chat_session("行动输入", scene.playerName, user_input)
 		scene.currentNpc.currentChat += "行动事实（已发生）：「" + user_input + "」\n"
 	var aprompts = build_action_messages(scene, user_input)
-	await scene.ask_ai(aprompts, scene.aiMode.action)
+	await scene.ask_ai(aprompts, scene.aiMode.action, {"input": user_input, "kind": "行动"})
 
 static func on_dialogue_button_pressed(scene: Node) -> void:
 	await scene._submit_dialogue_input(scene.dialogue_input.text, false)

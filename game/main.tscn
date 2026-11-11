@@ -657,8 +657,34 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="日志调试切换" type="HBoxContainer" parent="mainContainer/HBoxContainer/VBoxContainer2" unique_id=1147160383]
+layout_mode = 2
+
+[node name="日志按钮" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer2/日志调试切换" unique_id=841787432]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_pressed = true
+text = "日志"
+
+[node name="调试按钮" type="Button" parent="mainContainer/HBoxContainer/VBoxContainer2/日志调试切换" unique_id=1329324453]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+text = "调试"
+
+[node name="生图用量" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer2" unique_id=488607061]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "生图用量：尚未生成"
+autowrap_mode = 3
+
 [node name="LogPanelTitle" type="Label" parent="mainContainer/HBoxContainer/VBoxContainer2" unique_id=363885237]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 text = "日志"
 
@@ -690,6 +716,24 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 2
+fit_content = true
+autowrap_mode = 1
+context_menu_enabled = true
+selection_enabled = true
+
+[node name="调试滚动" type="ScrollContainer" parent="mainContainer/HBoxContainer/VBoxContainer2" unique_id=381547596]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="调试文本" type="RichTextLabel" parent="mainContainer/HBoxContainer/VBoxContainer2/调试滚动" unique_id=1887556664]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 2
+theme_override_font_sizes/normal_font_size = 16
 fit_content = true
 autowrap_mode = 1
 context_menu_enabled = true

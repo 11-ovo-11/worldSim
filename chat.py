@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from ai_output_policy import ensure_minimum_text
 from instant_image_service import generate_background, configuration_status
+from 生图诊断 import snapshot as image_debug_snapshot, refresh_quota
 import requests
 import base64
 import time
@@ -62,8 +63,8 @@ OPENAI_ATTEMPTS_PER_ENDPOINT = max(1, int(os.getenv("WORLD_SIM_PROVIDER_ATTEMPTS
 # 应答的是不是当前这份服务：协议号太低 = 旧版残留进程，pid 用于结束残留进程，
 # 避免多个 chat.py 同时占用同一端口（Windows 允许它们同时监听）。
 # 修改这里时必须同步修改 GDScript 里的 REQUIRED_BRIDGE_PROTOCOL。
-BRIDGE_PROTOCOL = 5
-BRIDGE_VERSION = "5-instant-codex-backgrounds"
+BRIDGE_PROTOCOL = 8
+BRIDGE_VERSION = "8-isolated-image-worker"
 # =========================================================
 
 DEEP_SEEK_KEY = key
@@ -661,6 +662,18 @@ def generate_instant_background():
 @app.route("/instant_image_status", methods=["GET"])
 def instant_image_status():
     return jsonify(configuration_status())
+
+
+@app.route("/instant_image_debug", methods=["GET"])
+def instant_image_debug():
+    codex_provider = configuration_status().get("provider") == "codex_cli"
+    if request.args.get("quota") == "1" and codex_provider:
+        from codex_image_service import cli_command
+        refresh_quota(cli_command())
+    data = image_debug_snapshot(max(0, request.args.get("after", 0, type=int) or 0))
+    if not codex_provider:
+        data["quota"] = {"status": "unavailable", "message": "当前为公开Images API通道，不能使用Codex账户额度推断API扣费"}
+    return jsonify(data)
 
 
 @app.route("/generate_image", methods=["POST"])

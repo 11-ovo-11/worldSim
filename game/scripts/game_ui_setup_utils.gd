@@ -101,7 +101,7 @@ static func setup_output_mode_controls(scene: Node) -> void:
 		scene.instant_background_checkbox.button_pressed = scene.instant_gen_mode
 		box.add_child(scene.instant_background_checkbox)
 		var image_hint = Label.new()
-		image_hint.text = "AI回复后交给本机Codex命令行生图并替换背景，不阻塞输入。\n需Codex登录和生图权限，耗时可能数十秒；关闭后保留最后一张背景。"
+		image_hint.text = "本轮输入确定主要事件，AI回复补充构图与细节，每轮只生成一张主要场景图。\n使用已有立绘绑定人物，不阻塞输入。需Codex登录和生图权限，可能耗时数十秒；关闭后保留最后一张背景。"
 		image_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		image_hint.add_theme_font_size_override("font_size", 13)
 		box.add_child(image_hint)

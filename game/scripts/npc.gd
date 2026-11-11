@@ -164,4 +164,4 @@ func chatWithNpc(prompt: String, shared_context: String = ""):
 	]
 	if scene != null:
 		scene.set_meta("chat_request_npc_name", npcName)
-	await scene.ask_ai(prompts, GameManager.aiMode.chat)
+	await scene.ask_ai(prompts, GameManager.aiMode.chat, {"input": prompt, "kind": "对话"})

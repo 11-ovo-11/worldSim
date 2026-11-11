@@ -2,12 +2,14 @@ extends RefCounted
 class_name GameDialogueHistoryUtils
 
 const HISTORY_LIMIT := 3
+const RuntimeDebug = preload("res://scripts/运行调试.gd")
 
-static func record_reply(scene: Node, speaker: String, text: String) -> void:
+static func record_reply(scene: Node, speaker: String, text: String, image_turn: Dictionary = {}) -> void:
 	var body = text.strip_edges()
 	if body.is_empty():
 		return
-	scene.recent_ai_replies.append({"speaker": speaker, "text": body})
+	# Image metadata stays out of the displayed text and the dialogue model's memory.
+	scene.recent_ai_replies.append({"speaker": speaker, "text": body, "image_turn": image_turn.duplicate(true)})
 	while scene.recent_ai_replies.size() > HISTORY_LIMIT:
 		scene.recent_ai_replies.pop_front()
 	if scene.showing_dialogue_history:
@@ -24,12 +26,10 @@ static func refresh_view(scene: Node) -> void:
 	scene.get_node("%DialogueHistoryScroll").set_deferred("scroll_vertical", 0)
 
 static func apply_view(scene: Node) -> void:
-	scene.get_node("%logContainer").get_parent().visible = not scene.showing_dialogue_history
-	scene.get_node("%DialogueHistoryScroll").visible = scene.showing_dialogue_history
-	scene.get_node("%DialogueHistoryButton").text = "日志" if scene.showing_dialogue_history else "对话历史"
-	scene.get_node("%LogPanelTitle").text = "对话历史（最近三条 AI 回复）" if scene.showing_dialogue_history else "日志"
+	RuntimeDebug.apply_view(scene)
 
 static func toggle_view(scene: Node) -> void:
+	scene.showing_debug = false
 	scene.showing_dialogue_history = not scene.showing_dialogue_history
 	if scene.showing_dialogue_history:
 		refresh_view(scene)
@@ -38,5 +38,6 @@ static func toggle_view(scene: Node) -> void:
 static func clear_history(scene: Node) -> void:
 	scene.recent_ai_replies.clear()
 	scene.showing_dialogue_history = false
+	scene.showing_debug = false
 	scene.get_node("%DialogueHistoryText").text = ""
 	apply_view(scene)

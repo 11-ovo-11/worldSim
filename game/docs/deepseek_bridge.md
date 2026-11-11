@@ -40,8 +40,8 @@ Godot 不直接请求 DeepSeek：密钥只保存在 Python 侧的 `key.py` / `im
 {
   "status": "healthy",
   "chat_mode": "openai",
-  "protocol": 5,
-  "version": "5-instant-codex-backgrounds",
+  "protocol": 8,
+  "version": "8-isolated-image-worker",
   "pid": 12345,
   "ppid": 6789,
   "api_base_url": "https://api.deepseek.com",
@@ -50,7 +50,7 @@ Godot 不直接请求 DeepSeek：密钥只保存在 Python 侧的 `key.py` / `im
 }
 ```
 
-- `protocol`：启动器要求 `>= REQUIRED_BRIDGE_PROTOCOL`（当前 5）。版本落后 = 残留进程，会被结束。
+- `protocol`：启动器要求 `>= REQUIRED_BRIDGE_PROTOCOL`（当前 8）。版本落后 = 残留进程，会被结束。
 - `pid`：真正运行 `chat.py` 的解释器进程。
 - `ppid`：Windows 上 `.venv/Scripts/python.exe` 只是启动器，它会派生出真正的解释器；
   Godot 用 `create_process` 拿到的是启动器的 pid，所以两个都要报。

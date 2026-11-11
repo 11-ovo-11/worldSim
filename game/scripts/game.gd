@@ -25,6 +25,7 @@ const GameSaveLoadUtils = preload("res://scripts/game_save_load_utils.gd")
 const GameFlowRuntimeUtils = preload("res://scripts/game_flow_runtime_utils.gd")
 const GameDialogueHistoryUtils = preload("res://scripts/game_dialogue_history_utils.gd")
 const InstantBackground = preload("res://scripts/instant_background_service.gd")
+const RuntimeDebug = preload("res://scripts/运行调试.gd")
 
 @onready var input_text_edit = %InputTextEdit
 @onready var send_button = %SendButton
@@ -45,6 +46,7 @@ var agent_url = "http://127.0.0.1:5000/agent"
 var image_api_url = "http://localhost:5000/generate_image"
 var instant_background_url = "http://127.0.0.1:5000/generate_instant_background"
 var instant_background_service: Node
+var instant_background_turn: Dictionary = {}
 var instant_background_checkbox: CheckButton
 var instant_background_status_label: Label
 # Only update image resources in the save that this game actually saved/loaded.
@@ -89,6 +91,9 @@ var interaction_history_records: Array = []
 # 仅供界面查看，不送入 AI 上下文，也不写入存档。
 var recent_ai_replies: Array = []
 var showing_dialogue_history: bool = false
+var showing_debug: bool = false
+var debug_records: Array[String] = []
+var ai_request_started_ms: int = 0
 var pending_explore_target: String = ""
 var explore_route_retry_count: int = 0
 var bg_debug_enabled: bool = true
@@ -190,6 +195,7 @@ func _ready():
 	save_button.connect("pressed", _on_save_button_pressed)
 	load_button.connect("pressed", _on_load_button_pressed)
 	%DialogueHistoryButton.pressed.connect(_on_dialogue_history_button_pressed)
+	RuntimeDebug.setup(self)
 	clear_dialogue_history()
 	if input_text_edit != null:
 		input_text_edit.placeholder_text = "纯对话模式：请先选择NPC"
@@ -231,11 +237,13 @@ func _exit_tree() -> void:
 
 func record_ai_reply(speaker: String, text: String) -> void:
 	_record_interaction_history("AI回复", speaker, text)
-	GameDialogueHistoryUtils.record_reply(self, speaker, text)
+	var image_turn = instant_background_turn.duplicate(true)
+	GameDialogueHistoryUtils.record_reply(self, speaker, text, image_turn)
 	if is_instance_valid(instant_background_service):
-		instant_background_service.submit_reply(text)
+		instant_background_service.submit_reply(text, image_turn)
 
 func reset_instant_background() -> void:
+	instant_background_turn.clear()
 	if is_instance_valid(instant_background_service):
 		instant_background_service.reset()
 	active_save_fingerprint = ""
@@ -248,6 +256,12 @@ func clear_dialogue_history() -> void:
 
 func _on_dialogue_history_button_pressed() -> void:
 	GameDialogueHistoryUtils.toggle_view(self)
+
+func add_debug(category: String, message: String) -> void:
+	RuntimeDebug.append(self, category, message)
+
+func show_image_usage(text: String) -> void:
+	get_node("%生图用量").text = text
 
 func _configure_dialogue_only_mode() -> void:
 	if !DIALOGUE_ONLY_MODE:
@@ -347,7 +361,8 @@ func _on_min_chars_dialog_confirmed() -> void:
 		if is_instance_valid(instant_background_service) and was_enabled != instant_gen_mode:
 			instant_background_service.set_enabled(instant_gen_mode)
 			if instant_gen_mode and not recent_ai_replies.is_empty():
-				instant_background_service.submit_reply(str(recent_ai_replies[-1].get("text", "")))
+				var latest_reply = recent_ai_replies[-1]
+				instant_background_service.submit_reply(str(latest_reply.get("text", "")), latest_reply.get("image_turn", {}))
 	_save_user_settings()
 
 func _notification(what: int) -> void:
@@ -545,7 +560,7 @@ func _bg_debug(msg: String) -> void:
 	if !bg_debug_enabled:
 		return
 	print("[BG_DEBUG] " + msg)
-	addLog("<BG_DEBUG> " + msg)
+	add_debug("图片", msg)
 
 func goto(where: String):
 	await GameFlowRuntimeUtils.goto(self, where)
@@ -639,8 +654,17 @@ func player_update():
 	%hp.target_value = hp
 	%reputation.target_value = reputation
 
-func ask_ai(message: Array, askmode: aiMode):
+func ask_ai(message: Array, askmode: aiMode, image_turn: Dictionary = {}):
 	currentMode = askmode
+	ai_request_started_ms = Time.get_ticks_msec()
+	add_debug("文本请求", "开始，类型=" + str(askmode) + "，消息段数=" + str(message.size()))
+	# Snapshot this request's input; never infer it later from stale action/dialogue fields.
+	instant_background_turn = image_turn.duplicate(true)
+	instant_background_turn["site"] = currentSiteName
+	instant_background_turn["site_description"] = str(_get_site_data(currentSiteName).get("地点描述", ""))
+	instant_background_turn["time_weather"] = timePrompt + " " + weatherPrompt
+	var has_focus = (askmode == aiMode.chat or currentState == worldState.chat) and is_instance_valid(currentNpc)
+	instant_background_turn["npc"] = str(currentNpc.npcName) if has_focus else ""
 	set_ai_busy(true)
 	_ignore_next_request_completed = false
 	if askmode == aiMode.init_background or askmode == aiMode.init_env:
@@ -1229,6 +1253,7 @@ func report_ai_error(message: String) -> void:
 	if detail == "":
 		detail = "未知错误"
 	print("【AI错误】", detail)
+	add_debug("AI错误", detail)
 	addLog("【AI错误】" + detail, true)
 
 func _is_important_log(log_text: String) -> bool:
